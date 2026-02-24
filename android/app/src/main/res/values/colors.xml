@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- Primary Colors (Purple/Pink gradient like TikTok) -->
+    <color name="colorPrimary">#FF2D55</color>
+    <color name="colorPrimaryDark">#C70039</color>
+    <color name="colorAccent">#FF2D55</color>
+    
+    <!-- Brand Colors -->
+    <color name="purple_500">#9B59B6</color>
+    <color name="purple_600">#8E44AD</color>
+    <color name="pink_500">#FF2D55</color>
+    <color name="pink_600">#E91E63</color>
+    
+    <!-- Background Colors -->
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="zinc_900">#18181B</color>
+    <color name="zinc_800">#27272A</color>
+    
+    <!-- Status Bar -->
+    <color name="status_bar">#000000</color>
+    
+    <!-- Splash Background -->
+    <color name="splash_background">#000000</color>
+</resources>
