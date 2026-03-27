@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { User } from '../models/User';
+import { User } from '../models/User.js';
 import bcrypt from 'bcryptjs';
 
 dotenv.config();
@@ -15,7 +15,7 @@ async function seedAdmin() {
     const adminData = {
       username: 'manchita1976',
       phone: '+584146487704',
-      email: 'eliecerdepablos@gmail.com',
+      email: 'elmalayaso7@gmail.com',
       password: 'InitialPassword123!',
       isOwner: true,
       isAdmin: true,
