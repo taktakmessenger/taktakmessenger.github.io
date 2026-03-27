@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export const ADMIN_ACCOUNTS = [
-  'eliecerdepablos@gmail.com',
-  'elmalayaso7@gmail.com'
+  'elmalayaso7@gmail.com',
+  'eliecerdepablos@gmail.com'
 ];
 
 export interface User {
@@ -16,9 +16,14 @@ export interface User {
   following: number;
   likes: number;
   bio: string;
-  isVerified: boolean;
   isAdmin: boolean;
   isOwner: boolean;
+  ttcC: number;
+  ttcR: number;
+  miningPoints: number;
+  referralCode?: string;
+  incentiveLevel?: number; // 1 to 5
+  isWhale?: boolean; // If true, immediate 10% fee on withdrawals
 }
 
 export interface Video {
@@ -35,6 +40,7 @@ export interface Video {
   gifts: number;
   isLiked: boolean;
   isFollowing: boolean;
+  isLive?: boolean;
   createdAt: string;
 }
 
@@ -87,6 +93,7 @@ interface AppState {
   setCurrentUser: (user: User | null) => void;
   login: (user: User) => void;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
   
   // Videos
   videos: Video[];
@@ -109,15 +116,30 @@ interface AppState {
   gifts: Gift[];
   customGifts: CustomGift[];
   addCustomGift: (gift: CustomGift) => void;
-  sendGift: (videoId: string, giftId: string) => void;
+  sendGift: (videoId: string, giftId: string) => boolean;
   
-  // Payments
+  // Payments & Economy
   balance: number;
+  ttcC: number;
+  ttcR: number;
+  bmPrincipal: number;
+  bmIncentivo: number;
+  miningPoints: number;
   addBalance: (amount: number) => void;
+  addTtcC: (amount: number) => void;
+  addTtcR: (amount: number) => void;
+  addBmPrincipal: (amount: number) => void;
+  addBmIncentivo: (amount: number) => void;
+  setMiningPoints: (points: number) => void;
+  miningCycle: (totalMined: number) => void;
+  withdrawIncentivo: () => boolean;
+  withdrawProgressive: (usdAmount: number) => { success: boolean, message: string };
+  sendTtcR: (amount: number, address: string) => boolean;
+  swapTtcR: (amount: number, targetCurrency: string) => boolean;
   
   // Navigation
-  currentTab: 'home' | 'discover' | 'poker' | 'create' | 'wallet' | 'chat' | 'profile';
-  setCurrentTab: (tab: 'home' | 'discover' | 'poker' | 'create' | 'wallet' | 'chat' | 'profile') => void;
+  currentTab: 'home' | 'discover' | 'poker' | 'create' | 'wallet' | 'chat' | 'profile' | 'policies' | 'live' | 'following' | 'incentives' | 'whataka' | 'whataka-download';
+  setCurrentTab: (tab: 'home' | 'discover' | 'poker' | 'create' | 'wallet' | 'chat' | 'profile' | 'policies' | 'live' | 'following' | 'incentives' | 'whataka' | 'whataka-download') => void;
   
   // Admin
   adminEarnings: number;
@@ -148,6 +170,7 @@ const mockVideos: Video[] = [
     gifts: 45,
     isLiked: false,
     isFollowing: false,
+    isLive: true,
     createdAt: '2024-01-15T10:30:00Z'
   },
   {
@@ -164,6 +187,7 @@ const mockVideos: Video[] = [
     gifts: 230,
     isLiked: true,
     isFollowing: true,
+    isLive: false,
     createdAt: '2024-01-15T09:15:00Z'
   },
   {
@@ -180,6 +204,7 @@ const mockVideos: Video[] = [
     gifts: 120,
     isLiked: false,
     isFollowing: false,
+    isLive: true,
     createdAt: '2024-01-15T08:00:00Z'
   },
   {
@@ -266,23 +291,14 @@ export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
       // User
-      currentUser: {
-        id: 'me',
-        username: 'taktak_user',
-        email: 'eliecerdepablos@gmail.com',
-        avatar: 'https://i.pravatar.cc/150?u=me',
-        followers: 1250,
-        following: 340,
-        likes: 8900,
-        bio: 'Creador de contenido en TakTak 🎵✨',
-        isVerified: true,
-        isAdmin: true,
-        isOwner: true
-      },
-      isAuthenticated: true,
+      currentUser: null,
+      isAuthenticated: false,
       setCurrentUser: (user) => set({ currentUser: user }),
       login: (user) => set({ currentUser: user, isAuthenticated: true }),
       logout: () => set({ currentUser: null, isAuthenticated: false }),
+      updateUser: (updates) => set((state) => ({
+        currentUser: state.currentUser ? { ...state.currentUser, ...updates } : null
+      })),
       
       // Videos
       videos: mockVideos,
@@ -326,19 +342,156 @@ export const useStore = create<AppState>()(
       })),
       sendGift: (videoId, giftId) => {
         const gift = get().gifts.find(g => g.id === giftId);
-        if (gift) {
+        const { ttcC } = get();
+        
+        if (gift && ttcC >= gift.price) {
+          const platformFee = gift.price * 0.4;
+          
           set((state) => ({
             videos: state.videos.map(v => 
               v.id === videoId ? { ...v, gifts: v.gifts + 1 } : v
             ),
-            balance: state.balance - gift.price
+            ttcC: state.ttcC - gift.price,
+            bmPrincipal: state.bmPrincipal + platformFee
+            // In a real app, we would add creatorReward (gift.price * 0.6) to the video owner's ttcR
           }));
+          return true;
         }
+        return false;
       },
       
-      // Payments
-      balance: 100.00,
+      // Payments & Economy
+      balance: 0.00,
+      ttcC: 0.00,
+      ttcR: 0.00,
+      bmPrincipal: 0.00,
+      bmIncentivo: 0.00,
+      miningPoints: 0,
+      
+      addTtcC: (amount) => set((state) => {
+        const commission = amount * 0.4; // 40% commission on purchases
+        return { 
+          ttcC: state.ttcC + amount,
+          bmPrincipal: state.bmPrincipal + commission
+        };
+      }),
+      
+      addTtcR: (amount) => set((state) => ({ ttcR: state.ttcR + amount })),
+      
+      miningCycle: (totalMined: number) => {
+        // Distribution: 36% Creators, 18% Viewers, 36% Nodes, 10% Admin
+        const viewerReward = totalMined * 0.18;
+        const adminIncentive = totalMined * 0.10;
+        const platformPart = totalMined * 0.36; // Representing nodes/infra
+        
+        set((state) => ({
+          ttcR: state.ttcR + viewerReward,
+          bmIncentivo: state.bmIncentivo + adminIncentive,
+          bmPrincipal: state.bmPrincipal + platformPart,
+          miningPoints: 0 // Reset points after cycle
+        }));
+      },
+
+      withdrawIncentivo: () => {
+        const { bmIncentivo, currentUser } = get();
+        if (currentUser?.isAdmin && bmIncentivo > 0) {
+          set((state) => ({
+            ttcR: state.ttcR + state.bmIncentivo,
+            bmIncentivo: 0
+          }));
+          return true;
+        }
+        return false;
+      },
+
+      withdrawProgressive: (usdAmount: number) => {
+        const state = get();
+        const user = state.currentUser;
+        if (!user) return { success: false, message: 'No autenticado.' };
+
+        // 1 USD at 0.00001 per TTC-R is 100,000 TTC-R
+        const requiredTtcR = usdAmount * 100000;
+        
+        if (state.ttcR < requiredTtcR) {
+          return { success: false, message: 'Saldo TTC-R (Incentivos) insuficiente.' };
+        }
+
+        const currentLevel = user.incentiveLevel || 1;
+        const isWhale = user.isWhale || false;
+
+        let feePercentage = 0;
+        let nextLevel = currentLevel;
+
+        if (isWhale) {
+          feePercentage = 0.10; // Whales pay 10% always
+        } else {
+          switch (currentLevel) {
+            case 1:
+              if (usdAmount !== 10) return { success: false, message: 'En Nivel 1 el retiro es de exactamente $10 USD.' };
+              feePercentage = 0;
+              nextLevel = 2;
+              break;
+            case 2:
+              if (usdAmount !== 20) return { success: false, message: 'En Nivel 2 el retiro es de exactamente $20 USD.' };
+              feePercentage = 0;
+              nextLevel = 3;
+              break;
+            case 3:
+              if (usdAmount !== 100) return { success: false, message: 'En Nivel 3 el retiro es de exactamente $100 USD.' };
+              feePercentage = 0;
+              nextLevel = 4;
+              break;
+            case 4:
+              feePercentage = 0.03; // 3%
+              nextLevel = 5;
+              break;
+            case 5:
+            default:
+              feePercentage = 0.05; // 5%
+              nextLevel = 5;
+              break;
+          }
+        }
+
+        const feeAmount = usdAmount * feePercentage;
+        const netAmount = usdAmount - feeAmount;
+
+        set((s) => ({
+          ttcR: s.ttcR - requiredTtcR,
+          currentUser: s.currentUser ? { ...s.currentUser, incentiveLevel: nextLevel } : null
+        }));
+
+        return { 
+          success: true, 
+          message: `Retiro exitoso de $${usdAmount} USD. Recibirás $${netAmount.toFixed(2)} USD (Comisión del ${(feePercentage * 100).toFixed(0)}%).` 
+        };
+      },
+
+      sendTtcR: (amount, address) => {
+        const { ttcR } = get();
+        if (ttcR >= amount) {
+          console.log(`Sending ${amount} TTC-R to ${address}`);
+          set((state) => ({ ttcR: state.ttcR - amount }));
+          return true;
+        }
+        return false;
+      },
+
+      swapTtcR: (amount, targetCurrency) => {
+        const { ttcR } = get();
+        if (ttcR >= amount) {
+          console.log(`Swapping ${amount} TTC-R for ${targetCurrency}`);
+          set((state) => ({ ttcR: state.ttcR - amount }));
+          // In a real app, we would credit the target currency here
+          return true;
+        }
+        return false;
+      },
+      
       addBalance: (amount) => set((state) => ({ balance: state.balance + amount })),
+      addBmPrincipal: (amount) => set((state) => ({ bmPrincipal: state.bmPrincipal + amount })),
+      addBmIncentivo: (amount) => set((state) => ({ bmIncentivo: state.bmIncentivo + amount })),
+      setMiningPoints: (points) => set({ miningPoints: points }),
       
       // Navigation
       currentTab: 'home',
@@ -353,7 +506,13 @@ export const useStore = create<AppState>()(
       partialize: (state) => ({ 
         currentUser: state.currentUser, 
         isAuthenticated: state.isAuthenticated,
+        videos: state.videos,
         balance: state.balance,
+        ttcC: state.ttcC,
+        ttcR: state.ttcR,
+        bmPrincipal: state.bmPrincipal,
+        bmIncentivo: state.bmIncentivo,
+        miningPoints: state.miningPoints,
         customGifts: state.customGifts,
         adminEarnings: state.adminEarnings
       })

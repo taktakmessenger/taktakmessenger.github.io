@@ -37,7 +37,7 @@ export const SecurityOverlay = () => {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={() => setShowDetails(!showDetails)}
-        className="fixed top-20 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-zinc-900/90 backdrop-blur-md rounded-full border border-zinc-800 hover:border-green-500/50 transition-all"
+        className="fixed top-20 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-gray-100/90 backdrop-blur-md rounded-full border border-zinc-800 hover:border-green-500/50 transition-all"
       >
         <div className={`w-2 h-2 rounded-full ${isSecure ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`} />
         <Shield className="w-4 h-4 text-green-400" />
@@ -51,7 +51,7 @@ export const SecurityOverlay = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-white/80 backdrop-blur-sm"
             onClick={() => setShowDetails(false)}
           >
             <motion.div
@@ -59,7 +59,7 @@ export const SecurityOverlay = () => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden"
+              className="w-full max-w-md bg-gray-100 rounded-2xl border border-zinc-800 overflow-hidden"
             >
               {/* Header */}
               <div className="p-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-b border-zinc-800">
@@ -69,15 +69,15 @@ export const SecurityOverlay = () => {
                       <Shield className="w-5 h-5 text-green-400" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-white">Estado de Seguridad</h3>
+                      <h3 className="font-semibold text-black">Estado de Seguridad</h3>
                       <p className="text-xs text-green-400">Sistema protegido</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowDetails(false)}
-                    className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
                   >
-                    <X className="w-5 h-5 text-zinc-400" />
+                    <X className="w-5 h-5 text-gray-600" />
                   </button>
                 </div>
               </div>
@@ -93,7 +93,7 @@ export const SecurityOverlay = () => {
                     >
                       <div className="flex items-center gap-3">
                         <Icon className={`w-5 h-5 ${getStatusColor(check.status)}`} />
-                        <span className="text-sm text-white">{check.label}</span>
+                        <span className="text-sm text-black">{check.label}</span>
                       </div>
                       {check.status ? (
                         <Check className="w-5 h-5 text-green-400" />
@@ -107,19 +107,19 @@ export const SecurityOverlay = () => {
 
               {/* Technical Info */}
               <div className="p-4 border-t border-zinc-800 space-y-3">
-                <h4 className="text-sm font-medium text-zinc-400">Información Técnica</h4>
+                <h4 className="text-sm font-medium text-gray-600">Información Técnica</h4>
                 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-zinc-500">ID Anónimo</span>
-                    <code className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+                    <code className="text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded">
                       {anonId?.substring(0, 16)}...
                     </code>
                   </div>
                   
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-zinc-500">Fingerprint</span>
-                    <code className="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+                    <code className="text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded">
                       {deviceFingerprint?.substring(0, 16)}...
                     </code>
                   </div>

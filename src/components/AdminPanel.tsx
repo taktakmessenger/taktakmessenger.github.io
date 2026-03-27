@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useStore } from '@/store/useStore';
 import { toast } from 'sonner';
 
-type AdminTab = 'dashboard' | 'users' | 'earnings' | 'security' | 'integrations' | 'calls' | 'settings';
+type AdminTab = 'dashboard' | 'users' | 'earnings' | 'security' | 'integrations' | 'calls' | 'settings' | 'economy';
 
 export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -117,10 +117,10 @@ export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="p-2 hover:bg-zinc-800 rounded-lg">
+                    <button className="p-2 hover:bg-zinc-800 rounded-lg" aria-label="Enviar mensaje" title="Enviar mensaje">
                       <MessageCircle className="w-4 h-4 text-zinc-400" />
                     </button>
-                    <button className="p-2 hover:bg-zinc-800 rounded-lg">
+                    <button className="p-2 hover:bg-zinc-800 rounded-lg" aria-label="Más opciones" title="Más opciones">
                       <MoreVertical className="w-4 h-4 text-zinc-400" />
                     </button>
                   </div>
@@ -371,6 +371,8 @@ export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
                     variant="outline"
                     className="border-zinc-700"
                     onClick={() => toast.info('Probando conexión...')}
+                    aria-label="Probar conexión"
+                    title="Probar conexión"
                   >
                     <Activity className="w-4 h-4" />
                   </Button>
@@ -506,6 +508,49 @@ export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
           </div>
         );
 
+      case 'economy': {
+        const { bmPrincipal, bmIncentivo } = useStore.getState();
+        return (
+          <div className="p-4 space-y-4">
+            <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 p-6 rounded-xl border border-green-500/30 text-center">
+              <p className="text-zinc-400 text-sm italic">BM‑PRINCIPAL (Plataforma - Regalos)</p>
+              <p className="text-4xl font-bold text-green-400">{bmPrincipal?.toLocaleString() || 0} TTC</p>
+              <p className="text-zinc-500 text-xs mt-2">≈ ${(bmPrincipal * 0.01).toLocaleString()} USD</p>
+            </div>
+
+            <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-6 rounded-xl border border-purple-500/30 text-center">
+              <p className="text-zinc-400 text-sm italic">BM‑INCENTIVO (Admin - 10% Minado)</p>
+              <p className="text-4xl font-bold text-purple-400">{bmIncentivo?.toLocaleString() || 0} TTC</p>
+              <p className="text-zinc-500 text-xs mt-2">≈ ${(bmIncentivo * 0.01).toLocaleString()} USD</p>
+              <Button 
+                onClick={() => {
+                  if (useStore.getState().withdrawIncentivo()) {
+                    toast.success('Incentivo retirado con éxito');
+                  } else {
+                    toast.error('No hay incentivos para retirar');
+                  }
+                }}
+                className="mt-4 bg-purple-500 hover:bg-purple-600 w-full"
+              >
+                Retirar Incentivo 10%
+              </Button>
+            </div>
+            
+            <div className="bg-zinc-900 p-4 rounded-xl">
+              <h3 className="text-white font-semibold mb-3">Red de Minado P2P</h3>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-zinc-400 text-sm">Nodos activos</span>
+                <span className="text-green-400 font-bold">428</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400 text-sm">Tráfico P2P 24h</span>
+                <span className="text-blue-400 font-bold">1.2 TB</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       default:
         return null;
     }
@@ -519,7 +564,7 @@ export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
           <Crown className="w-5 h-5 text-white" />
           <h1 className="text-white font-medium">Admin Panel</h1>
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-[#009577] rounded-full">
+        <button onClick={onClose} className="p-2 hover:bg-[#009577] rounded-full" aria-label="Cerrar" title="Cerrar">
           <XCircle className="w-5 h-5 text-white" />
         </button>
       </div>
@@ -533,6 +578,7 @@ export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
           { id: 'security', icon: Shield, label: 'Segurid' },
           { id: 'integrations', icon: Server, label: 'API' },
           { id: 'calls', icon: Phone, label: 'Llamadas' },
+          { id: 'economy', icon: Zap, label: 'Economía' },
         ].map((tab) => (
           <button
             key={tab.id}

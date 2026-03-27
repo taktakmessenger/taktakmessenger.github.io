@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: taktak-app
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build && cd server && npm install && npm run build
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false # User will need to provide this in Render dashboard

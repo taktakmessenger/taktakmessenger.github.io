@@ -5,25 +5,25 @@
 @layer base {
   :root {
     --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
+    --foreground: 0 0% 98%;
     --card: 0 0% 5%;
-    --card-foreground: 0 0% 100%;
+    --card-foreground: 0 0% 98%;
     --popover: 0 0% 5%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 280 100% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 100%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 348 97% 58%; /* TikTok Pink #FE2C55 */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 178 91% 55%; /* TikTok Cyan #25F4EE */
+    --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 65%;
-    --accent: 280 100% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 348 97% 58%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 280 100% 60%;
-    --radius: 0.75rem;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 348 97% 58%;
+    --radius: 0.5rem;
   }
 }
 
@@ -57,8 +57,8 @@
 
 /* Hide scrollbar for mobile */
 .hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }
 
 .hide-scrollbar::-webkit-scrollbar {
@@ -114,14 +114,14 @@
 /* Glass effect */
 .glass {
   background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f97316 100%);
+  background: linear-gradient(to right, #FE2C55, #25F4EE);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

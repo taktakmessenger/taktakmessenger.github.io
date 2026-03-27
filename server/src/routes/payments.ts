@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { createPaymentIntent, createCustomer, createSubscription, confirmPayment, cancelSubscription } from '../services/stripe';
+import { createPaymentIntent, createCustomer, createSubscription, confirmPayment, cancelSubscription } from '../services/stripe.js';
+import { giftService } from '../services/gift.js';
+import { miningService } from '../services/mining.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -91,6 +94,86 @@ router.get('/plans', (req: Request, res: Response) => {
 router.post('/webhook', async (req: Request, res: Response) => {
   console.log('📝 Webhook de Stripe recibido');
   res.json({ received: true });
+});
+
+router.post('/gift', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { receiverId, coinAmount } = req.body;
+    const senderId = req.user?.id;
+
+    if (!receiverId || !coinAmount || coinAmount <= 0) {
+      return res.status(400).json({ error: 'Datos de regalo inválidos' });
+    }
+
+    const result = await giftService.sendGift(senderId!, receiverId, coinAmount);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/withdraw', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { amount, method, details } = req.body;
+    const userId = req.user?.id;
+
+    if (!amount || amount <= 0 || !method) {
+      return res.status(400).json({ error: 'Datos de retiro inválidos' });
+    }
+
+    const transaction = await giftService.requestWithdrawal(userId!, amount, method, details);
+    res.json({ success: true, transactionId: transaction._id, status: transaction.status });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/mine', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { megabytesServed } = req.body;
+    const userId = req.user?.id;
+
+    if (!megabytesServed || megabytesServed <= 0) {
+      return res.status(400).json({ error: 'Datos de minado inválidos' });
+    }
+
+    const result = await miningService.rewardSeeding(userId!, megabytesServed);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/activity', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { creatorId, type, duration, isCompletion80 } = req.body;
+    const userId = req.user?.id;
+
+    if (!creatorId || !type) {
+      return res.status(400).json({ error: 'Datos de actividad inválidos' });
+    }
+
+    await miningService.recordActivity(userId!, creatorId, { type, duration, isCompletion80 });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/mining-report', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const report = req.body;
+
+    if (!userId || !report) {
+      return res.status(400).json({ error: 'Datos de reporte inválidos' });
+    }
+
+    const result = await miningService.recordMiningReport(userId, report);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 export default router;

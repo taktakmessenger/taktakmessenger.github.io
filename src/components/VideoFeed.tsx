@@ -1,7 +1,7 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Heart, MessageCircle, Share2, Bookmark, 
+  Heart, MessageCircle, Share2, 
   Music2, Volume2, VolumeX, Gift, Plus
 } from 'lucide-react';
 import { useStore, type Video } from '@/store/useStore';
@@ -15,7 +15,6 @@ interface VideoItemProps {
 
 const VideoItem = ({ video, isActive }: VideoItemProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const { likeVideo, followUser } = useStore();
@@ -24,23 +23,20 @@ const VideoItem = ({ video, isActive }: VideoItemProps) => {
     if (videoRef.current) {
       if (isActive) {
         videoRef.current.play().catch(() => {});
-        setIsPlaying(true);
       } else {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
-        setIsPlaying(false);
       }
     }
   }, [isActive]);
 
   const togglePlay = () => {
     if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
+      if (videoRef.current.paused) {
         videoRef.current.play().catch(() => {});
+      } else {
+        videoRef.current.pause();
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -84,6 +80,8 @@ const VideoItem = ({ video, isActive }: VideoItemProps) => {
             size="icon"
             className="text-white hover:bg-white/20"
             onClick={toggleMute}
+            aria-label={isMuted ? "Activar sonido" : "Silenciar"}
+            title={isMuted ? "Activar sonido" : "Silenciar"}
           >
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </Button>
@@ -95,9 +93,9 @@ const VideoItem = ({ video, isActive }: VideoItemProps) => {
       </div>
 
       {/* Right Side Actions */}
-      <div className="absolute right-4 bottom-24 flex flex-col items-center gap-4 z-10">
+      <div className="absolute right-2 bottom-20 flex flex-col items-center gap-5 z-10">
         {/* Avatar */}
-        <div className="relative">
+        <div className="relative mb-2">
           <img
             src={video.userAvatar}
             alt={video.username}
@@ -106,7 +104,9 @@ const VideoItem = ({ video, isActive }: VideoItemProps) => {
           {!video.isFollowing && (
             <button
               onClick={() => followUser(video.userId)}
-              className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center hover:bg-purple-600 transition-colors"
+              aria-label="Seguir usuario"
+              title="Seguir usuario"
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 bg-[#FE2C55] rounded-full flex items-center justify-center hover:scale-110 transition-transform"
             >
               <Plus className="w-4 h-4 text-white" />
             </button>
@@ -115,58 +115,53 @@ const VideoItem = ({ video, isActive }: VideoItemProps) => {
 
         {/* Like */}
         <motion.button
-          whileTap={{ scale: 0.9 }}
+          whileTap={{ scale: 0.8 }}
           onClick={() => likeVideo(video.id)}
-          className="flex flex-col items-center gap-1"
+          className="flex flex-col items-center"
+          aria-label="Dar me gusta"
+          title="Dar me gusta"
         >
-          <div className={`p-3 rounded-full ${video.isLiked ? 'bg-red-500' : 'bg-black/30 backdrop-blur-sm'}`}>
-            <Heart className={`w-7 h-7 ${video.isLiked ? 'text-white fill-white' : 'text-white'}`} />
-          </div>
-          <span className="text-white text-sm font-medium">{formatNumber(video.likes)}</span>
+          <Heart 
+            className={`w-9 h-9 transition-colors ${video.isLiked ? 'text-[#FE2C55] fill-[#FE2C55]' : 'text-white'}`} 
+          />
+          <span className="text-white text-[13px] font-semibold mt-1">{formatNumber(video.likes)}</span>
         </motion.button>
 
         {/* Comments */}
         <motion.button
-          whileTap={{ scale: 0.9 }}
-          className="flex flex-col items-center gap-1"
+          whileTap={{ scale: 0.8 }}
+          className="flex flex-col items-center"
+          aria-label="Comentarios"
+          title="Comentarios"
         >
-          <div className="p-3 rounded-full bg-black/30 backdrop-blur-sm">
-            <MessageCircle className="w-7 h-7 text-white" />
-          </div>
-          <span className="text-white text-sm font-medium">{formatNumber(video.comments)}</span>
+          <MessageCircle className="w-9 h-9 text-white" />
+          <span className="text-white text-[13px] font-semibold mt-1">{formatNumber(video.comments)}</span>
         </motion.button>
 
         {/* Gifts */}
         <motion.button
-          whileTap={{ scale: 0.9 }}
+          whileTap={{ scale: 0.8 }}
           onClick={() => setShowGiftModal(true)}
-          className="flex flex-col items-center gap-1"
+          className="flex flex-col items-center"
+          aria-label="Enviar regalo"
+          title="Enviar regalo"
         >
-          <div className="p-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 glow-effect">
-            <Gift className="w-7 h-7 text-white" />
+          <div className="relative">
+            <Gift className="w-9 h-9 text-white" />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#25F4EE] rounded-full animate-pulse shadow-[0_0_8px_#25F4EE]" />
           </div>
-          <span className="text-white text-sm font-medium">{formatNumber(video.gifts)}</span>
+          <span className="text-white text-[13px] font-semibold mt-1">{formatNumber(video.gifts)}</span>
         </motion.button>
 
         {/* Share */}
         <motion.button
-          whileTap={{ scale: 0.9 }}
-          className="flex flex-col items-center gap-1"
+          whileTap={{ scale: 0.8 }}
+          className="flex flex-col items-center"
+          aria-label="Compartir"
+          title="Compartir"
         >
-          <div className="p-3 rounded-full bg-black/30 backdrop-blur-sm">
-            <Share2 className="w-7 h-7 text-white" />
-          </div>
-          <span className="text-white text-sm font-medium">{formatNumber(video.shares)}</span>
-        </motion.button>
-
-        {/* Save */}
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          className="flex flex-col items-center gap-1"
-        >
-          <div className="p-3 rounded-full bg-black/30 backdrop-blur-sm">
-            <Bookmark className="w-7 h-7 text-white" />
-          </div>
+          <Share2 className="w-9 h-9 text-white" />
+          <span className="text-white text-[13px] font-semibold mt-1">{formatNumber(video.shares)}</span>
         </motion.button>
       </div>
 
@@ -200,10 +195,16 @@ const VideoItem = ({ video, isActive }: VideoItemProps) => {
   );
 };
 
-export const VideoFeed = () => {
+export const VideoFeed = ({ filter }: { filter?: 'all' | 'following' | 'live' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { videos, currentVideoIndex, setCurrentVideoIndex } = useStore();
   const [isScrolling, setIsScrolling] = useState(false);
+
+  const filteredVideos = useMemo(() => {
+    if (filter === 'following') return videos.filter(v => v.isFollowing);
+    if (filter === 'live') return videos.filter(v => v.isLive);
+    return videos;
+  }, [videos, filter]);
 
   const handleScroll = useCallback(() => {
     if (!containerRef.current || isScrolling) return;
@@ -213,12 +214,12 @@ export const VideoFeed = () => {
     const itemHeight = window.innerHeight;
     const newIndex = Math.round(scrollTop / itemHeight);
     
-    if (newIndex !== currentVideoIndex && newIndex >= 0 && newIndex < videos.length) {
+    if (newIndex !== currentVideoIndex && newIndex >= 0 && newIndex < filteredVideos.length) {
       setIsScrolling(true);
       setCurrentVideoIndex(newIndex);
       setTimeout(() => setIsScrolling(false), 500);
     }
-  }, [currentVideoIndex, videos.length, setCurrentVideoIndex, isScrolling]);
+  }, [currentVideoIndex, filteredVideos.length, setCurrentVideoIndex, isScrolling]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -233,7 +234,7 @@ export const VideoFeed = () => {
       ref={containerRef}
       className="w-full h-screen overflow-y-scroll hide-scrollbar video-container"
     >
-      {videos.map((video, index) => (
+      {filteredVideos.map((video, index) => (
         <VideoItem 
           key={video.id} 
           video={video} 

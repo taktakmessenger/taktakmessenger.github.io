@@ -1,0 +1,305 @@
+WhaTaka + TakTak P2P — Proyecto Completo en JavaScript (COPIAR Y PEGAR)
+
+
+/********************************************************************************************
+ * WHATAKA + TAKTAK — PROYECTO COMPLETO P2P EN JAVASCRIPT
+ * Incluye:
+ * ✔ Nodo P2P real con libp2p
+ * ✔ Capa WhaTaka P2P
+ * ✔ Cliente P2P
+ * ✔ Módulo de minería TTC
+ * ✔ Protocolo MINING_REPORT
+ * ✔ Contrato inteligente TTC (Solidity)
+ * ✔ Script de prueba completo
+ ********************************************************************************************/
+
+
+/********************************************************************************************
+ * 1. PROTOCOLO MINING_REPORT (JSON)
+ ********************************************************************************************/
+
+const MINING_REPORT_EXAMPLE = {
+  type: "MINING_REPORT",
+  node_id: "peer_123456",
+  user_id: "taktak_user_abc",
+  relay_units: 120,
+  store_units: 45,
+  uptime_units: 300,
+  call_units: 90,
+  reputation_units: 10,
+  period_start: 1730000000,
+  period_end: 1730003600,
+  timestamp: 1730003600,
+  signature: "firma_hex_del_reporte"
+};
+
+
+/********************************************************************************************
+ * 2. MÓDULO DE MINERÍA TTC EN JAVASCRIPT
+ ********************************************************************************************/
+
+class MiningTracker {
+  constructor({ nodeId, userId, signer, reportSender }) {
+    this.nodeId = nodeId;
+    this.userId = userId;
+    this.signer = signer;
+    this.reportSender = reportSender;
+
+    this.relayUnits = 0;
+    this.storeUnits = 0;
+    this.uptimeUnits = 0;
+    this.callUnits = 0;
+    this.reputationUnits = 0;
+
+    this.periodStart = Math.floor(Date.now() / 1000);
+    this.uptimeInterval = null;
+  }
+
+  startUptimeTracking() {
+    if (this.uptimeInterval) clearInterval(this.uptimeInterval);
+    this.uptimeInterval = setInterval(() => {
+      this.uptimeUnits += 1;
+    }, 60 * 1000);
+  }
+
+  stopUptimeTracking() {
+    if (this.uptimeInterval) clearInterval(this.uptimeInterval);
+    this.uptimeInterval = null;
+  }
+
+  addRelayUnits(u = 1) { this.relayUnits += u; }
+  addStoreUnits(u = 1) { this.storeUnits += u; }
+  addCallUnits(u = 1) { this.callUnits += u; }
+  addReputationUnits(u = 1) { this.reputationUnits += u; }
+
+  buildAndSendReport() {
+    const periodEnd = Math.floor(Date.now() / 1000);
+
+    const report = {
+      type: "MINING_REPORT",
+      node_id: this.nodeId,
+      user_id: this.userId,
+      relay_units: this.relayUnits,
+      store_units: this.storeUnits,
+      uptime_units: this.uptimeUnits,
+      call_units: this.callUnits,
+      reputation_units: this.reputationUnits,
+      period_start: this.periodStart,
+      period_end: periodEnd,
+      timestamp: periodEnd
+    };
+
+    const payload = Buffer.from(JSON.stringify(report), "utf8");
+    const signatureBytes = this.signer(payload);
+    const signatureHex = Buffer.from(signatureBytes).toString("hex");
+
+    report.signature = signatureHex;
+
+    this.reportSender(JSON.stringify(report));
+    this.reset(periodEnd);
+  }
+
+  reset(newStart) {
+    this.relayUnits = 0;
+    this.storeUnits = 0;
+    this.uptimeUnits = 0;
+    this.callUnits = 0;
+    this.reputationUnits = 0;
+    this.periodStart = newStart;
+  }
+}
+
+
+/********************************************************************************************
+ * 3. NODO P2P TAKTAK/WHAKATA REAL (libp2p)
+ ********************************************************************************************/
+
+import { createLibp2p } from "libp2p";
+import { tcp } from "@libp2p/tcp";
+import { webSockets } from "@libp2p/websockets";
+import { mplex } from "@libp2p/mplex";
+import { noise } from "@chainsafe/libp2p-noise";
+import { kadDHT } from "@libp2p/kad-dht";
+import { gossipsub } from "@chainsafe/libp2p-gossipsub";
+
+export async function createTakTakNode({ listenAddrs = [] } = {}) {
+  const node = await createLibp2p({
+    addresses: { listen: listenAddrs },
+    transports: [tcp(), webSockets()],
+    streamMuxers: [mplex()],
+    connectionEncryption: [noise()],
+    pubsub: gossipsub(),
+    dht: kadDHT({ kBucketSize: 20 })
+  });
+
+  await node.start();
+  console.log("Nodo TakTak iniciado:", node.peerId.toString());
+  return node;
+}
+
+
+/********************************************************************************************
+ * 4. CAPA WHATAKA P2P (PubSub + Mensajes dirigidos)
+ ********************************************************************************************/
+
+const WHATKA_TOPIC = "whataka-messages";
+
+export async function createWhaTakaP2P() {
+  const node = await createTakTakNode({
+    listenAddrs: ["/ip4/0.0.0.0/tcp/0"]
+  });
+
+  let onMessageHandler = null;
+
+  node.pubsub.subscribe(WHATKA_TOPIC);
+
+  node.pubsub.addEventListener("message", (evt) => {
+    const msg = evt.detail;
+    try {
+      const data = JSON.parse(new TextDecoder().decode(msg.data));
+      const { to, from, payload } = data;
+
+      const myId = node.peerId.toString();
+      if (to !== myId) return;
+
+      if (onMessageHandler) {
+        const payloadBytes = Buffer.from(payload, "base64");
+        onMessageHandler(from, payloadBytes);
+      }
+    } catch (e) {
+      console.error("Error parsing message", e);
+    }
+  });
+
+  async function sendToPeer(peerId, payloadBytes) {
+    const msg = {
+      to: peerId,
+      from: node.peerId.toString(),
+      payload: Buffer.from(payloadBytes).toString("base64")
+    };
+    await node.pubsub.publish(
+      WHATKA_TOPIC,
+      new TextEncoder().encode(JSON.stringify(msg))
+    );
+  }
+
+  return {
+    node,
+    getMyPeerId: () => node.peerId.toString(),
+    sendToPeer,
+    setOnMessageListener: (fn) => (onMessageHandler = fn)
+  };
+}
+
+
+/********************************************************************************************
+ * 5. CLIENTE P2P WHATAKA
+ ********************************************************************************************/
+
+export async function createP2PClient() {
+  const p2p = await createWhaTakaP2P();
+
+  return {
+    getMyPeerId: () => p2p.getMyPeerId(),
+    sendToPeer: (peerId, payloadBytes) => p2p.sendToPeer(peerId, payloadBytes),
+    setOnMessageListener: (listener) => p2p.setOnMessageListener(listener)
+  };
+}
+
+
+/********************************************************************************************
+ * 6. CONTRATO INTELIGENTE TTC (Solidity)
+ ********************************************************************************************/
+
+const TTC_CONTRACT = `
+pragma solidity ^0.8.20;
+
+interface ITTC {
+    function transfer(address to, uint256 amount) external returns (bool);
+}
+
+contract WhaTakaMiningRewards {
+    ITTC public ttcToken;
+    address public owner;
+
+    uint256 public relayWeight = 5;
+    uint256 public storeWeight = 8;
+    uint256 public uptimeWeight = 1;
+    uint256 public callWeight = 10;
+    uint256 public reputationWeight = 3;
+
+    uint256 public rewardFactor = 1e15;
+
+    mapping(bytes32 => bool) public processedReports;
+
+    event RewardPaid(address indexed user, uint256 amount, bytes32 reportHash);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "not owner");
+        _;
+    }
+
+    constructor(address _ttcToken) {
+        ttcToken = ITTC(_ttcToken);
+        owner = msg.sender;
+    }
+
+    function payReward(
+        address user,
+        bytes32 reportHash,
+        uint256 relayUnits,
+        uint256 storeUnits,
+        uint256 uptimeUnits,
+        uint256 callUnits,
+        uint256 reputationUnits
+    ) external onlyOwner {
+        require(!processedReports[reportHash], "report already processed");
+
+        uint256 score =
+            relayUnits * relayWeight +
+            storeUnits * storeWeight +
+            uptimeUnits * uptimeWeight +
+            callUnits * callWeight +
+            reputationUnits * reputationWeight;
+
+        uint256 rewardAmount = score * rewardFactor;
+
+        processedReports[reportHash] = true;
+
+        require(ttcToken.transfer(user, rewardAmount), "TTC transfer failed");
+
+        emit RewardPaid(user, rewardAmount, reportHash);
+    }
+}
+`;
+
+
+/********************************************************************************************
+ * 7. SCRIPT DE PRUEBA COMPLETO — DOS NODOS P2P HABLANDO ENTRE SÍ
+ ********************************************************************************************/
+
+// test.js
+import { createP2PClient } from "./p2pClient.js";
+
+async function runTest() {
+  console.log("Iniciando nodo A...");
+  const A = await createP2PClient();
+
+  console.log("Iniciando nodo B...");
+  const B = await createP2PClient();
+
+  console.log("Nodo A:", A.getMyPeerId());
+  console.log("Nodo B:", B.getMyPeerId());
+
+  B.setOnMessageListener((from, payload) => {
+    console.log("B recibió mensaje de:", from);
+    console.log("Contenido:", payload.toString());
+  });
+
+  const mensaje = Buffer.from("Hola desde A → B", "utf8");
+
+  console.log("A enviando mensaje a B...");
+  A.sendToPeer(B.getMyPeerId(), mensaje);
+}
+
+runTest();

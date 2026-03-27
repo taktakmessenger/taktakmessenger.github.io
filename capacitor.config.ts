@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.taktak.app',
-  appName: 'Taktak',
+  appId: 'com.taktaknew.app',
+  appName: 'Taktaknew',
   webDir: 'dist'
 };
 

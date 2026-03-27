@@ -1,12 +1,34 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
-import { sendSMS } from '../services/twilio';
-import { generateOTP, hashOTP, verifyOTP } from '../utils/otp';
-import config from '../config';
+import { User } from '../models/User.js';
+import { sendSMS } from '../services/twilio.js';
+import { generateOTP, hashOTP, verifyOTP } from '../utils/otp.js';
+import config from '../config/index.js';
+
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+
+// Multer config for avatars
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/avatars';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `avatar-${Date.now()}${path.extname(file.originalname)}`);
+  }
+});
+
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+});
 
 // Register with phone number
 router.post('/register', [
@@ -19,7 +41,18 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { phone, username, email } = req.body;
+    // Age verification (min 13 years)
+    const { phone, username, email, dob, legalAccepted, privacyAccepted, referredByCode } = req.body;
+    
+    if (!dob || !legalAccepted || !privacyAccepted) {
+      return res.status(400).json({ error: 'Fecha de nacimiento y aceptación legal son obligatorias' });
+    }
+
+    const birthDate = new Date(dob);
+    const age = new Date().getFullYear() - birthDate.getFullYear();
+    if (age < 18) {
+      return res.status(400).json({ error: 'Debes tener al menos 18 años para registrarte' });
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({
@@ -38,6 +71,17 @@ router.post('/register', [
     const adminEmails = ['eliecerdepablos@gmail.com', 'elmalayaso7@gmail.com'];
     const isOwner = email && adminEmails.includes(email.toLowerCase());
 
+    // Check if referrer exists
+    let referredBy = undefined;
+    if (referredByCode) {
+      const referrer = await User.findOne({ referralCode: referredByCode });
+      if (referrer) referredBy = referrer._id;
+    }
+
+    // Generate my own referralCode
+    const uid = Math.random().toString(36).substring(2, 8).toUpperCase() + Math.floor(Math.random() * 1000).toString();
+    const myReferralCode = `${username.substring(0, 3).toUpperCase()}-${uid}`;
+
     // Create user
     const user = new User({
       phone,
@@ -46,9 +90,18 @@ router.post('/register', [
       password: otp, // Temporary password
       isOwner,
       isAdmin: isOwner,
+      dateOfBirth: birthDate,
+      legalAgreementAccepted: legalAccepted,
+      privacyPolicyAccepted: privacyAccepted,
+      referralCode: myReferralCode,
+      referredBy,
       verificationCode: otpHash,
-      verificationCodeExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+      verificationCodeExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      // Asignar automáticamente la frase de seguridad de 12 palabras a los administradores
+      recoveryPhraseHash: isOwner ? '$2a$10$667cHWtTWIHIyl5r5Tg18.MVRA7ww5yKRMNHSLx2vkUQeKEj8W4d6' : undefined
     });
+
+    await user.save();
 
     await user.save();
 
@@ -88,6 +141,15 @@ router.post('/verify', [
     const isValid = verifyOTP(otp, user.verificationCode!);
     if (!isValid || !user.verificationCodeExpires || user.verificationCodeExpires < new Date()) {
       return res.status(400).json({ error: 'Código inválido o expirado' });
+    }
+
+    // Reward referrer if this is first verification
+    if (!user.isVerified && user.referredBy) {
+      const referrer = await User.findById(user.referredBy);
+      if (referrer) {
+        referrer.minedCoins += 100; // Reward: 100 TTC-R = $1.00 USD
+        await referrer.save();
+      }
     }
 
     // Update user
@@ -180,6 +242,79 @@ router.get('/me', async (req: Request, res: Response) => {
     res.json({ user });
   } catch (error) {
     res.status(401).json({ error: 'Token inválido' });
+  }
+});
+
+// Update profile
+router.put('/profile', async (req: Request, res: Response) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'No autorizado' });
+
+    const decoded = jwt.verify(token, config.jwt.secret) as { userId: string };
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    user.username = req.body.username || user.username;
+    if (req.body.dob) user.dateOfBirth = new Date(req.body.dob);
+    if (req.body.legalAccepted !== undefined) user.legalAgreementAccepted = req.body.legalAccepted;
+    if (req.body.privacyAccepted !== undefined) user.privacyPolicyAccepted = req.body.privacyAccepted;
+
+    await user.save();
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Error al actualizar perfil' });
+  }
+});
+
+// Setup security
+router.post('/security-setup', async (req: Request, res: Response) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'No autorizado' });
+
+    const decoded = jwt.verify(token, config.jwt.secret) as { userId: string };
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const { recoveryPhrase, securityQuestion, securityAnswer } = req.body;
+
+    if (!recoveryPhrase || !securityQuestion || !securityAnswer) {
+      return res.status(400).json({ error: 'Faltan datos de seguridad requeridos' });
+    }
+
+    const bcrypt = await import('bcryptjs');
+    const salt = await bcrypt.default.genSalt(10);
+    user.recoveryPhraseHash = await bcrypt.default.hash(recoveryPhrase, salt);
+    user.securityQuestion = securityQuestion;
+    user.securityAnswer = await bcrypt.default.hash(securityAnswer.toLowerCase().trim(), salt);
+
+    await user.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Security setup error:', error);
+    res.status(500).json({ error: 'Error al configurar seguridad' });
+  }
+});
+
+// Update profile photo
+router.post('/avatar', authMiddleware, uploadAvatar.single('avatar'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
+    
+    const userId = req.user?.id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    // Update user avatar with relative URL
+    user.avatar = `/uploads/avatars/${req.file.filename}`;
+    await user.save();
+
+    res.json({ success: true, avatar: user.avatar });
+  } catch (error) {
+    console.error('Avatar upload error:', error);
+    res.status(500).json({ error: 'Error al subir avatar' });
   }
 });
 

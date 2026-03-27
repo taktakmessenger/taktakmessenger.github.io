@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import config from '../config';
+import config from '../config/index.js';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;

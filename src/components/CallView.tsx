@@ -85,7 +85,7 @@ export const CallView = () => {
     <div className="flex flex-col h-screen bg-[#12233e]">
       {/* Header */}
       <div className="bg-[#00a884] px-4 py-3">
-        <h1 className="text-white font-medium">Llamadas</h1>
+        <h1 className="text-black font-medium">Llamadas</h1>
       </div>
 
       {/* Quick Call Buttons */}
@@ -110,7 +110,7 @@ export const CallView = () => {
       {/* Recent Calls */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-2">
-          <h2 className="text-zinc-400 text-sm font-medium mb-3">Recientes</h2>
+          <h2 className="text-gray-600 text-sm font-medium mb-3">Recientes</h2>
           
           {chats.slice(0, 5).map((chat) => (
             <div
@@ -127,7 +127,7 @@ export const CallView = () => {
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-[#12233e]" />
                 </div>
                 <div>
-                  <p className="text-white font-medium">{chat.username}</p>
+                  <p className="text-black font-medium">{chat.username}</p>
                   <div className="flex items-center gap-1 text-zinc-500 text-xs">
                     <PhoneIncoming className="w-3 h-3" />
                     <span>Ayer, 3:45 PM</span>
@@ -139,13 +139,13 @@ export const CallView = () => {
                   onClick={() => startCall(chat.id, 'voice')}
                   className="p-2 bg-green-500 rounded-full hover:bg-green-600"
                 >
-                  <Phone className="w-4 h-4 text-white" />
+                  <Phone className="w-4 h-4 text-black" />
                 </button>
                 <button
                   onClick={() => startCall(chat.id, 'video')}
                   className="p-2 bg-blue-500 rounded-full hover:bg-blue-600"
                 >
-                  <Video className="w-4 h-4 text-white" />
+                  <Video className="w-4 h-4 text-black" />
                 </button>
               </div>
             </div>
@@ -157,7 +157,7 @@ export const CallView = () => {
           <div className="bg-[#1f2c34] rounded-xl p-4">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-white text-xl font-bold">127</p>
+                <p className="text-black text-xl font-bold">127</p>
                 <p className="text-zinc-500 text-xs">Llamadas hoy</p>
               </div>
               <div>
@@ -180,7 +180,7 @@ export const CallView = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-white/80 z-50 flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ scale: 0.9 }}
@@ -188,7 +188,7 @@ export const CallView = () => {
               exit={{ scale: 0.9 }}
               className="bg-[#1f2c34] rounded-2xl w-full max-w-sm p-6"
             >
-              <h2 className="text-white text-xl font-bold mb-4 text-center">
+              <h2 className="text-black text-xl font-bold mb-4 text-center">
                 Nueva Llamada
               </h2>
 
@@ -196,7 +196,7 @@ export const CallView = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <Input
                   placeholder="Buscar contacto..."
-                  className="bg-[#2a3942] border-none text-white pl-10"
+                  className="bg-[#2a3942] border-none text-black pl-10"
                 />
               </div>
 
@@ -215,7 +215,7 @@ export const CallView = () => {
                       alt={chat.username}
                       className="w-10 h-10 rounded-full"
                     />
-                    <span className="text-white">{chat.username}</span>
+                    <span className="text-black">{chat.username}</span>
                   </button>
                 ))}
               </div>
@@ -223,7 +223,7 @@ export const CallView = () => {
               <Button
                 variant="ghost"
                 onClick={() => setShowCallModal(false)}
-                className="w-full mt-4 text-zinc-400"
+                className="w-full mt-4 text-gray-600"
               >
                 Cancelar
               </Button>
@@ -257,7 +257,7 @@ const CallScreen = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
       {/* Video or Avatar */}
       <div className="flex-1 flex items-center justify-center">
         {call.type === 'video' && !isVideoOff ? (
@@ -275,8 +275,8 @@ const CallScreen = ({
               alt={call.username}
               className="w-32 h-32 rounded-full mx-auto mb-4"
             />
-            <p className="text-white text-xl font-bold">{call.username}</p>
-            <p className="text-zinc-400">
+            <p className="text-black text-xl font-bold">{call.username}</p>
+            <p className="text-gray-600">
               {call.status === 'calling' && 'Llamando...'}
               {call.status === 'ringing' && 'Sonando...'}
               {call.status === 'connected' && formatDuration(call.duration)}
@@ -294,9 +294,9 @@ const CallScreen = ({
               className={`p-4 rounded-full ${isVideoOff ? 'bg-red-500' : 'bg-zinc-700'}`}
             >
               {isVideoOff ? (
-                <VideoOff className="w-6 h-6 text-white" />
+                <VideoOff className="w-6 h-6 text-black" />
               ) : (
-                <Video className="w-6 h-6 text-white" />
+                <Video className="w-6 h-6 text-black" />
               )}
             </button>
           )}
@@ -306,9 +306,9 @@ const CallScreen = ({
             className={`p-4 rounded-full ${isMuted ? 'bg-red-500' : 'bg-zinc-700'}`}
           >
             {isMuted ? (
-              <MicOff className="w-6 h-6 text-white" />
+              <MicOff className="w-6 h-6 text-black" />
             ) : (
-              <Mic className="w-6 h-6 text-white" />
+              <Mic className="w-6 h-6 text-black" />
             )}
           </button>
 
@@ -316,7 +316,7 @@ const CallScreen = ({
             onClick={onEndCall}
             className="p-4 rounded-full bg-red-500"
           >
-            <PhoneOff className="w-6 h-6 text-white" />
+            <PhoneOff className="w-6 h-6 text-black" />
           </button>
         </div>
       </div>

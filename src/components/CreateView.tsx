@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Video, Image, Music, Radio, Upload,
   Play, X, Check, Search, Heart, MessageCircle,
-  Share2, UserPlus, TrendingUp, Flame, Clock, Sparkles
+  Share2, UserPlus, TrendingUp, Flame, Clock, Sparkles,
+  Camera, Filter, Wand2, Monitor, Mic, MicOff
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { Input } from '@/components/ui/input';
@@ -23,14 +24,6 @@ const trendingSongs = [
   { id: '8', title: 'Peaches', artist: 'Justin Bieber', duration: '3:18', plays: '1.2B' },
 ];
 
-const suggestedUsers = [
-  { id: '1', username: 'creador_pro', avatar: 'https://picsum.photos/200?random=1', followers: '2.5M' },
-  { id: '2', username: 'influencer_tiktok', avatar: 'https://picsum.photos/200?random=2', followers: '5.2M' },
-  { id: '3', username: 'artista_oficial', avatar: 'https://picsum.photos/200?random=3', followers: '10M' },
-  { id: '4', username: 'comediante_local', avatar: 'https://picsum.photos/200?random=4', followers: '800K' },
-  { id: '5', username: 'deportista_pro', avatar: 'https://picsum.photos/200?random=5', followers: '3.1M' },
-];
-
 interface Post {
   id: string;
   username: string;
@@ -44,12 +37,26 @@ interface Post {
 }
 
 export const CreateView = () => {
-  useStore();
+  const { addVideo, currentUser } = useStore();
   const [activeTab, setActiveTab] = useState<CreateTab>('upload');
   const [selectedSong, setSelectedSong] = useState<typeof trendingSongs[0] | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  
+  // New states from TikTok Clone UI
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isLive, setIsLive] = useState(false);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [liveChat, setLiveChat] = useState<{user: string, message: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isMuted, setIsMuted] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
   const [posts] = useState<Post[]>([
     {
       id: '1',
@@ -85,18 +92,126 @@ export const CreateView = () => {
     },
   ]);
 
-  const handleUpload = () => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setVideoFile(file);
+      setVideoPreview(URL.createObjectURL(file));
+      setUploadProgress(0);
+    } else {
+      toast.error('Por favor, selecciona un archivo de video válido.');
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!videoFile) {
+      toast.error('Selecciona un video primero');
+      return;
+    }
     if (!caption.trim()) {
       toast.error('Escribe una descripción para tu video');
       return;
     }
+
     setIsUploading(true);
-    setTimeout(() => {
+    setUploadProgress(10);
+
+    const formData = new FormData();
+    formData.append('video', videoFile);
+    formData.append('caption', caption);
+
+    try {
+      const response = await fetch('/api/videos/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('taktak_token')}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        addVideo(data.video);
+        setIsUploading(false);
+        setShowUploadModal(false);
+        setCaption('');
+        setVideoFile(null);
+        setVideoPreview(null);
+        setUploadProgress(0);
+        toast.success('¡Video subido exitosamente! 🎉');
+      } else {
+        toast.error(data.error || 'Error al subir el video');
+        setIsUploading(false);
+      }
+    } catch (error) {
+      console.error('Video upload error:', error);
+      toast.error('Error de conexión al subir el video');
       setIsUploading(false);
-      setShowUploadModal(false);
-      setCaption('');
-      toast.success('¡Video subido exitosamente! 🎉');
-    }, 2000);
+    }
+  };
+
+  const startLivePreview = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' }, 
+        audio: true 
+      });
+      setLiveStream(stream);
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Live Preview Error:', err);
+      toast.error('No se pudo acceder a la cámara para el Live');
+    }
+  };
+
+  const stopLivePreview = () => {
+    if (liveStream) {
+      liveStream.getTracks().forEach(track => track.stop());
+      setLiveStream(null);
+    }
+  };
+
+  const toggleMute = () => {
+    if (liveStream) {
+      const audioTrack = liveStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+        toast.info(audioTrack.enabled ? 'Micrófono activado' : 'Micrófono silenciado');
+      }
+    }
+  };
+
+  const handleGoLive = () => {
+    if (!liveStream) {
+      toast.error('Activa la cámara primero');
+      return;
+    }
+    setIsLive(!isLive);
+    if (!isLive) {
+      toast.success('¡Ahora estás en directo! 📡');
+      setViewerCount(Math.floor(Math.random() * 10) + 1);
+      // Mock chat messages
+      setTimeout(() => setLiveChat([{ user: 'Admin', message: '¡Bienvenidos al live de ' + currentUser?.username + '!' }]), 1000);
+      // Simulate viewer growth
+      const interval = setInterval(() => {
+        setViewerCount(prev => prev + Math.floor(Math.random() * 5));
+      }, 5000);
+      (window as any).liveInterval = interval;
+    } else {
+      toast.info('Transmisión finalizada');
+      clearInterval((window as any).liveInterval);
+      setViewerCount(0);
+      stopLivePreview();
+    }
+  };
+
+  const handleSendChat = () => {
+    if (!chatInput.trim()) return;
+    setLiveChat(prev => [...prev, { user: currentUser?.username || 'Yo', message: chatInput }]);
+    setChatInput('');
   };
 
   const formatNumber = (num: number) => {
@@ -116,7 +231,7 @@ export const CreateView = () => {
             className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500"
           >
             <Upload className="w-4 h-4 mr-2" />
-            Subir video
+            Nuevo video
           </Button>
           <Button
             variant="outline"
@@ -124,7 +239,7 @@ export const CreateView = () => {
             onClick={() => setActiveTab('live')}
           >
             <Radio className="w-4 h-4 mr-2" />
-            En vivo
+            Ir al En Vivo
           </Button>
         </div>
       </div>
@@ -141,6 +256,8 @@ export const CreateView = () => {
             key={i}
             whileTap={{ scale: 0.95 }}
             className="flex flex-col items-center gap-2"
+            aria-label={action.label}
+            title={action.label}
             onClick={() => {
               if (action.label === 'Video' || action.label === 'Foto') setShowUploadModal(true);
               else if (action.label === 'Sonido') setActiveTab('music');
@@ -191,11 +308,11 @@ export const CreateView = () => {
                     <Heart className="w-4 h-4" />
                     <span className="text-xs">{formatNumber(post.likes)}</span>
                   </button>
-                  <button className="flex items-center gap-1">
+                  <button className="flex items-center gap-1" aria-label="Comentarios" title="Comentarios">
                     <MessageCircle className="w-4 h-4" />
                     <span className="text-xs">{formatNumber(post.comments)}</span>
                   </button>
-                  <button className="flex items-center gap-1">
+                  <button className="flex items-center gap-1" aria-label="Compartir" title="Compartir">
                     <Share2 className="w-4 h-4" />
                     <span className="text-xs">{formatNumber(post.shares)}</span>
                   </button>
@@ -223,33 +340,95 @@ export const CreateView = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white">Subir video</h2>
-                <button onClick={() => setShowUploadModal(false)}>
+                <button onClick={() => setShowUploadModal(false)} aria-label="Cerrar" title="Cerrar">
                   <X className="w-6 h-6 text-zinc-400" />
                 </button>
               </div>
 
-              <div className="border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center mb-4">
-                <Video className="w-12 h-12 text-zinc-500 mx-auto mb-2" />
-                <p className="text-white mb-2">Selecciona un video</p>
-                <p className="text-zinc-500 text-sm">MP4, MOV hasta 287MB</p>
-                <Button className="mt-4 bg-purple-500 hover:bg-purple-600">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Elegir archivo
-                </Button>
-              </div>
+              {!videoPreview ? (
+                <div 
+                  className="border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center mb-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Video className="w-12 h-12 text-zinc-500 mx-auto mb-2" />
+                  <p className="text-white mb-2">Selecciona un video para subir</p>
+                  <p className="text-zinc-500 text-sm mb-4">MP4, MOV hasta 287MB</p>
+                  <Button 
+                    className="bg-purple-500 hover:bg-purple-600 pointer-events-none"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Elegir archivo
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    id="video-upload"
+                    title="Seleccionar archivo de video"
+                  />
+                </div>
+              ) : (
+                <div className="relative mb-4 bg-black rounded-xl overflow-hidden aspect-[9/16] max-h-[40vh] mx-auto flex items-center justify-center group">
+                  <video 
+                    src={videoPreview} 
+                    className="w-full h-full object-contain"
+                    controls
+                  />
+                  {!isUploading && (
+                    <button 
+                      onClick={() => {
+                        setVideoFile(null);
+                        setVideoPreview(null);
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-colors z-10 opacity-0 group-hover:opacity-100"
+                      aria-label="Eliminar video"
+                      title="Eliminar video"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
 
               {selectedSong && (
-                <div className="flex items-center gap-3 p-3 bg-zinc-800 rounded-lg mb-4">
+                <div className="flex items-center gap-3 p-3 bg-zinc-800 rounded-lg mb-4 border border-purple-500/30">
                   <Music className="w-5 h-5 text-purple-400" />
                   <div className="flex-1">
                     <p className="text-white text-sm">{selectedSong.title}</p>
                     <p className="text-zinc-500 text-xs">{selectedSong.artist}</p>
                   </div>
-                  <button onClick={() => setSelectedSong(null)}>
+                  <button onClick={() => setSelectedSong(null)} aria-label="Quitar canción" title="Quitar canción">
                     <X className="w-4 h-4 text-zinc-400" />
                   </button>
                 </div>
               )}
+
+              {/* Effects/Filters Simulation */}
+              <div className="mb-4">
+                <p className="text-zinc-400 text-xs mb-2 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Filtros y Efectos
+                </p>
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                  {[
+                    { name: 'Original', color: 'bg-zinc-700' },
+                    { name: 'Cyber', color: 'bg-cyan-500' },
+                    { name: 'Retro', color: 'bg-orange-400' },
+                    { name: 'B&W', color: 'bg-white' },
+                    { name: 'Magic', color: 'bg-purple-500' },
+                  ].map((filter) => (
+                    <button
+                      key={filter.name}
+                      className="flex-shrink-0 flex flex-col items-center gap-1"
+                      onClick={() => toast.success(`Filtro ${filter.name} aplicado`)}
+                    >
+                      <div className={`w-10 h-10 rounded-lg ${filter.color} opacity-40 hover:opacity-100 transition-opacity border border-white/20`} />
+                      <span className="text-[10px] text-zinc-500">{filter.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <Input
                 value={caption}
@@ -258,9 +437,21 @@ export const CreateView = () => {
                 className="bg-zinc-800 border-zinc-700 text-white mb-4"
               />
 
+              {isUploading && uploadProgress > 0 && (
+                <div className="mb-4">
+                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-200"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-right text-xs text-zinc-500 mt-1">{uploadProgress}% compitiendo P2P...</p>
+                </div>
+              )}
+
               <Button
                 onClick={handleUpload}
-                disabled={isUploading}
+                disabled={isUploading || !videoPreview}
                 className="w-full bg-gradient-to-r from-pink-500 to-purple-500"
               >
                 {isUploading ? (
@@ -268,7 +459,7 @@ export const CreateView = () => {
                 ) : (
                   <>
                     <Check className="w-4 h-4 mr-2" />
-                    Publicar
+                    Publicar en TakTak
                   </>
                 )}
               </Button>
@@ -284,7 +475,7 @@ export const CreateView = () => {
       {/* Header */}
       <div className="p-4 bg-zinc-900 border-b border-zinc-800">
         <div className="flex items-center gap-3">
-          <button onClick={() => setActiveTab('upload')}>
+          <button onClick={() => setActiveTab('upload')} aria-label="Volver" title="Volver">
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <h1 className="text-xl font-bold text-white">Música</h1>
@@ -364,81 +555,146 @@ export const CreateView = () => {
   );
 
   const renderLiveTab = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-black relative">
       {/* Header */}
-      <div className="p-4 bg-zinc-900 border-b border-zinc-800">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setActiveTab('upload')}>
-            <ArrowLeft className="w-5 h-5 text-white" />
-          </button>
-          <h1 className="text-xl font-bold text-white">En vivo</h1>
-        </div>
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center gap-3 z-30 bg-gradient-to-b from-black/80 to-transparent">
+        <button onClick={() => { stopLivePreview(); setActiveTab('upload'); }} aria-label="Volver" title="Volver">
+          <ArrowLeft className="w-6 h-6 text-white" />
+        </button>
+        <h1 className="text-xl font-bold text-white">Emitir en Directo</h1>
       </div>
 
-      {/* Live Preview */}
-      <div className="flex-1 p-4">
-        <div className="aspect-video bg-gradient-to-br from-purple-900 to-pink-900 rounded-2xl flex items-center justify-center mb-6">
-          <div className="text-center">
-            <Radio className="w-16 h-16 text-white/50 mx-auto mb-4 animate-pulse" />
-            <p className="text-white text-lg">Vista previa</p>
-            <p className="text-white/50 text-sm">Configura tu transmisión</p>
-          </div>
-        </div>
-
-        {/* Live Settings */}
-        <div className="space-y-4">
-          <div>
-            <label className="text-zinc-400 text-sm mb-2 block">Título de la transmisión</label>
-            <Input
-              placeholder="¿Sobre qué vas a transmitir?"
-              className="bg-zinc-800 border-zinc-700 text-white"
-            />
-          </div>
-
-          <div>
-            <label className="text-zinc-400 text-sm mb-2 block">Categoría</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Gaming', 'Baile', 'Chat', 'Música', 'Deportes', 'Arte'].map((cat) => (
-                <button
-                  key={cat}
-                  className="p-3 bg-zinc-800 rounded-lg text-zinc-400 text-sm hover:bg-zinc-700"
-                >
-                  {cat}
-                </button>
-              ))}
+      {/* Live Preview / Camera */}
+      <div className="flex-1 relative flex items-center justify-center bg-zinc-900 overflow-hidden">
+        {liveStream ? (
+          <video
+            ref={liveVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="text-center p-8">
+            <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-zinc-600">
+              <Camera className="w-10 h-10 text-zinc-500" />
             </div>
+            <p className="text-white font-medium mb-4">La cámara está apagada</p>
+            <Button onClick={startLivePreview} className="bg-[#FE2C55]">
+              Activar Cámara
+            </Button>
           </div>
+        )}
 
-          <Button
-            className="w-full bg-gradient-to-r from-red-500 to-pink-500 py-6"
-            onClick={() => toast.success('¡Transmisión iniciada! 📡')}
-          >
-            <Radio className="w-5 h-5 mr-2" />
-            Iniciar transmisión
-          </Button>
-        </div>
-      </div>
-
-      {/* Suggested Users */}
-      <div className="p-4 bg-zinc-900 border-t border-zinc-800">
-        <h3 className="text-white font-semibold mb-3">Usuarios en vivo</h3>
-        <div className="flex gap-3 overflow-x-auto">
-          {suggestedUsers.slice(0, 5).map((user) => (
-            <div key={user.id} className="flex flex-col items-center gap-2">
-              <div className="relative">
-                <img
-                  src={user.avatar}
-                  alt={user.username}
-                  className="w-14 h-14 rounded-full"
-                />
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                </div>
+        {/* Live Chat Overlay */}
+        <AnimatePresence>
+          {showChat && (
+            <motion.div 
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              className="absolute inset-0 z-40 bg-black/60 flex flex-col pt-24"
+            >
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {liveChat.map((msg, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="text-pink-400 font-bold text-sm">@{msg.user}:</span>
+                    <span className="text-white text-sm">{msg.message}</span>
+                  </div>
+                ))}
               </div>
-              <span className="text-xs text-zinc-400">@{user.username.slice(0, 8)}</span>
+              <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex gap-2">
+                <Input 
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Di algo..."
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendChat()}
+                />
+                <Button onClick={handleSendChat} className="bg-pink-500">
+                  <Play className="w-4 h-4 rotate-[-90deg]" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Right Controls (TikTok Style) */}
+        {liveStream && (
+          <div className="absolute right-4 top-24 flex flex-col gap-6 z-30">
+            <button className="flex flex-col items-center gap-1 group" onClick={toggleMute}>
+              <div className={`p-3 backdrop-blur-md rounded-full transition-colors ${isMuted ? 'bg-red-500' : 'bg-black/40 group-hover:bg-black/60'}`}>
+                {isMuted ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
+              </div>
+              <span className="text-[10px] text-white font-bold drop-shadow-md">{isMuted ? 'Silenciado' : 'Mic On'}</span>
+            </button>
+            <button className="flex flex-col items-center gap-1 group" onClick={() => setShowChat(!showChat)}>
+              <div className={`p-3 backdrop-blur-md rounded-full transition-colors ${showChat ? 'bg-pink-500' : 'bg-black/40 group-hover:bg-black/60'}`}>
+                <MessageCircle className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-[10px] text-white font-bold drop-shadow-md">Chat</span>
+            </button>
+            <button className="flex flex-col items-center gap-1 group" onClick={() => toast.info('Filtros próximamente')}>
+              <div className="p-3 bg-black/40 backdrop-blur-md rounded-full group-hover:bg-black/60 transition-colors">
+                <Filter className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-[10px] text-white font-bold drop-shadow-md">Filtros</span>
+            </button>
+            <button className="flex flex-col items-center gap-1 group" onClick={() => toast.info('Efectos próximamente')}>
+              <div className="p-3 bg-black/40 backdrop-blur-md rounded-full group-hover:bg-black/60 transition-colors">
+                <Wand2 className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-[10px] text-white font-bold drop-shadow-md">Efectos</span>
+            </button>
+            <button className="flex flex-col items-center gap-1 group" onClick={() => toast.info('Pantalla verde próximamente')}>
+              <div className="p-3 bg-black/40 backdrop-blur-md rounded-full group-hover:bg-black/60 transition-colors">
+                <Monitor className="w-6 h-6 text-green-400" />
+              </div>
+              <span className="text-[10px] text-white font-bold drop-shadow-md">Fondo</span>
+            </button>
+          </div>
+        )}
+
+        {/* Bottom Banner */}
+        <div className="absolute bottom-32 left-4 right-4 z-30">
+          <div className="bg-black/40 backdrop-blur-xl border border-white/10 p-4 rounded-2xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-tr from-purple-500 to-pink-500 rounded-full flex items-center justify-center p-0.5">
+                <img src={currentUser?.avatar} alt="Me" className="w-full h-full rounded-full object-cover" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-bold">{isLive ? 'EN DIRECTO' : 'Configuración de Live'}</p>
+                <p className="text-zinc-400 text-xs text-green-400">
+                  {isLive ? `${formatNumber(viewerCount)} espectadores` : 'P2P Network: Online'}
+                </p>
+              </div>
             </div>
-          ))}
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-white text-[10px] font-bold">HD</span>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="p-8 bg-black z-30">
+        <Button
+          className={`w-full h-14 text-white text-lg font-bold rounded-full shadow-lg flex items-center justify-center gap-2 ${isLive ? 'bg-red-600 shadow-red-500/20' : 'bg-[#FE2C55] shadow-[#FE2C55]/20'}`}
+          onClick={handleGoLive}
+        >
+          {isLive ? (
+            <>
+              <div className="w-3 h-3 bg-white rounded-full" />
+              DETENER TRANSMISIÓN
+            </>
+          ) : (
+            <>
+              <div className="w-3 h-3 bg-white rounded-full animate-ping" />
+              GO LIVE
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );

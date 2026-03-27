@@ -115,16 +115,16 @@ export const CameraView = ({ onClose }: CameraViewProps) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black flex flex-col"
+        className="fixed inset-0 z-50 bg-white flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 bg-zinc-900">
-          <button onClick={() => setIsCreatingGift(false)} className="p-2 hover:bg-zinc-800 rounded-full">
-            <ArrowLeft className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between p-4 bg-gray-100">
+          <button onClick={() => setIsCreatingGift(false)} className="p-2 hover:bg-gray-200 rounded-full">
+            <ArrowLeft className="w-6 h-6 text-black" />
           </button>
-          <h2 className="text-white font-semibold">Crear Regalo</h2>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full">
-            <X className="w-6 h-6 text-white" />
+          <h2 className="text-black font-semibold">Crear Regalo</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full">
+            <X className="w-6 h-6 text-black" />
           </button>
         </div>
 
@@ -143,26 +143,26 @@ export const CameraView = ({ onClose }: CameraViewProps) => {
         </div>
 
         {/* Form */}
-        <div className="p-6 bg-zinc-900 rounded-t-3xl space-y-4">
+        <div className="p-6 bg-gray-100 rounded-t-3xl space-y-4">
           <div>
-            <label className="text-zinc-400 text-sm mb-2 block">Nombre del regalo</label>
+            <label className="text-gray-600 text-sm mb-2 block">Nombre del regalo</label>
             <Input
               value={giftName}
               onChange={(e) => setGiftName(e.target.value)}
               placeholder="Ej: Mi Foto Especial"
-              className="bg-zinc-800 border-zinc-700 text-white"
+              className="bg-gray-200 border-zinc-700 text-black"
             />
           </div>
           
           <div>
-            <label className="text-zinc-400 text-sm mb-2 block">Precio (USD)</label>
+            <label className="text-gray-600 text-sm mb-2 block">Precio (USD)</label>
             <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
               <Input
                 type="number"
                 value={giftPrice}
                 onChange={(e) => setGiftPrice(e.target.value)}
-                className="bg-zinc-800 border-zinc-700 text-white pl-10"
+                className="bg-gray-200 border-zinc-700 text-black pl-10"
                 min="0.50"
                 step="0.50"
               />
@@ -173,7 +173,7 @@ export const CameraView = ({ onClose }: CameraViewProps) => {
           <div className="flex gap-3 pt-2">
             <Button
               variant="outline"
-              className="flex-1 border-zinc-700 text-white"
+              className="flex-1 border-zinc-700 text-black"
               onClick={() => setIsCreatingGift(false)}
             >
               <RotateCcw className="w-4 h-4 mr-2" />
@@ -197,32 +197,32 @@ export const CameraView = ({ onClose }: CameraViewProps) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black flex flex-col"
+      className="fixed inset-0 z-50 bg-white flex flex-col"
     >
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
         <button
           onClick={onClose}
-          className="p-3 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
+          className="p-3 bg-white/50 backdrop-blur-sm rounded-full hover:bg-white/70 transition-colors"
         >
-          <X className="w-6 h-6 text-white" />
+          <X className="w-6 h-6 text-black" />
         </button>
         <div className="flex gap-2">
           <button
             onClick={() => setFlashEnabled(!flashEnabled)}
-            className="p-3 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
+            className="p-3 bg-white/50 backdrop-blur-sm rounded-full hover:bg-white/70 transition-colors"
           >
             {flashEnabled ? (
               <Zap className="w-5 h-5 text-yellow-400" />
             ) : (
-              <ZapOff className="w-5 h-5 text-white" />
+              <ZapOff className="w-5 h-5 text-black" />
             )}
           </button>
           <button
             onClick={toggleCamera}
-            className="p-3 bg-black/50 backdrop-blur-sm rounded-full hover:bg-black/70 transition-colors"
+            className="p-3 bg-white/50 backdrop-blur-sm rounded-full hover:bg-white/70 transition-colors"
           >
-            <RotateCcw className="w-5 h-5 text-white" />
+            <RotateCcw className="w-5 h-5 text-black" />
           </button>
         </div>
       </div>
@@ -266,29 +266,29 @@ export const CameraView = ({ onClose }: CameraViewProps) => {
       </div>
 
       {/* Controls */}
-      <div className="p-6 bg-black">
+      <div className="p-6 bg-white">
         {capturedImage ? (
           <div className="flex items-center justify-center gap-6">
             <button
               onClick={retakePhoto}
-              className="p-4 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors"
+              className="p-4 bg-gray-200 rounded-full hover:bg-zinc-700 transition-colors"
             >
-              <RotateCcw className="w-6 h-6 text-white" />
+              <RotateCcw className="w-6 h-6 text-black" />
             </button>
             <button
               onClick={() => setIsCreatingGift(true)}
               className="px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center gap-2"
             >
-              <Gift className="w-5 h-5 text-white" />
-              <span className="text-white font-semibold">Crear Regalo</span>
+              <Gift className="w-5 h-5 text-black" />
+              <span className="text-black font-semibold">Crear Regalo</span>
             </button>
             <button
               onClick={() => {
                 toast.info('Compartir foto próximamente');
               }}
-              className="p-4 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors"
+              className="p-4 bg-gray-200 rounded-full hover:bg-zinc-700 transition-colors"
             >
-              <Image className="w-6 h-6 text-white" />
+              <Image className="w-6 h-6 text-black" />
             </button>
           </div>
         ) : (
