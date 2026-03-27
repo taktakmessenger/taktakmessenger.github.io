@@ -30,19 +30,20 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
   
   const { login } = useStore();
 
+  const [debugOtp, setDebugOtp] = useState<string | null>(null);
+
   const handleIdentitySubmit = async () => {
     if (!phone.trim()) {
       toast.error('Ingresa tu teléfono o correo');
       return;
     }
     setIsLoading(true);
+    setDebugOtp(null);
     try {
-      // Intentar login con el identificador (puede ser tel o correo)
-      await authApi.login(phone).catch(() => {
-        // Si falla (usuario nuevo), intentar registrar
+      const res = await authApi.login(phone).catch(() => {
         if (phone.includes('@')) {
           return authApi.register({ 
-            phone: 'temp_' + Date.now(), // Phone is required in schema
+            phone: 'temp_' + Date.now(),
             email: phone,
             username: 'user_' + Math.random().toString(36).substring(7),
             dob: '2000-01-01',
@@ -60,6 +61,10 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
           referredByCode
         });
       });
+      
+      if (res.data.debugOtp) {
+        setDebugOtp(res.data.debugOtp);
+      }
       
       setStep('otp');
       toast.success(phone.includes('@') ? `Código enviado a ${phone}` : `Código enviado al +58 ${phone}`);
@@ -211,15 +216,24 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
           mode={mode === 'recovery' ? 'signup' : mode}
         />;
       case 'otp':
-        return <OTPScreen 
-          otp={otp}
-          isLoading={isLoading}
-          onOtpChange={handleOTPChange}
-          onKeyDown={handleKeyDown}
-          onVerify={handleVerifyOTP}
-          onResend={handleResendOTP}
-          onBack={() => setStep('phone')}
-        />;
+        return (
+          <div className="relative">
+            {debugOtp && (
+              <div className="absolute top-0 left-0 right-0 bg-yellow-500/20 border border-yellow-500/50 p-2 text-center text-[10px] text-yellow-500 font-bold z-50 rounded-b-xl backdrop-blur-md">
+                MODO ADMIN (OTP): {debugOtp}
+              </div>
+            )}
+            <OTPScreen 
+              otp={otp}
+              isLoading={isLoading}
+              onOtpChange={handleOTPChange}
+              onKeyDown={handleKeyDown}
+              onVerify={handleVerifyOTP}
+              onResend={handleResendOTP}
+              onBack={() => setStep('phone')}
+            />
+          </div>
+        );
       case 'profile':
         return <ProfileScreen 
           username={username}
