@@ -188,8 +188,15 @@ const startServer = async () => {
         miningService.runRewardCycle(1000).catch(err => console.error('Mining Cycle Error:', err));
       }, 10 * 60 * 1000);
     });
-  } catch (error) {
-    console.error('❌ Error al iniciar servidor:', error);
+  } catch (error: any) {
+    console.error('❌ FALLO CRÍTICO AL INICIAR SERVIDOR:');
+    console.error('Mensaje:', error.message);
+    if (error.code === 'EADDRINUSE') {
+      console.error('Error: El puerto ya está en uso.');
+    } else if (error.name === 'MongooseServerSelectionError') {
+      console.error('Error de MongoDB: No se pudo conectar a la base de datos. Verifica la URI y el IP Whitelist.');
+    }
+    console.error('Stack:', error.stack);
     process.exit(1);
   }
 };
