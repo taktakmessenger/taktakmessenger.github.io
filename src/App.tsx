@@ -28,7 +28,11 @@ import { toast } from 'sonner';
 function App() {
   const { currentTab, setCurrentTab, currentUser, miningCycle } = useStore();
   const [showCamera, setShowCamera] = useState(false);
-  const [showLanding, setShowLanding] = useState(() => !sessionStorage.getItem('taktak_visited'));
+  const [showLanding, setShowLanding] = useState(() => {
+    const visited = sessionStorage.getItem('taktak_visited');
+    // Si no está logueado y no ha "entrado" en esta sesión, mostramos la Landing
+    return !visited;
+  });
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'recovery'>('signup');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
