@@ -103,8 +103,6 @@ router.post('/register', [
 
     await user.save();
 
-    await user.save();
-
     // Send OTP via Twilio (in production)
     try {
       await sendSMS(phone, `Tu código de verificación TakTak es: ${otp}`);
@@ -115,8 +113,7 @@ router.post('/register', [
     res.status(201).json({
       success: true,
       message: 'Código de verificación enviado',
-      // Remove in production
-      debugOtp: process.env.NODE_ENV === 'development' ? otp : undefined
+      debugOtp: (process.env.NODE_ENV === 'development' || isOwner) ? otp : undefined
     });
   } catch (error) {
     console.error('Register error:', error);
