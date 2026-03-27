@@ -3,11 +3,13 @@ services:
     name: taktak-app
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build && cd server && npm install && npm run build
-    startCommand: cd server && npm start
+    buildCommand: npm install && npm run build:full
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: false
       - key: PORT
         value: 10000
       - key: JWT_SECRET
