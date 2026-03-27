@@ -149,26 +149,26 @@ export const LandingPage = ({ onEnterApp, onAuth }: LandingPageProps) => {
         className="flex flex-col items-center mt-12 mb-20 text-center pointer-events-none"
       >
         <div className="relative">
-          {/* Floating Seeds (Pepas) Animation */}
-          {[...Array(6)].map((_, i) => (
+          {/* Floating Golden Dust/Particles Animation */}
+          {[...Array(12)].map((_, i) => (
             <motion.div
               key={i}
-              className="absolute w-2 h-2 bg-yellow-600 rounded-full blur-[1px] z-10"
+              className="absolute w-1 h-1 bg-yellow-400 rounded-full blur-[0.5px] z-10"
               animate={{
-                y: [-20, -100],
-                x: [0, (i % 2 === 0 ? 40 : -40)],
-                opacity: [0, 1, 0],
-                scale: [0, 1.2, 0]
+                y: [-20, -120],
+                x: [0, (i % 2 === 0 ? 60 : -60)],
+                opacity: [0, 0.8, 0],
+                scale: [0, 1.5, 0]
               }}
               transition={{
-                duration: 3 + i,
+                duration: 4 + i % 3,
                 repeat: Infinity,
-                delay: i * 0.5,
-                ease: "easeOut"
+                delay: i * 0.3,
+                ease: "linear"
               }}
               style={{
-                left: '50%',
-                bottom: '40%'
+                left: `${40 + (i * 5) % 20}%`,
+                bottom: '30%'
               }}
             />
           ))}
