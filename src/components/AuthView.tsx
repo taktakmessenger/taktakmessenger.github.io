@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   ArrowLeft, MessageCircle, Shield,
-  RefreshCw, User, Check, Smartphone
+  RefreshCw, User, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { PrivacyPolicy } from './PrivacyPolicy';
 import { TermsOfService } from './TermsOfService';
 import { authApi } from '@/services/api';
+import { CountryPicker } from './CountryPicker';
+import { cn } from '@/lib/utils';
 
 type AuthStep = 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms' | 'recovery' | 'recovery_question';
 
@@ -29,6 +31,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
   });
   
   const { login } = useStore();
+  const [countryCode, setCountryCode] = useState('+58');
 
   const [debugOtp, setDebugOtp] = useState<string | null>(null);
 
@@ -67,7 +70,8 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
       }
       
       setStep('otp');
-      toast.success(phone.includes('@') ? `Código enviado a ${phone}` : `Código enviado al +58 ${phone}`);
+      const displayPhone = phone.includes('@') ? phone : `${countryCode} ${phone}`;
+      toast.success(`Código enviado a ${displayPhone}`);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error: string } } };
       toast.error(error.response?.data?.error || 'Error al enviar código');
@@ -83,8 +87,9 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
       return;
     }
     setIsLoading(true);
+    const fullIdentifier = phone.includes('@') ? phone : (phone.startsWith('+') ? phone : countryCode + phone);
     try {
-      const response = await authApi.verify(phone, otpCode);
+      const response = await authApi.verify(fullIdentifier, otpCode);
       const { user, token } = response.data;
       
       localStorage.setItem('taktak_token', token);
@@ -209,6 +214,8 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
         return <PhoneScreen 
           phone={phone} 
           setPhone={setPhone}
+          countryCode={countryCode}
+          setCountryCode={setCountryCode}
           referredByCode={referredByCode}
           setReferredByCode={setReferredByCode}
           isLoading={isLoading}
@@ -405,6 +412,8 @@ const RecoveryQuestionScreen = ({ onBack, onComplete }: { onBack: () => void, on
 const PhoneScreen = ({
   phone,
   setPhone,
+  countryCode,
+  setCountryCode,
   referredByCode,
   setReferredByCode,
   isLoading,
@@ -413,6 +422,8 @@ const PhoneScreen = ({
 }: {
   phone: string;
   setPhone: (v: string) => void;
+  countryCode: string;
+  setCountryCode: (v: string) => void;
   referredByCode: string;
   setReferredByCode: (v: string) => void;
   isLoading: boolean;
@@ -432,16 +443,26 @@ const PhoneScreen = ({
         {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número o correo' : 'Únete a la red P2P más grande'}
       </p>
 
-      <div className="flex items-center gap-3 mb-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl w-full max-w-md backdrop-blur-md transition-all focus-within:border-cyan-500/50">
-        {phone.includes('@') ? <MessageCircle className="w-6 h-6 text-zinc-500" /> : <Smartphone className="w-6 h-6 text-zinc-500" />}
-        <div className="flex-1">
-          <Input 
-            type="text"
-            placeholder="Teléfono o Correo"
-            className="bg-transparent border-none focus:ring-0 text-white h-10 p-0 text-lg placeholder:text-zinc-600"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
+      <div className="flex flex-col gap-3 w-full max-w-md mb-8 transition-all">
+        <div className="flex gap-2">
+          {!phone.includes('@') && (
+            <CountryPicker value={countryCode} onChange={setCountryCode} />
+          )}
+          <div className={cn(
+            "flex-1 flex items-center gap-3 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl backdrop-blur-md transition-all focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20",
+            phone.includes('@') ? "pl-4" : "pl-3"
+          )}>
+            {phone.includes('@') ? <MessageCircle className="w-6 h-6 text-zinc-500" /> : null}
+            <div className="flex-1">
+              <Input 
+                type="text"
+                placeholder={phone.includes('@') ? "Correo electrónico" : "Número de teléfono"}
+                className="bg-transparent border-none focus:ring-0 text-white h-10 p-0 text-lg placeholder:text-zinc-600"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
