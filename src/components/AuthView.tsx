@@ -65,12 +65,15 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
     }
     setIsLoading(true);
     setDebugOtp(null);
+    
+    const fullIdentifier = phone.includes('@') ? phone : (phone.startsWith('+') ? phone : countryCode + phone);
+    
     try {
-      const res = await authApi.login(phone).catch(() => {
-        if (phone.includes('@')) {
+      const res = await authApi.login(fullIdentifier).catch(() => {
+        if (fullIdentifier.includes('@')) {
           return authApi.register({ 
             phone: 'temp_' + Date.now(),
-            email: phone,
+            email: fullIdentifier,
             username: 'user_' + Math.random().toString(36).substring(7),
             dob: '2000-01-01',
             legalAccepted: true, 
@@ -79,7 +82,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
           });
         }
         return authApi.register({ 
-          phone, 
+          phone: fullIdentifier, 
           username: 'pending_' + Date.now(),
           dob: '2000-01-01',
           legalAccepted: true, 
@@ -93,8 +96,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
       }
       
       setStep('otp');
-      const displayPhone = phone.includes('@') ? phone : `${countryCode} ${phone}`;
-      toast.success(`Código enviado a ${displayPhone}`);
+      toast.success(`Código enviado a ${fullIdentifier}`);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error: string } } };
       toast.error(error.response?.data?.error || 'Error al enviar código');
