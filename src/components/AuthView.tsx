@@ -393,7 +393,7 @@ const PhoneScreen = ({
   <div className="flex flex-col h-screen bg-black text-white">
     <div className="flex-1 flex flex-col items-center justify-center p-8">
       <div className="p-4 mb-4">
-        <img src="/logo.png" alt="Logo" className="w-24 h-24 object-contain" />
+        <img src="/taktak-logo.jpeg" alt="Logo" className="w-24 h-24 object-contain" />
       </div>
 
       <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">
