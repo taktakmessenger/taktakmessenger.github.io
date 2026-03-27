@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 interface LandingPageProps {
   onEnterApp: () => void;
+  onAuth: (mode: 'login' | 'signup') => void;
 }
 
 type View = 'landing' | 'auth_choice' | 'auth_register' | 'auth_login' | 'register_info' | 'register_recovery' | 'register_security';
@@ -20,7 +21,7 @@ const RECOVERY_WORDS = [
   "bosque", "montaña", "nieve", "trueno", "rayo", "lluvia", "niebla", "oasis"
 ];
 
-export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
+export const LandingPage = ({ onEnterApp, onAuth }: LandingPageProps) => {
   const [view, setView] = useState<View>('landing');
   const [fade, setFade] = useState(false);
   const [formData, setFormData] = useState({
@@ -104,20 +105,20 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="flex flex-col w-full max-w-sm gap-4 mb-16"
+        className="flex flex-col w-full max-w-sm gap-4 mb-16 px-6"
       >
         <Button 
-          onClick={() => setView('auth_register')}
-          className="flex items-center justify-center gap-2 w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black rounded-xl font-black text-lg transition-all active:scale-95 shadow-[0_4px_15px_rgba(234,179,8,0.3)]"
+          onClick={() => onAuth('signup')}
+          className="flex items-center justify-center gap-2 w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black rounded-xl font-black text-lg transition-all active:scale-95 shadow-[0_10px_30px_rgba(234,179,8,0.25)] border-t border-yellow-400/30"
         >
           <UserPlus className="w-6 h-6" />
           Crear Cuenta
         </Button>
 
         <Button 
-          onClick={() => setView('auth_login')}
+          onClick={() => onAuth('login')}
           variant="outline"
-          className="flex items-center justify-center gap-2 w-full h-14 border-2 border-zinc-800 hover:bg-zinc-900 text-white rounded-xl font-black text-lg transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 w-full h-14 border-2 border-zinc-700 hover:bg-zinc-800 text-white rounded-xl font-black text-lg transition-all active:scale-95 backdrop-blur-sm"
         >
           <Key className="w-6 h-6 text-yellow-500" />
           Ingresar
@@ -145,22 +146,50 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.6 }}
-        className="flex flex-col items-center mt-12 mb-20 text-center"
+        className="flex flex-col items-center mt-12 mb-20 text-center pointer-events-none"
       >
         <div className="relative">
+          {/* Floating Seeds (Pepas) Animation */}
+          {[...Array(6)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-2 h-2 bg-yellow-600 rounded-full blur-[1px] z-10"
+              animate={{
+                y: [-20, -100],
+                x: [0, (i % 2 === 0 ? 40 : -40)],
+                opacity: [0, 1, 0],
+                scale: [0, 1.2, 0]
+              }}
+              transition={{
+                duration: 3 + i,
+                repeat: Infinity,
+                delay: i * 0.5,
+                ease: "easeOut"
+              }}
+              style={{
+                left: '50%',
+                bottom: '40%'
+              }}
+            />
+          ))}
+
           <img 
             src="/pepa.png" 
             alt="Pepa del Queso" 
-            className="w-48 h-48 object-cover rounded-3xl border-2 border-yellow-500/20 shadow-[0_10px_40px_rgba(234,179,8,0.15)] transform -rotate-3 hover:rotate-0 transition-transform duration-500"
+            className="w-56 h-56 object-cover rounded-3xl border-2 border-yellow-500/20 shadow-[0_20px_60px_rgba(234,179,8,0.2)] transform -rotate-3 hover:rotate-0 transition-transform duration-700"
           />
-          <div className="absolute -bottom-4 -right-4 bg-yellow-500 text-black font-black px-4 py-1 rounded-full text-xs shadow-lg">
-            PREMIUM
+          <div className="absolute -bottom-4 -right-4 bg-yellow-500 text-black font-black px-6 py-1.5 rounded-full text-[10px] shadow-2xl border-2 border-black tracking-tighter ring-4 ring-black/50">
+            PREMIUM P2P
           </div>
         </div>
-        <p className="text-yellow-500 font-extrabold text-2xl mt-8 italic tracking-[0.2em] uppercase leading-tight">
-          Somos la <br />
-          <span className="text-3xl font-black">Pepa del Queso</span>
-        </p>
+        <div className="mt-10">
+          <p className="text-yellow-500 font-extrabold text-2xl italic tracking-[0.3em] uppercase leading-none opacity-80">
+            Somos la 
+          </p>
+          <h2 className="text-5xl font-black text-white italic tracking-tighter mt-1 drop-shadow-lg scale-y-110">
+            PEPA DEL QUESO
+          </h2>
+        </div>
       </motion.div>
     </div>
   );

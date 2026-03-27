@@ -13,8 +13,8 @@ import { authApi } from '@/services/api';
 
 type AuthStep = 'welcome' | 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms';
 
-export const AuthView = () => {
-  const [step, setStep] = useState<AuthStep>('welcome');
+export const AuthView = ({ initialStep = 'welcome' }: { initialStep?: AuthStep }) => {
+  const [step, setStep] = useState<AuthStep>(initialStep);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);

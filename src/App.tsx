@@ -29,6 +29,7 @@ function App() {
   const { currentTab, setCurrentTab, currentUser, miningCycle } = useStore();
   const [showCamera, setShowCamera] = useState(false);
   const [showLanding, setShowLanding] = useState(() => !sessionStorage.getItem('taktak_visited'));
+  const [authInitialStep, setAuthInitialStep] = useState<'welcome' | 'phone'>('welcome');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Mining Cycle Effect (Simulated P2P rewards every 30s)
@@ -65,10 +66,11 @@ function App() {
     });
   }, []);
 
-  const handleEnterApp = () => {
+  const handleEnterApp = (mode: 'login' | 'signup' = 'signup') => {
     sessionStorage.setItem('taktak_visited', 'true');
     setShowLanding(false);
-    toast.success('¡Bienvenido a TakTak!', {
+    setAuthInitialStep(mode === 'login' ? 'phone' : 'welcome');
+    toast.success(mode === 'login' ? 'Bienvenido de vuelta' : '¡Bienvenido a TakTak!', {
       description: 'Tu experiencia descentralizada comienza ahora'
     });
   };
@@ -100,7 +102,10 @@ function App() {
       case 'incentives':
         return <BannersIncentivesView />;
       case 'policies':
-        return <LandingPage onEnterApp={() => setCurrentTab('home')} />;
+        return <LandingPage 
+          onEnterApp={() => setCurrentTab('home')} 
+          onAuth={(mode) => handleEnterApp(mode)} 
+        />;
       default:
         return <NotFoundView onGoHome={() => setCurrentTab('home')} />;
     }
@@ -110,7 +115,10 @@ function App() {
   if (showLanding) {
     return (
       <>
-        <LandingPage onEnterApp={handleEnterApp} />
+        <LandingPage 
+          onEnterApp={() => handleEnterApp('signup')} 
+          onAuth={(mode) => handleEnterApp(mode)} 
+        />
         <Toaster
           position="top-center"
           toastOptions={{
@@ -129,7 +137,7 @@ function App() {
   if (!currentUser) {
     return (
       <>
-        <AuthView />
+        <AuthView initialStep={authInitialStep} />
         <Toaster
           position="top-center"
           toastOptions={{
