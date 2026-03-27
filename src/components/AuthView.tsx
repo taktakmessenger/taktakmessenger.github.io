@@ -113,8 +113,12 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
     const fullIdentifier = phone.includes('@') ? phone : (phone.startsWith('+') ? phone : countryCode + phone);
     try {
       const response = await authApi.verify(fullIdentifier, otpCode);
-      const { user, token } = response.data;
+      const { user, token } = response.data || {};
       
+      if (!user) {
+        throw new Error("Respuesta del servidor inválida.");
+      }
+
       localStorage.setItem('taktak_token', token);
       
       if (!user.username || user.username.startsWith('pending_')) {
