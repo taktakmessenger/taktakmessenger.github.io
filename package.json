@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:full": "npm run build && cd server && npm install && npm run build",
+    "build": "vite build",
+    "build:full": "npm install && npm run build && cd server && npm install && npm run build",
     "start": "cd server && npm start",
     "lint": "eslint .",
     "preview": "vite preview",
