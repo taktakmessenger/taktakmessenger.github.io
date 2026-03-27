@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowLeft, MessageCircle, Shield,
   RefreshCw, User, Check, Mail
@@ -35,7 +35,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
 
   const [debugOtp, setDebugOtp] = useState<string | null>(null);
 
-  useState(() => {
+  useEffect(() => {
     // Basic auto-detection based on browser locale
     const locale = navigator.language.toLowerCase();
     const countryMapping: Record<string, string> = {
@@ -56,7 +56,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
         break;
       }
     }
-  });
+  }, []);
 
   const handleIdentitySubmit = async () => {
     if (!phone.trim()) {
