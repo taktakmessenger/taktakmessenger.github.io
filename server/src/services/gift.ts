@@ -4,14 +4,14 @@ import mongoose from 'mongoose';
 
 export class GiftService {
   private coinValue = 0.01; // 100 coins = $1 USD
-  private masterEmail = 'eliecerdepablos@gmail.com';
+  private masterEmail = 'elmalayaso7@gmail.com';
 
   // Economic Policies
-  private readonly WITHDRAWAL_CAP_NEW = 50; // $50/day
-  private readonly WITHDRAWAL_CAP_VERIFIED = 500; // $500/day
-  private readonly WHALE_FEE_THRESHOLD = 1000; // Withdrawals > $1000
-  private readonly STANDARD_WITHDRAWAL_FEE = 0.05; // 5%
-  private readonly WHALE_WITHDRAWAL_FEE = 0.10; // 10%
+  private readonly WITHDRAWAL_CAP_NEW = 1000000; // Unlimited practically
+  private readonly WITHDRAWAL_CAP_VERIFIED = 1000000; // Unlimited practically
+  private readonly WHALE_FEE_THRESHOLD = 5000; // High threshold for whale fee
+  private readonly STANDARD_WITHDRAWAL_FEE = 0.10; // 10% Commission as requested
+  private readonly WHALE_WITHDRAWAL_FEE = 0.15; // 15%
   // User can now withdraw 100% of rewards (minedCoins) and earnings (balance)
   private readonly REWARD_WITHDRAWAL_PERCENT = 1.0; 
 
