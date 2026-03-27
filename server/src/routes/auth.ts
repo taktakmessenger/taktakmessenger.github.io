@@ -186,15 +186,22 @@ router.post('/verify', [
 
 // Login
 router.post('/login', [
-  body('identifier').notEmpty() // Can be phone or email
+  body('identifier').optional(),
+  body('phone').optional()
 ], async (req: Request, res: Response) => {
   try {
-    const { identifier } = req.body;
+    const identifier = req.body.identifier || req.body.phone;
+    
+    if (!identifier) {
+      return res.status(400).json({ error: 'Identificador (teléfono o correo) requerido' });
+    }
+
+    const lowerId = identifier.toString().toLowerCase().trim();
 
     const user = await User.findOne({ 
       $or: [
         { phone: identifier },
-        { email: identifier.toLowerCase().trim() }
+        { email: lowerId }
       ]
     }).select('+password');
     if (!user) {
