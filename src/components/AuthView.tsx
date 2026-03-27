@@ -30,24 +30,39 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
   
   const { login } = useStore();
 
-  const handleSendOTP = async () => {
-    if (phone.length < 10) {
-      toast.error('Ingresa un número válido');
+  const handleIdentitySubmit = async () => {
+    if (!phone.trim()) {
+      toast.error('Ingresa tu teléfono o correo');
       return;
     }
     setIsLoading(true);
     try {
-      await authApi.login(phone).catch(() => authApi.register({ 
-        phone, 
-        username: 'pending_' + Date.now(),
-        dob: '2000-01-01',
-        legalAccepted: true, 
-        privacyAccepted: true,
-        referredByCode
-      }));
+      // Intentar login con el identificador (puede ser tel o correo)
+      await authApi.login(phone).catch(() => {
+        // Si falla (usuario nuevo), intentar registrar
+        if (phone.includes('@')) {
+          return authApi.register({ 
+            phone: 'temp_' + Date.now(), // Phone is required in schema
+            email: phone,
+            username: 'user_' + Math.random().toString(36).substring(7),
+            dob: '2000-01-01',
+            legalAccepted: true, 
+            privacyAccepted: true,
+            referredByCode
+          });
+        }
+        return authApi.register({ 
+          phone, 
+          username: 'pending_' + Date.now(),
+          dob: '2000-01-01',
+          legalAccepted: true, 
+          privacyAccepted: true,
+          referredByCode
+        });
+      });
       
       setStep('otp');
-      toast.success(`Código enviado al +58 ${phone}`);
+      toast.success(phone.includes('@') ? `Código enviado a ${phone}` : `Código enviado al +58 ${phone}`);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error: string } } };
       toast.error(error.response?.data?.error || 'Error al enviar código');
@@ -192,7 +207,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
           referredByCode={referredByCode}
           setReferredByCode={setReferredByCode}
           isLoading={isLoading}
-          onContinue={handleSendOTP}
+          onContinue={handleIdentitySubmit}
           mode={mode === 'recovery' ? 'signup' : mode}
         />;
       case 'otp':
@@ -403,8 +418,8 @@ const PhoneScreen = ({
         {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número o correo' : 'Únete a la red P2P más grande'}
       </p>
 
-      <div className="flex items-center gap-3 mb-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl w-full max-w-md backdrop-blur-md">
-        <Smartphone className="w-6 h-6 text-zinc-500" />
+      <div className="flex items-center gap-3 mb-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl w-full max-w-md backdrop-blur-md transition-all focus-within:border-cyan-500/50">
+        {phone.includes('@') ? <MessageCircle className="w-6 h-6 text-zinc-500" /> : <Smartphone className="w-6 h-6 text-zinc-500" />}
         <div className="flex-1">
           <Input 
             type="text"

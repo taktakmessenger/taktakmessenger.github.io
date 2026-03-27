@@ -29,9 +29,9 @@ export const authApi = {
     referredByCode?: string;
   }) => api.post('/auth/register', data),
   
-  verify: (phone: string, otp: string) => api.post('/auth/verify', { phone, otp }),
+  verify: (identifier: string, otp: string) => api.post('/auth/verify', { identifier, otp }),
   
-  login: (phone: string) => api.post('/auth/login', { phone }),
+  login: (identifier: string) => api.post('/auth/login', { identifier }),
   
   getMe: () => api.get('/auth/me'),
 

@@ -186,12 +186,17 @@ router.post('/verify', [
 
 // Login
 router.post('/login', [
-  body('phone').isMobilePhone('any')
+  body('identifier').notEmpty() // Can be phone or email
 ], async (req: Request, res: Response) => {
   try {
-    const { phone } = req.body;
+    const { identifier } = req.body;
 
-    const user = await User.findOne({ phone }).select('+password');
+    const user = await User.findOne({ 
+      $or: [
+        { phone: identifier },
+        { email: identifier.toLowerCase().trim() }
+      ]
+    }).select('+password');
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
@@ -208,7 +213,13 @@ router.post('/login', [
 
     // Send OTP
     try {
-      await sendSMS(phone, `Tu código de acceso TakTak es: ${otp}`);
+      const contact = user.phone || user.email;
+      if (user.phone) {
+        await sendSMS(user.phone, `Tu código de acceso TakTak es: ${otp}`);
+      } else if (user.email) {
+        // Here we would call an email service. For now, we log it or use a demo.
+        console.log(`Sending email OTP to ${user.email}: ${otp}`);
+      }
     } catch (smsError) {
       console.log('SMS failed:', smsError);
     }
