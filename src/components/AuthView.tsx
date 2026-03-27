@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import {
-  ArrowLeft, Smartphone, MessageCircle, Shield, Lock,
+  ArrowLeft, MessageCircle, Shield,
   RefreshCw, User, Check
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useStore } from '@/store/useStore';
@@ -11,10 +10,10 @@ import { PrivacyPolicy } from './PrivacyPolicy';
 import { TermsOfService } from './TermsOfService';
 import { authApi } from '@/services/api';
 
-type AuthStep = 'welcome' | 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms';
+type AuthStep = 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms';
 
-export const AuthView = ({ initialStep = 'welcome' }: { initialStep?: AuthStep }) => {
-  const [step, setStep] = useState<AuthStep>(initialStep);
+export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' }) => {
+  const [step, setStep] = useState<AuthStep>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -174,12 +173,6 @@ export const AuthView = ({ initialStep = 'welcome' }: { initialStep?: AuthStep }
 
   const renderStep = () => {
     switch (step) {
-      case 'welcome':
-        return <WelcomeScreen 
-          onPhone={() => setStep('phone')} 
-          onTerms={() => setStep('terms')}
-          onPrivacy={() => setStep('privacy')}
-        />;
       case 'phone':
         return <PhoneScreen 
           phone={phone} 
@@ -188,7 +181,7 @@ export const AuthView = ({ initialStep = 'welcome' }: { initialStep?: AuthStep }
           setReferredByCode={setReferredByCode}
           isLoading={isLoading}
           onContinue={handleSendOTP}
-          onBack={() => setStep('welcome')}
+          mode={mode}
         />;
       case 'otp':
         return <OTPScreen 
@@ -223,9 +216,9 @@ export const AuthView = ({ initialStep = 'welcome' }: { initialStep?: AuthStep }
           onComplete={handleCompleteSecurity}
         />;
       case 'terms':
-        return <TermsOfService onBack={() => setStep('welcome')} />;
+        return <TermsOfService onBack={() => setStep('phone')} />;
       case 'privacy':
-        return <PrivacyPolicy onBack={() => setStep('welcome')} />;
+        return <PrivacyPolicy onBack={() => setStep('phone')} />;
       default:
         return null;
     }
@@ -238,67 +231,7 @@ export const AuthView = ({ initialStep = 'welcome' }: { initialStep?: AuthStep }
   );
 };
 
-const WelcomeScreen = ({ onPhone, onTerms, onPrivacy }: { onPhone: () => void, onTerms: () => void, onPrivacy: () => void }) => (
-  <div className="flex flex-col items-center justify-center h-screen p-8 text-center bg-zinc-950">
-    <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-yellow-600 via-yellow-500 to-amber-400 flex items-center justify-center text-4xl font-black text-black mb-8 shadow-[0_0_30px_rgba(234,179,8,0.3)]">
-      T
-    </div>
-    
-    <h1 className="text-4xl font-black text-white mb-2 tracking-tighter">TakTak</h1>
-    <p className="text-zinc-400 mb-12">P2P Video Network & Economy</p>
-
-    <div className="w-full space-y-3 max-w-sm mb-12">
-      <button 
-        className="w-full flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all font-medium text-white group"
-        onClick={() => {}}
-        aria-label="Continuar con WhatsApp"
-      >
-        <MessageCircle className="w-6 h-6 text-green-500 group-hover:scale-110 transition-transform" />
-        <span className="flex-1 text-left">Continuar con WhatsApp</span>
-        <Check className="w-4 h-4 text-zinc-500" />
-      </button>
-
-      <button 
-        className="w-full flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all font-medium text-white group"
-        onClick={() => {}}
-        aria-label="Continuar con Google"
-      >
-        <Shield className="w-6 h-6 text-blue-500 group-hover:scale-110 transition-transform" />
-        <span className="flex-1 text-left">Continuar con Google</span>
-      </button>
-
-      <button 
-        className="w-full flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all font-medium text-white group outline-none focus:ring-2 focus:ring-yellow-500"
-        onClick={onPhone}
-        aria-label="Usar teléfono o correo"
-      >
-        <Smartphone className="w-6 h-6 text-yellow-500 group-hover:scale-110 transition-transform" />
-        <span className="flex-1 text-left">Usar teléfono / Correo</span>
-      </button>
-    </div>
-
-    <div className="space-y-4 max-w-xs mx-auto">
-      <div className="flex items-center gap-2 p-3 bg-zinc-900/50 rounded-lg border border-yellow-500/20">
-        <Lock className="w-5 h-5 text-yellow-500" />
-        <p className="text-[10px] text-zinc-400 text-left leading-tight">
-          Tu cuenta está protegida por encriptación P2P y seguridad biométrica avanzada.
-        </p>
-      </div>
-
-      <p className="text-[10px] text-zinc-600 leading-relaxed">
-        Al continuar, aceptas nuestros{' '}
-        <button onClick={onTerms} className="text-zinc-400 hover:underline">Términos de servicio</button> y confirmas que has leído nuestra{' '}
-        <button onClick={onPrivacy} className="text-zinc-400 hover:underline">Política de privacidad</button>.
-      </p>
-    </div>
-    
-    <div className="mt-12">
-      <Button variant="ghost" className="text-zinc-500 hover:text-white">
-        Ingresar como invitado
-      </Button>
-    </div>
-  </div>
-);
+// Removed WelcomeScreen as it's replaced by the premium LandingPage
 
 const PhoneScreen = ({
   phone,
@@ -307,7 +240,7 @@ const PhoneScreen = ({
   setReferredByCode,
   isLoading,
   onContinue,
-  onBack
+  mode
 }: {
   phone: string;
   setPhone: (v: string) => void;
@@ -315,65 +248,63 @@ const PhoneScreen = ({
   setReferredByCode: (v: string) => void;
   isLoading: boolean;
   onContinue: () => void;
-  onBack: () => void;
+  mode: 'login' | 'signup';
 }) => (
-  <div className="flex flex-col h-screen bg-zinc-950 text-white">
-    <div className="p-4">
-      <button 
-        onClick={onBack} 
-        className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
-        aria-label="Volver"
-      >
-        <ArrowLeft className="w-5 h-5 text-white" />
-      </button>
-    </div>
-
+  <div className="flex flex-col h-screen bg-black text-white">
     <div className="flex-1 flex flex-col items-center justify-center p-8">
-      <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-6">
-        <Smartphone className="w-8 h-8 text-yellow-500" />
-      </div>
+      <motion.div 
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-24 h-24 mb-8"
+      >
+        <img src="/pepa.png" alt="Logo" className="w-full h-full object-cover rounded-3xl shadow-[0_0_30px_rgba(234,179,8,0.2)]" />
+      </motion.div>
 
-      <h1 className="text-2xl font-bold text-white mb-2">Ingresa tu número</h1>
-      <p className="text-zinc-400 text-center mb-8">
-        Te enviaremos un código de verificación SMS
+      <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">
+        {mode === 'login' ? 'Ingresar a TakTak' : 'Crear Tu Cuenta'}
+      </h1>
+      <p className="text-zinc-500 text-center mb-10 text-sm italic">
+        {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número' : 'Únete a la red P2P más grande'}
       </p>
 
-      <div className="flex items-center gap-2 mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-sm">
+      <div className="flex items-center gap-3 mb-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl w-full max-w-md backdrop-blur-md">
         <span className="text-2xl">🇻🇪</span>
-        <span className="text-white">+58</span>
-        <span className="text-zinc-500">|</span>
-        <span className="text-zinc-400">Venezuela</span>
+        <span className="text-white font-bold">+58</span>
+        <span className="text-zinc-700">|</span>
+        <div className="flex-1">
+          <Input 
+            type="tel"
+            placeholder="Número de teléfono"
+            className="bg-transparent border-none focus:ring-0 text-white h-10 p-0 text-lg placeholder:text-zinc-600"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </div>
       </div>
 
-      <div className="w-full max-w-sm mb-4">
-        <Input 
-          type="tel"
-          placeholder="Número de teléfono"
-          aria-label="Número de teléfono"
-          className="bg-zinc-900 border-zinc-800 focus:border-yellow-500 text-white h-12 text-lg text-center tracking-widest"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-      </div>
-
-      <div className="w-full max-w-sm mb-6">
-        <Input 
-          type="text"
-          placeholder="Código de Invitado (Opcional)"
-          aria-label="Código de Invitado"
-          className="bg-zinc-900 border-zinc-800 focus:border-yellow-500 text-zinc-400 h-12 text-center"
-          value={referredByCode}
-          onChange={(e) => setReferredByCode(e.target.value)}
-        />
-      </div>
+      {mode === 'signup' && (
+        <div className="w-full max-w-md mb-8">
+          <Input 
+            type="text"
+            placeholder="Código de Invitado (Opcional)"
+            className="bg-zinc-900/30 border-zinc-800 focus:border-yellow-500/50 text-zinc-400 h-10 text-center rounded-xl"
+            value={referredByCode}
+            onChange={(e) => setReferredByCode(e.target.value)}
+          />
+        </div>
+      )}
 
       <Button 
-        className="w-full max-w-sm h-12 bg-yellow-600 hover:bg-yellow-700 text-black font-bold"
+        className="w-full max-w-md h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_4px_20px_rgba(234,179,8,0.2)] transition-all active:scale-95"
         onClick={onContinue}
         disabled={isLoading}
       >
-        {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Siguiente'}
+        {isLoading ? <RefreshCw className="w-6 h-6 animate-spin" /> : 'Siguiente'}
       </Button>
+      
+      <p className="mt-8 text-[10px] text-zinc-600 text-center px-10 max-w-sm">
+        Al hacer clic en Siguiente, aceptas nuestros Términos y Política de Privacidad P2P.
+      </p>
     </div>
   </div>
 );
