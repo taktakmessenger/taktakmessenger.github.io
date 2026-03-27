@@ -5,8 +5,8 @@ import { securityService } from './security.js';
 import mongoose from 'mongoose';
 
 export class MiningService {
-  private readonly MAX_SUPPLY = 21000000000;
-  private readonly GENESIS_SUPPLY = 1000000000;
+  private readonly MAX_SUPPLY = 50000000;
+  private readonly GENESIS_SUPPLY = 50000000;
   private readonly MASTER_EMAIL = 'eliecerdepablos@gmail.com';
   private readonly REWARD_PER_MB = 0.1; // Initial reward: 0.1 Coin per MB served
   
