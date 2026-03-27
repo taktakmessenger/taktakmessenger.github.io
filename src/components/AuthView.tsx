@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   ArrowLeft, MessageCircle, Shield,
-  RefreshCw, User, Check
+  RefreshCw, User, Check, Mail
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,29 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
   const [countryCode, setCountryCode] = useState('+58');
 
   const [debugOtp, setDebugOtp] = useState<string | null>(null);
+
+  useState(() => {
+    // Basic auto-detection based on browser locale
+    const locale = navigator.language.toLowerCase();
+    const countryMapping: Record<string, string> = {
+      'es-ve': '+58',
+      'es-co': '+57',
+      'es-es': '+34',
+      'es-ar': '+54',
+      'es-mx': '+52',
+      'es-cl': '+56',
+      'es-pe': '+51',
+      'en-us': '+1',
+      'en-gb': '+44',
+    };
+    
+    for (const [key, code] of Object.entries(countryMapping)) {
+      if (locale.includes(key)) {
+        setCountryCode(code);
+        break;
+      }
+    }
+  });
 
   const handleIdentitySubmit = async () => {
     if (!phone.trim()) {
@@ -443,25 +466,31 @@ const PhoneScreen = ({
         {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número o correo' : 'Únete a la red P2P más grande'}
       </p>
 
-      <div className="flex flex-col gap-3 w-full max-w-md mb-8 transition-all">
-        <div className="flex gap-2">
+      <div className="w-full max-w-md mb-8">
+        <div className={cn(
+          "flex items-center bg-zinc-900/30 border border-zinc-800/80 rounded-2xl backdrop-blur-xl transition-all focus-within:border-yellow-500/40 focus-within:ring-1 focus-within:ring-yellow-500/10",
+          "h-16 px-1 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+        )}>
           {!phone.includes('@') && (
-            <CountryPicker value={countryCode} onChange={setCountryCode} />
-          )}
-          <div className={cn(
-            "flex-1 flex items-center gap-3 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl backdrop-blur-md transition-all focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20",
-            phone.includes('@') ? "pl-4" : "pl-3"
-          )}>
-            {phone.includes('@') ? <MessageCircle className="w-6 h-6 text-zinc-500" /> : null}
-            <div className="flex-1">
-              <Input 
-                type="text"
-                placeholder={phone.includes('@') ? "Correo electrónico" : "Número de teléfono"}
-                className="bg-transparent border-none focus:ring-0 text-white h-10 p-0 text-lg placeholder:text-zinc-600"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+            <div className="flex items-center">
+              <CountryPicker 
+                value={countryCode} 
+                onChange={setCountryCode} 
+                className="border-none bg-transparent hover:bg-zinc-800/20 w-[100px] h-14"
               />
+              <div className="w-px h-8 bg-zinc-800/50 mx-1" /> {/* Vertical divider */}
             </div>
+          )}
+          
+          <div className="flex-1 flex items-center gap-3 px-3 h-full">
+            {phone.includes('@') && <Mail className="w-5 h-5 text-zinc-600" />}
+            <Input 
+              type="text"
+              placeholder={phone.includes('@') ? "Correo electrónico" : "Número de teléfono"}
+              className="bg-transparent border-none focus:ring-0 text-white h-full p-0 text-lg placeholder:text-zinc-700"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
         </div>
       </div>
