@@ -126,13 +126,22 @@ router.post('/register', [
 
 // Verify OTP
 router.post('/verify', [
-  body('phone').isMobilePhone('any'),
+  body('identifier').optional(),
+  body('phone').optional(),
   body('otp').isLength({ min: 6, max: 6 })
 ], async (req: Request, res: Response) => {
   try {
-    const { phone, otp } = req.body;
+    const identifier = req.body.identifier || req.body.phone;
+    const { otp } = req.body;
 
-    const user = await User.findOne({ phone });
+    const lowerId = identifier ? identifier.toString().toLowerCase().trim() : '';
+
+    const user = await User.findOne({ 
+      $or: [
+        { phone: identifier },
+        { email: lowerId }
+      ]
+    });
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
