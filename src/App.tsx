@@ -29,7 +29,7 @@ function App() {
   const { currentTab, setCurrentTab, currentUser, miningCycle } = useStore();
   const [showCamera, setShowCamera] = useState(false);
   const [showLanding, setShowLanding] = useState(() => !sessionStorage.getItem('taktak_visited'));
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'recovery'>('signup');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Mining Cycle Effect (Simulated P2P rewards every 30s)
@@ -66,11 +66,12 @@ function App() {
     });
   }, []);
 
-  const handleEnterApp = (mode: 'login' | 'signup' = 'signup') => {
+  const handleEnterApp = (mode: 'login' | 'signup' | 'recovery' = 'signup') => {
     sessionStorage.setItem('taktak_visited', 'true');
     setShowLanding(false);
     setAuthMode(mode);
-    toast.success(mode === 'login' ? 'Bienvenido de vuelta' : '¡Bienvenido a TakTak!', {
+    const message = mode === 'recovery' ? 'Iniciando recuperación' : (mode === 'login' ? 'Bienvenido de vuelta' : '¡Bienvenido a TakTak!');
+    toast.success(message, {
       description: 'Tu experiencia descentralizada comienza ahora'
     });
   };

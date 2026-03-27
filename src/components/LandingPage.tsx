@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 interface LandingPageProps {
   onEnterApp: () => void;
-  onAuth: (mode: 'login' | 'signup') => void;
+  onAuth: (mode: 'login' | 'signup' | 'recovery') => void;
 }
 
 type View = 'landing' | 'auth_choice' | 'auth_register' | 'auth_login' | 'register_info' | 'register_recovery' | 'register_security';
@@ -122,6 +122,14 @@ export const LandingPage = ({ onEnterApp, onAuth }: LandingPageProps) => {
         >
           <Key className="w-6 h-6 text-yellow-500" />
           Ingresar
+        </Button>
+
+        <Button 
+          onClick={() => onAuth('recovery')}
+          variant="ghost"
+          className="w-full text-zinc-500 hover:text-white text-xs mt-2"
+        >
+          ¿Perdiste tu cuenta? Recuperar con 12 palabras
         </Button>
       </motion.div>
 

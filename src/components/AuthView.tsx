@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import {
   ArrowLeft, MessageCircle, Shield,
-  RefreshCw, User, Check
+  RefreshCw, User, Check, Smartphone
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useStore } from '@/store/useStore';
@@ -12,10 +11,10 @@ import { PrivacyPolicy } from './PrivacyPolicy';
 import { TermsOfService } from './TermsOfService';
 import { authApi } from '@/services/api';
 
-type AuthStep = 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms';
+type AuthStep = 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms' | 'recovery' | 'recovery_question';
 
-export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' }) => {
-  const [step, setStep] = useState<AuthStep>('phone');
+export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'recovery' }) => {
+  const [step, setStep] = useState<AuthStep>(mode === 'recovery' ? 'recovery' : 'phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -175,6 +174,17 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' }) => 
 
   const renderStep = () => {
     switch (step) {
+      case 'recovery':
+        return <RecoveryScreen 
+          onBack={() => setStep('phone')} 
+          onComplete={() => setStep('profile')}
+          onSwitchToQuestion={() => setStep('recovery_question')}
+        />;
+      case 'recovery_question':
+        return <RecoveryQuestionScreen
+          onBack={() => setStep('recovery')}
+          onComplete={() => setStep('profile')}
+        />;
       case 'phone':
         return <PhoneScreen 
           phone={phone} 
@@ -183,7 +193,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' }) => 
           setReferredByCode={setReferredByCode}
           isLoading={isLoading}
           onContinue={handleSendOTP}
-          mode={mode}
+          mode={mode === 'recovery' ? 'signup' : mode}
         />;
       case 'otp':
         return <OTPScreen 
@@ -235,6 +245,134 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' }) => 
 
 // Removed WelcomeScreen as it's replaced by the premium LandingPage
 
+// Removed WelcomeScreen as it's replaced by the premium LandingPage
+
+const RecoveryScreen = ({ onBack, onComplete, onSwitchToQuestion }: { onBack: () => void, onComplete: () => void, onSwitchToQuestion: () => void }) => {
+  const [recoveryWords, setRecoveryWords] = useState<string[]>(new Array(12).fill(''));
+
+  const handleWordChange = (index: number, value: string) => {
+    const newWords = [...recoveryWords];
+    newWords[index] = value.toLowerCase().trim();
+    setRecoveryWords(newWords);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text');
+    const words = text.split(/\s+/).slice(0, 12);
+    if (words.length > 0) {
+      const newWords = [...recoveryWords];
+      words.forEach((w, i) => { if (i < 12) newWords[i] = w.toLowerCase().trim(); });
+      setRecoveryWords(newWords);
+    }
+  };
+
+  const isComplete = recoveryWords.every((w: string) => w.length > 0);
+
+  return (
+    <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto pb-32">
+      <button 
+        onClick={onBack} 
+        aria-label="Volver"
+        className="self-start mb-6 text-zinc-500 hover:text-white transition-colors"
+      >
+        <ArrowLeft className="w-5 h-5" />
+      </button>
+
+      <div className="flex flex-col items-center mb-8">
+        <div className="w-20 h-20 mb-6 p-4 bg-zinc-900 rounded-3xl border border-zinc-800 ring-4 ring-yellow-500/10">
+           <Shield className="w-full h-full text-yellow-500" />
+        </div>
+        <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Recuperar Cuenta</h1>
+        <p className="text-zinc-500 text-center text-sm italic">Ingresa tus 12 palabras clave para restaurar tu identidad</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-10" onPaste={handlePaste}>
+        {recoveryWords.map((word: string, i: number) => (
+          <div key={i} className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-bold">{i + 1}</span>
+            <Input 
+              value={word}
+              onChange={(e) => handleWordChange(i, e.target.value)}
+              className="bg-zinc-900/50 border-zinc-800 h-11 pl-8 text-sm focus:border-yellow-500/50"
+              placeholder="..."
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        <Button 
+          disabled={!isComplete}
+          onClick={onComplete}
+          className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
+        >
+          Validar y Restaurar
+        </Button>
+
+        <button 
+          onClick={onSwitchToQuestion}
+          className="w-full text-zinc-500 hover:text-yellow-500 text-xs font-bold transition-colors py-2"
+        >
+          ¿No tienes las palabras? Usar Pregunta de Seguridad
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const RecoveryQuestionScreen = ({ onBack, onComplete }: { onBack: () => void, onComplete: () => void }) => {
+  const [phoneOrEmail, setPhoneOrEmail] = useState('');
+  const [answer, setAnswer] = useState('');
+
+  return (
+    <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto">
+      <button onClick={onBack} aria-label="Volver" className="self-start mb-6 text-zinc-500 hover:text-white transition-colors">
+        <ArrowLeft className="w-5 h-5" />
+      </button>
+
+      <div className="flex flex-col items-center mb-10">
+        <div className="w-20 h-20 mb-6 p-4 bg-zinc-900 rounded-3xl border border-zinc-800">
+           <RefreshCw className="w-full h-full text-yellow-500" />
+        </div>
+        <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Pregunta Secreta</h1>
+        <p className="text-zinc-500 text-center text-sm italic">Responde tu pregunta para recuperar acceso</p>
+      </div>
+
+      <div className="space-y-6 mb-10">
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Identificador</label>
+          <Input 
+            value={phoneOrEmail} 
+            onChange={e => setPhoneOrEmail(e.target.value)}
+            placeholder="Teléfono o Correo" 
+            className="bg-zinc-900 border-zinc-800 h-14"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Tu Respuesta</label>
+          <Input 
+            type="password"
+            value={answer} 
+            onChange={e => setAnswer(e.target.value)}
+            placeholder="Ingresa tu palabra secreta" 
+            className="bg-zinc-900 border-zinc-800 h-14 text-yellow-500"
+          />
+        </div>
+      </div>
+
+      <Button 
+        disabled={!answer || !phoneOrEmail}
+        onClick={onComplete}
+        className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
+      >
+        Validar Respuesta
+      </Button>
+    </div>
+  );
+};
+
 const PhoneScreen = ({
   phone,
   setPhone,
@@ -254,29 +392,23 @@ const PhoneScreen = ({
 }) => (
   <div className="flex flex-col h-screen bg-black text-white">
     <div className="flex-1 flex flex-col items-center justify-center p-8">
-      <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-24 h-24 mb-8"
-      >
-        <img src="/pepa.png" alt="Logo" className="w-full h-full object-cover rounded-3xl shadow-[0_0_30px_rgba(234,179,8,0.2)]" />
-      </motion.div>
+      <div className="p-4 mb-4">
+        <img src="/logo.png" alt="Logo" className="w-24 h-24 object-contain" />
+      </div>
 
       <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">
         {mode === 'login' ? 'Ingresar a TakTak' : 'Crear Tu Cuenta'}
       </h1>
       <p className="text-zinc-500 text-center mb-10 text-sm italic">
-        {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número' : 'Únete a la red P2P más grande'}
+        {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número o correo' : 'Únete a la red P2P más grande'}
       </p>
 
       <div className="flex items-center gap-3 mb-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl w-full max-w-md backdrop-blur-md">
-        <span className="text-2xl">🇻🇪</span>
-        <span className="text-white font-bold">+58</span>
-        <span className="text-zinc-700">|</span>
+        <Smartphone className="w-6 h-6 text-zinc-500" />
         <div className="flex-1">
           <Input 
-            type="tel"
-            placeholder="Número de teléfono"
+            type="text"
+            placeholder="Teléfono o Correo"
             className="bg-transparent border-none focus:ring-0 text-white h-10 p-0 text-lg placeholder:text-zinc-600"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
