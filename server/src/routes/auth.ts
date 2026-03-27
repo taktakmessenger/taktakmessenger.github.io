@@ -346,4 +346,87 @@ router.post('/avatar', authMiddleware, uploadAvatar.single('avatar'), async (req
   }
 });
 
+// Recover account
+router.post('/recover', async (req: Request, res: Response) => {
+  try {
+    const { identifier, recoveryPhrase, securityAnswer } = req.body;
+    
+    if (!identifier) {
+      return res.status(400).json({ error: 'Identificador requerido' });
+    }
+    
+    if (!recoveryPhrase && !securityAnswer) {
+      return res.status(400).json({ error: 'Se requiere la frase de recuperación o la respuesta secreta' });
+    }
+
+    const lowerId = identifier.toString().toLowerCase().trim();
+    
+    const user = await User.findOne({ 
+      $or: [
+        { phone: identifier },
+        { email: lowerId }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const bcrypt = await import('bcryptjs');
+    let isValid = false;
+
+    if (recoveryPhrase) {
+      if (!user.recoveryPhraseHash) {
+        return res.status(400).json({ error: 'Este usuario no tiene configurada frase de recuperación' });
+      }
+      isValid = await bcrypt.default.compare(recoveryPhrase, user.recoveryPhraseHash);
+      if (!isValid && !securityAnswer) {
+        return res.status(400).json({ error: 'Frase de recuperación incorrecta' });
+      }
+    }
+
+    if (securityAnswer) {
+      if (!user.securityAnswer) {
+        return res.status(400).json({ error: 'Este usuario no tiene configurada pregunta de seguridad' });
+      }
+      const isAnswerValid = await bcrypt.default.compare(securityAnswer.toLowerCase().trim(), user.securityAnswer);
+      if (!isAnswerValid) {
+        return res.status(400).json({ error: 'Respuesta de seguridad incorrecta' });
+      }
+      isValid = true; // If answer is valid, allow recovery
+    }
+
+    if (!isValid) {
+      return res.status(400).json({ error: 'Credenciales de recuperación incorrectas' });
+    }
+
+    // Generate token and login safely
+    const token = jwt.sign({ userId: user._id }, config.jwt.secret, { expiresIn: '7d' });
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        isAdmin: user.isAdmin,
+        isOwner: user.isOwner,
+        ttcC: (user as any).ttcC || 0,
+        ttcR: (user as any).ttcR || 0,
+        bmPrincipal: (user as any).bmPrincipal || 0,
+        bmIncentivo: (user as any).bmIncentivo || 0,
+        miningPoints: (user as any).miningPoints || 0,
+        referralCode: user.referralCode,
+        incentiveLevel: (user as any).incentiveLevel
+      }
+    });
+
+  } catch (error) {
+    console.error('Recover error:', error);
+    res.status(500).json({ error: 'Error al recuperar cuenta' });
+  }
+});
+
 export default router;

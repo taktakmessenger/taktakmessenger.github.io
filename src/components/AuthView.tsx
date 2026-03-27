@@ -226,18 +226,45 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
     }
   };
 
+  const handleRecover = async (identifier: string, phrase: string, answer?: string) => {
+    if (!identifier) {
+      toast.error('Por favor ingresa tu identificador (teléfono o correo)');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const fullIdentifier = identifier.includes('@') ? identifier : (identifier.startsWith('+') ? identifier : countryCode + identifier);
+      const response = await authApi.recoverAccount({ 
+        identifier: fullIdentifier, 
+        recoveryPhrase: phrase, 
+        securityAnswer: answer 
+      });
+      const { user, token } = response.data;
+      localStorage.setItem('taktak_token', token);
+      login(user); // user ya contiene la info de la cuenta
+      toast.success(`¡Bienvenido de vuelta, ${user.username}!`);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error: string } } };
+      toast.error(error.response?.data?.error || 'Frase o respuesta incorrecta');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renderStep = () => {
     switch (step) {
       case 'recovery':
         return <RecoveryScreen 
           onBack={() => setStep('phone')} 
-          onComplete={() => setStep('profile')}
+          onRecover={handleRecover}
           onSwitchToQuestion={() => setStep('recovery_question')}
+          isLoading={isLoading}
         />;
       case 'recovery_question':
         return <RecoveryQuestionScreen
           onBack={() => setStep('recovery')}
-          onComplete={() => setStep('profile')}
+          onRecover={handleRecover}
+          isLoading={isLoading}
         />;
       case 'phone':
         return <PhoneScreen 
@@ -312,7 +339,8 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
 
 // Removed WelcomeScreen as it's replaced by the premium LandingPage
 
-const RecoveryScreen = ({ onBack, onComplete, onSwitchToQuestion }: { onBack: () => void, onComplete: () => void, onSwitchToQuestion: () => void }) => {
+const RecoveryScreen = ({ onBack, onRecover, onSwitchToQuestion, isLoading }: { onBack: () => void, onRecover: (id: string, phrase: string) => void, onSwitchToQuestion: () => void, isLoading?: boolean }) => {
+  const [identifier, setIdentifier] = useState('');
   const [recoveryWords, setRecoveryWords] = useState<string[]>(new Array(12).fill(''));
 
   const handleWordChange = (index: number, value: string) => {
@@ -332,7 +360,7 @@ const RecoveryScreen = ({ onBack, onComplete, onSwitchToQuestion }: { onBack: ()
     }
   };
 
-  const isComplete = recoveryWords.every((w: string) => w.length > 0);
+  const isComplete = recoveryWords.every((w: string) => w.length > 0) && identifier.length > 0;
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto pb-32">
@@ -352,6 +380,16 @@ const RecoveryScreen = ({ onBack, onComplete, onSwitchToQuestion }: { onBack: ()
         <p className="text-zinc-500 text-center text-sm italic">Ingresa tus 12 palabras clave para restaurar tu identidad</p>
       </div>
 
+      <div className="w-full mb-6">
+        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Identificador</label>
+        <Input 
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          placeholder="Correo o teléfono"
+          className="bg-zinc-900/50 border-zinc-800 h-12 mt-2 w-full focus:border-yellow-500/50"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-3 mb-10" onPaste={handlePaste}>
         {recoveryWords.map((word: string, i: number) => (
           <div key={i} className="relative">
@@ -368,11 +406,11 @@ const RecoveryScreen = ({ onBack, onComplete, onSwitchToQuestion }: { onBack: ()
 
       <div className="space-y-4">
         <Button 
-          disabled={!isComplete}
-          onClick={onComplete}
+          disabled={!isComplete || isLoading}
+          onClick={() => onRecover(identifier, recoveryWords.join(' '))}
           className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
         >
-          Validar y Restaurar
+          {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Validar y Restaurar'}
         </Button>
 
         <button 
@@ -386,7 +424,7 @@ const RecoveryScreen = ({ onBack, onComplete, onSwitchToQuestion }: { onBack: ()
   );
 };
 
-const RecoveryQuestionScreen = ({ onBack, onComplete }: { onBack: () => void, onComplete: () => void }) => {
+const RecoveryQuestionScreen = ({ onBack, onRecover, isLoading }: { onBack: () => void, onRecover: (id: string, phrase: string, answer: string) => void, isLoading?: boolean }) => {
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
   const [answer, setAnswer] = useState('');
 
@@ -428,11 +466,11 @@ const RecoveryQuestionScreen = ({ onBack, onComplete }: { onBack: () => void, on
       </div>
 
       <Button 
-        disabled={!answer || !phoneOrEmail}
-        onClick={onComplete}
+        disabled={!answer || !phoneOrEmail || isLoading}
+        onClick={() => onRecover(phoneOrEmail, '', answer)}
         className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
       >
-        Validar Respuesta
+        {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Validar Respuesta'}
       </Button>
     </div>
   );

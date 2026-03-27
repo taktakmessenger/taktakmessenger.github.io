@@ -48,6 +48,9 @@ export const authApi = {
 
   setupSecurity: (data: { securityQuestion: string; securityAnswer: string; recoveryPhrase: string }) => 
     api.post('/auth/security-setup', data),
+
+  recoverAccount: (data: { identifier: string; recoveryPhrase: string; securityAnswer?: string }) =>
+    api.post('/auth/recover', data),
 };
 
 export const paymentApi = {
