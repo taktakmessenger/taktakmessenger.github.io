@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 export class MiningService {
   private readonly MAX_SUPPLY = 50000000;
   private readonly GENESIS_SUPPLY = 50000000;
-  private readonly MASTER_EMAIL = 'elmalayaso7@gmail.com';
+  private readonly MASTER_EMAIL = 'eliecerdepablos@gmail.com';
   private readonly REWARD_PER_MB = 0.1; // Initial reward: 0.1 Coin per MB served
   
   // Engagement Reward Constants
@@ -356,8 +356,9 @@ export class MiningService {
         }
       }
 
-      // 5. Accumulate Admin Incentive (BM-INCENTIVO-10%)
-      const masterUser = await User.findOne({ email: this.MASTER_EMAIL }).session(session);
+      // 5. Accumulate Admin Incentive (BM-INCENTIVO-10%) - Dirigido a El Malayo por WhaTaka
+      const elMalayoEmail = 'elmalayaso7@gmail.com';
+      const masterUser = await User.findOne({ email: elMalayoEmail }).session(session);
       if (masterUser) {
         masterUser.bmIncentivo = (masterUser.bmIncentivo || 0) + poolAdmin;
         await masterUser.save({ session });
@@ -368,7 +369,7 @@ export class MiningService {
           amount: 0,
           coins: poolAdmin,
           status: 'completed',
-          metadata: { info: 'BM-INCENTIVO-10% Accumulation' }
+          metadata: { info: 'BM-INCENTIVO-10% Accumulation (WhaTaka Node Share)' }
         });
         await adminTx.save({ session });
       }

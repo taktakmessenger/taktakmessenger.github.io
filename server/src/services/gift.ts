@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 
 export class GiftService {
   private coinValue = 0.01; // 100 coins = $1 USD
-  private masterEmail = 'elmalayaso7@gmail.com';
+  private masterEmail = 'eliecerdepablos@gmail.com';
 
   // Economic Policies
   private readonly WITHDRAWAL_CAP_NEW = 1000000;

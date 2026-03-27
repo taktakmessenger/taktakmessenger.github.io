@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { sendSMS } from '../services/twilio.js';
+import { sendEmail } from '../services/email.js';
 import { generateOTP, hashOTP, verifyOTP } from '../utils/otp.js';
 import config from '../config/index.js';
 
@@ -68,7 +69,7 @@ router.post('/register', [
     const otpHash = hashOTP(otp);
 
     // Check if admin
-    const adminEmails = ['eliecerdepablos@gmail.com', 'elmalayaso7@gmail.com'];
+    const adminEmails = ['eliecerdepablos@gmail.com', 'elmalayaso7@gmail.com', 'taktak.massenger@gmail.com'];
     const isOwner = email && adminEmails.includes(email.toLowerCase());
 
     // Check if referrer exists
@@ -103,11 +104,14 @@ router.post('/register', [
 
     await user.save();
 
-    // Send OTP via Twilio (in production)
+    // Send OTP via Twilio or Email
     try {
+      if (email) {
+        await sendEmail(email, 'Tu código de verificación TakTak', `Tu código de verificación TakTak es: ${otp}`);
+      }
       await sendSMS(phone, `Tu código de verificación TakTak es: ${otp}`);
     } catch (smsError) {
-      console.log('SMS failed, using demo mode:', smsError);
+      console.log('Notification failed, using demo mode:', smsError);
     }
 
     res.status(201).json({
@@ -229,9 +233,9 @@ router.post('/login', [
       const contact = user.phone || user.email;
       if (user.phone) {
         await sendSMS(user.phone, `Tu código de acceso TakTak es: ${otp}`);
-      } else if (user.email) {
-        // Here we would call an email service. For now, we log it or use a demo.
-        console.log(`Sending email OTP to ${user.email}: ${otp}`);
+      }
+      if (user.email) {
+        await sendEmail(user.email, 'Tu código de acceso TakTak', `Tu código de acceso TakTak es: ${otp}`);
       }
     } catch (smsError) {
       console.log('SMS failed:', smsError);
