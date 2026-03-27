@@ -7,11 +7,12 @@ export class GiftService {
   private masterEmail = 'elmalayaso7@gmail.com';
 
   // Economic Policies
-  private readonly WITHDRAWAL_CAP_NEW = 1000000; // Unlimited practically
-  private readonly WITHDRAWAL_CAP_VERIFIED = 1000000; // Unlimited practically
-  private readonly WHALE_FEE_THRESHOLD = 5000; // High threshold for whale fee
-  private readonly STANDARD_WITHDRAWAL_FEE = 0.10; // 10% Commission as requested
-  private readonly WHALE_WITHDRAWAL_FEE = 0.15; // 15%
+  private readonly WITHDRAWAL_CAP_NEW = 1000000;
+  private readonly WITHDRAWAL_CAP_VERIFIED = 1000000;
+  private readonly WHALE_FEE_THRESHOLD = 5000; 
+  private readonly STANDARD_WITHDRAWAL_FEE = 0.05; // 5% for standard users
+  private readonly WHALE_WITHDRAWAL_FEE = 0.10; // 10% for Whales/Bots
+  private readonly TRANSFER_TAX = 0.10; // 10% on all transfers/gifts
   // User can now withdraw 100% of rewards (minedCoins) and earnings (balance)
   private readonly REWARD_WITHDRAWAL_PERCENT = 1.0; 
 
@@ -46,27 +47,16 @@ export class GiftService {
       }
       await sender.save();
 
-      // 2. Calculate Revenue Split
+      // 2. Calculate Revenue Split (Aggressive Ecosystem Protection)
       const grossValue = coinAmount * this.coinValue;
-      let platformFee = 0;
-      let agencyFee = 0;
-      let netEarnings = 0;
+      
+      // Platform tax for transfers/gifts (10% from sender, 10% from receiver as per user request)
+      const senderTax = grossValue * this.TRANSFER_TAX;
+      const receiverTax = grossValue * this.TRANSFER_TAX;
+      const platformFee = senderTax + receiverTax; // Aggregated fee for logging
+      const agencyFee = 0; // Agencies disabled as per current manual request, but keeping variable for consistency
 
-      if (receiver.isAgencyMember && receiver.agencyId) {
-        // "TakTak Stars" split: 70% Creator, 15% Agency, 15% Platform
-        netEarnings = grossValue * 0.7;
-        agencyFee = grossValue * 0.15;
-        platformFee = grossValue * 0.15;
-
-        // Credit Agency
-        await User.findByIdAndUpdate(receiver.agencyId, {
-          $inc: { balance: agencyFee }
-        }).session(session);
-      } else {
-        // Standard split: 60% User, 40% Platform
-        netEarnings = grossValue * 0.6;
-        platformFee = grossValue * 0.4;
-      }
+      let netEarnings = grossValue - platformFee;
 
       // 3. Credit Receiver & Propagate Whale Status
       receiver.balance += netEarnings;
@@ -174,15 +164,11 @@ export class GiftService {
         throw new Error('Retiros mayores a $100 requieren verificación KYC aprobada.');
       }
 
-      // 3. Calculate Fee: Standard Fee + Whale/Bot Penalty
-      const standardFee = amount * this.STANDARD_WITHDRAWAL_FEE;
-      let whalePenalty = 0;
-
-      if (user.isWhaleOrBot) {
-        whalePenalty = amount * this.WHALE_WITHDRAWAL_FEE; // 10% penalty
-      }
-
-      const totalFee = standardFee + whalePenalty;
+      // 3. Calculate Fee: User (5%) vs Whale/Bot (10%)
+      const feePercent = user.isWhaleOrBot ? this.WHALE_WITHDRAWAL_FEE : this.STANDARD_WITHDRAWAL_FEE;
+      const totalFee = amount * feePercent;
+      const standardFee = user.isWhaleOrBot ? 0 : totalFee; // Simplified for logging
+      const whalePenalty = user.isWhaleOrBot ? totalFee : 0;
       const netAmount = amount - totalFee;
 
       // 4. Update User Balance & Limits
