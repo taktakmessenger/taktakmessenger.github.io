@@ -72,13 +72,23 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
     try {
       // If password provided, try login-password first
       if (password.trim()) {
-        const response = await authApi.loginWithPassword(fullIdentifier, password);
-        const data = response?.data;
-        if (data?.token && data?.user) {
-          localStorage.setItem('taktak_token', data.token);
-          login(data.user);
-          toast.success(`¡Bienvenido de nuevo, ${data.user.username}!`);
-          return;
+        try {
+          const response = await authApi.loginWithPassword(fullIdentifier, password);
+          const data = response?.data;
+          if (data?.token && data?.user) {
+            localStorage.setItem('taktak_token', data.token);
+            login(data.user);
+            toast.success(`¡Bienvenido de nuevo, ${data.user.username}!`);
+            return;
+          }
+        } catch (err: unknown) {
+          const error = err as { response?: { status: number, data?: { error: string } } };
+          if (error.response?.status === 401 || error.response?.status === 404) {
+            toast.error(error.response?.data?.error || 'Credenciales incorrectas');
+            setIsLoading(false);
+            return;
+          }
+          console.error("Password login error:", err);
         }
       }
 

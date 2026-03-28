@@ -67,14 +67,26 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
     try {
       // If password provided, try login-password first
       if (password.trim()) {
-        const response = await authApi.loginWithPassword(identifier, password);
-        const data = response?.data;
-        if (data?.token && data?.user) {
-          localStorage.setItem('taktak_token', data.token);
-          login(data.user);
-          toast.success(`¡Bienvenido, ${data.user.username}!`);
-          onEnterApp();
-          return;
+        try {
+          const response = await authApi.loginWithPassword(identifier, password);
+          const data = response?.data;
+          if (data?.token && data?.user) {
+            localStorage.setItem('taktak_token', data.token);
+            login(data.user);
+            toast.success(`¡Bienvenido, ${data.user.username}!`);
+            onEnterApp();
+            return;
+          }
+        } catch (err: unknown) {
+          const error = err as { response?: { status: number, data?: { error: string } } };
+          // If it's a 401 (Wrong Password), stop and show error
+          if (error.response?.status === 401 || error.response?.status === 404) {
+             toast.error(error.response?.data?.error || 'Credenciales incorrectas');
+             setIsLoading(false);
+             return;
+          }
+          // For other errors, we can let it fall back or show error
+          console.error("Password login error:", err);
         }
       }
 
