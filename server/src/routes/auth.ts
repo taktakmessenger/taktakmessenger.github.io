@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
 import { sendSMS } from '../services/twilio.js';
 import { sendEmail } from '../services/email.js';
@@ -214,7 +215,8 @@ router.post('/login-password', [
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const isMatch = await user.comparePassword(password);
+    console.log(`[Login-Password] Intentando login para: ${identifier}`);
+    const isMatch = await bcrypt.compare(password, user.password || '');
     if (!isMatch) {
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
