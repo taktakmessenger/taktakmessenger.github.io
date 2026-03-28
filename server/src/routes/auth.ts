@@ -251,6 +251,68 @@ router.post('/login-password', [
   }
 });
 
+// Reset password with OTP
+router.post('/reset-password', [
+  body('identifier').notEmpty(),
+  body('code').isLength({ min: 6, max: 6 }),
+  body('password').isLength({ min: 6 })
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { identifier, code, password } = req.body;
+    const lowerId = identifier ? identifier.toString().toLowerCase().trim() : '';
+
+    const user = await User.findOne({ 
+      $or: [
+        { phone: identifier },
+        { email: lowerId }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Verify OTP code (reusing existing verification logic)
+    if (!user.verificationCode || !user.verificationCodeExpires) {
+      return res.status(400).json({ error: 'No hay un código de verificación activo. Por favor, solicita uno nuevo.' });
+    }
+
+    if (new Date() > user.verificationCodeExpires) {
+      return res.status(400).json({ error: 'El código ha expirado. Solicita uno nuevo.' });
+    }
+
+    const isValid = verifyOTP(code, user.verificationCode);
+    if (!isValid) {
+      return res.status(400).json({ error: 'Código de verificación incorrecto.' });
+    }
+
+    // Hash and update new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    
+    // Invalidate code after use
+    user.verificationCode = undefined;
+    user.verificationCodeExpires = undefined;
+    
+    await user.save();
+
+    console.log(`[Reset-Password] Password reset successful for: ${user.username}`);
+
+    res.json({
+      success: true,
+      message: 'Contraseña restablecida con éxito. Ya puedes iniciar sesión.'
+    });
+  } catch (error) {
+    console.error('Reset-password error:', error);
+    res.status(500).json({ error: 'Error al restablecer la contraseña' });
+  }
+});
+
 // Login
 router.post('/login', [
   body('identifier').optional(),

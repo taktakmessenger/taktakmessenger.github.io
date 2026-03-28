@@ -35,6 +35,8 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
   const [countryCode, setCountryCode] = useState('+58');
 
   const [debugOtp, setDebugOtp] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [newResetPassword, setNewResetPassword] = useState('');
 
   useEffect(() => {
     // Basic auto-detection based on browser locale
@@ -137,6 +139,19 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
     setIsLoading(true);
     const fullIdentifier = phone.includes('@') ? phone : (phone.startsWith('+') ? phone : countryCode + phone);
     try {
+      if (isResettingPassword) {
+        if (newResetPassword.length < 6) {
+          toast.error('La nueva contraseña debe tener al menos 6 caracteres');
+          setIsLoading(false);
+          return;
+        }
+        await authApi.resetPassword(fullIdentifier, otpCode, newResetPassword);
+        toast.success('¡Contraseña restablecida! Ahora puedes iniciar sesión.');
+        setStep('phone');
+        setIsResettingPassword(false);
+        setNewResetPassword('');
+        return;
+      }
       const response = await authApi.verify(fullIdentifier, otpCode);
       const { user, token } = response.data || {};
       
@@ -149,7 +164,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
       if (!user.username || user.username.startsWith('pending_')) {
         setStep('profile');
       } else {
-        login(user); // Fixed: user now contains economic properties from backend OR defaults in store
+        login(user);
         toast.success(`¡Bienvenido de nuevo, ${user.username}!`);
       }
     } catch (err: unknown) {
@@ -176,7 +191,6 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
 
     setIsLoading(true);
     try {
-      // First update the profile in the backend
       await authApi.updateProfile({ 
         username, 
         dob, 
@@ -184,7 +198,6 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
         privacyAccepted: agreements.privacy 
       });
       
-      // Generate 12 random words for the recovery phrase immediately
       const wordList = ['sol', 'luna', 'estrella', 'mar', 'montaña', 'rio', 'viento', 'fuego', 'tierra', 'bosque', 'flor', 'nieve', 'camino', 'viaje', 'tiempo', 'vida', 'sueño', 'amor', 'paz', 'luz', 'cielo', 'nube', 'lluvia', 'dia', 'noche', 'alma', 'corazon', 'mente', 'fuerza', 'valor', 'esperanza', 'verdad', 'destino', 'mundo', 'universo', 'espacio', 'voz', 'canto', 'palabra', 'silencio', 'oro', 'plata', 'bronce', 'hierro', 'cristal', 'piedra', 'hoja', 'arbol', 'raiz', 'semilla'];
       const phrase = Array.from({ length: 12 }, () => wordList[Math.floor(Math.random() * wordList.length)]).join(' ');
       setRecoveryPhrase(phrase);
@@ -212,9 +225,7 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
         recoveryPhrase
       });
 
-      // Get full updated user
       const { data } = await authApi.getMe();
-      
       login(data.user);
       toast.success('¡Registro y seguridad completados con éxito!');
     } catch {
@@ -302,6 +313,8 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
           isLoading={isLoading}
           onContinue={handleIdentitySubmit}
           mode={mode === 'recovery' ? 'signup' : mode}
+          setIsResettingPassword={setIsResettingPassword}
+          setStep={setStep}
         />;
       case 'otp':
         return (
@@ -319,6 +332,9 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
               onVerify={handleVerifyOTP}
               onResend={handleResendOTP}
               onBack={() => setStep('phone')}
+              isResettingPassword={isResettingPassword}
+              newResetPassword={newResetPassword}
+              setNewResetPassword={setNewResetPassword}
             />
           </div>
         );
@@ -360,10 +376,6 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
   );
 };
 
-// Removed WelcomeScreen as it's replaced by the premium LandingPage
-
-// Removed WelcomeScreen as it's replaced by the premium LandingPage
-
 const RecoveryScreen = ({ onBack, onRecover, onSwitchToQuestion, isLoading }: { onBack: () => void, onRecover: (id: string, phrase: string) => void, onSwitchToQuestion: () => void, isLoading?: boolean }) => {
   const [identifier, setIdentifier] = useState('');
   const [recoveryWords, setRecoveryWords] = useState<string[]>(new Array(12).fill(''));
@@ -385,65 +397,55 @@ const RecoveryScreen = ({ onBack, onRecover, onSwitchToQuestion, isLoading }: { 
     }
   };
 
-  const isComplete = recoveryWords.every((w: string) => w.length > 0) && identifier.length > 0;
-
   return (
-    <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto pb-32">
-      <button 
-        onClick={onBack} 
-        aria-label="Volver"
-        className="self-start mb-6 text-zinc-500 hover:text-white transition-colors"
-      >
-        <ArrowLeft className="w-5 h-5" />
-      </button>
+    <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-full transition-colors"><ArrowLeft className="w-6 h-6" /></button>
+        <h2 className="text-xl font-bold">Recuperar Cuenta</h2>
+      </div>
 
-      <div className="flex flex-col items-center mb-8">
-        <div className="w-20 h-20 mb-6 p-4 bg-zinc-900 rounded-3xl border border-zinc-800 ring-4 ring-yellow-500/10">
-           <Shield className="w-full h-full text-yellow-500" />
+      <div className="space-y-6 max-w-md mx-auto w-full">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-zinc-400">Teléfono o Correo</label>
+          <Input 
+            placeholder="Ej: +584121234567 o email@ejemplo.com"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            className="bg-zinc-900 border-zinc-800 h-12"
+          />
         </div>
-        <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Recuperar Cuenta</h1>
-        <p className="text-zinc-500 text-center text-sm italic">Ingresa tus 12 palabras clave para restaurar tu identidad</p>
-      </div>
 
-      <div className="w-full mb-6">
-        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Identificador</label>
-        <Input 
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          placeholder="Correo o teléfono"
-          className="bg-zinc-900/50 border-zinc-800 h-12 mt-2 w-full focus:border-yellow-500/50"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-10" onPaste={handlePaste}>
-        {recoveryWords.map((word: string, i: number) => (
-          <div key={i} className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-bold">{i + 1}</span>
-            <Input 
-              value={word}
-              onChange={(e) => handleWordChange(i, e.target.value)}
-              className="bg-zinc-900/50 border-zinc-800 h-11 pl-8 text-sm focus:border-yellow-500/50"
-              placeholder="..."
-            />
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-zinc-400">Frase de Recuperación (12 palabras)</label>
+          <div className="grid grid-cols-3 gap-2" onPaste={handlePaste}>
+            {recoveryWords.map((word, i) => (
+              <Input
+                key={i}
+                placeholder={String(i + 1)}
+                value={word}
+                onChange={(e) => handleWordChange(i, e.target.value)}
+                className="bg-zinc-900 border-zinc-800 h-10 text-center text-sm"
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="space-y-4">
         <Button 
-          disabled={!isComplete || isLoading}
+          className="w-full h-12 bg-yellow-600 hover:bg-yellow-500 text-black font-bold"
           onClick={() => onRecover(identifier, recoveryWords.join(' '))}
-          className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
+          disabled={isLoading || recoveryWords.some(w => !w) || !identifier}
         >
-          {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Validar y Restaurar'}
+          {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Recuperar con Frase'}
         </Button>
 
-        <button 
-          onClick={onSwitchToQuestion}
-          className="w-full text-zinc-500 hover:text-yellow-500 text-xs font-bold transition-colors py-2"
-        >
-          ¿No tienes las palabras? Usar Pregunta de Seguridad
-        </button>
+        <div className="relative py-4">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800"></div></div>
+          <div className="relative flex justify-center text-xs uppercase"><span className="bg-black px-2 text-zinc-500">O usa tu pregunta</span></div>
+        </div>
+
+        <Button variant="outline" className="w-full border-zinc-800 text-zinc-400" onClick={onSwitchToQuestion}>
+          Responder Pregunta de Seguridad
+        </Button>
       </div>
     </div>
   );
@@ -454,49 +456,42 @@ const RecoveryQuestionScreen = ({ onBack, onRecover, isLoading }: { onBack: () =
   const [answer, setAnswer] = useState('');
 
   return (
-    <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto">
-      <button onClick={onBack} aria-label="Volver" className="self-start mb-6 text-zinc-500 hover:text-white transition-colors">
-        <ArrowLeft className="w-5 h-5" />
-      </button>
-
-      <div className="flex flex-col items-center mb-10">
-        <div className="w-20 h-20 mb-6 p-4 bg-zinc-900 rounded-3xl border border-zinc-800">
-           <RefreshCw className="w-full h-full text-yellow-500" />
-        </div>
-        <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Pregunta Secreta</h1>
-        <p className="text-zinc-500 text-center text-sm italic">Responde tu pregunta para recuperar acceso</p>
+    <div className="flex flex-col h-screen bg-black text-white p-8">
+      <div className="flex items-center gap-4 mb-10">
+        <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-full transition-colors"><ArrowLeft className="w-6 h-6" /></button>
+        <h2 className="text-xl font-bold uppercase tracking-tight">Pregunta de Seguridad</h2>
       </div>
 
-      <div className="space-y-6 mb-10">
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Identificador</label>
+      <div className="space-y-8 max-w-sm mx-auto w-full">
+        <div className="space-y-3">
+          <label className="text-xs font-black text-zinc-500 uppercase ml-1">Tu Identificador</label>
           <Input 
-            value={phoneOrEmail} 
-            onChange={e => setPhoneOrEmail(e.target.value)}
-            placeholder="Teléfono o Correo" 
-            className="bg-zinc-900 border-zinc-800 h-14"
+            placeholder="Teléfono o Correo"
+            value={phoneOrEmail}
+            onChange={(e) => setPhoneOrEmail(e.target.value)}
+            className="bg-zinc-900/50 border-zinc-800 h-14 rounded-2xl text-lg placeholder:text-zinc-700"
           />
         </div>
-        
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Tu Respuesta</label>
+
+        <div className="space-y-3">
+          <label className="text-xs font-black text-zinc-500 uppercase ml-1">Tu Respuesta Secreta</label>
           <Input 
             type="password"
-            value={answer} 
-            onChange={e => setAnswer(e.target.value)}
-            placeholder="Ingresa tu palabra secreta" 
-            className="bg-zinc-900 border-zinc-800 h-14 text-yellow-500"
+            placeholder="Escribe tu respuesta aquí"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            className="bg-zinc-900/50 border-zinc-800 h-14 rounded-2xl text-lg placeholder:text-zinc-700"
           />
         </div>
-      </div>
 
-      <Button 
-        disabled={!answer || !phoneOrEmail || isLoading}
-        onClick={() => onRecover(phoneOrEmail, '', answer)}
-        className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
-      >
-        {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Validar Respuesta'}
-      </Button>
+        <Button 
+          disabled={!answer || !phoneOrEmail || isLoading}
+          onClick={() => onRecover(phoneOrEmail, '', answer)}
+          className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
+        >
+          {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Validar Respuesta'}
+        </Button>
+      </div>
     </div>
   );
 };
@@ -512,7 +507,9 @@ const PhoneScreen = ({
   setReferredByCode,
   isLoading,
   onContinue,
-  mode
+  mode,
+  setIsResettingPassword,
+  setStep
 }: {
   phone: string;
   setPhone: (v: string) => void;
@@ -525,6 +522,8 @@ const PhoneScreen = ({
   isLoading: boolean;
   onContinue: () => void;
   mode: 'login' | 'signup';
+  setIsResettingPassword: (v: boolean) => void;
+  setStep: (v: AuthStep) => void;
 }) => (
   <div className="flex flex-col h-screen bg-black text-white">
     <div className="flex-1 flex flex-col items-center justify-center p-8">
@@ -567,7 +566,6 @@ const PhoneScreen = ({
           </div>
         </div>
 
-        {/* Password field */}
         <div className={cn(
           "flex items-center bg-zinc-900/30 border border-zinc-800/80 rounded-2xl backdrop-blur-xl transition-all focus-within:border-yellow-500/40 focus-within:ring-1 focus-within:ring-yellow-500/10",
           "h-16 px-1 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
@@ -583,6 +581,29 @@ const PhoneScreen = ({
             />
           </div>
         </div>
+
+        {mode === 'login' && (
+          <div className="flex justify-center pt-1">
+            <button 
+              onClick={async () => {
+                const fullIdentifier = phone.includes('@') ? phone : (phone.startsWith('+') ? phone : countryCode + phone);
+                if (!phone.trim()) { toast.error('Ingresa tu teléfono o correo primero'); return; }
+                try {
+                  await authApi.login(fullIdentifier);
+                  toast.success('Código de recuperación enviado.');
+                  setIsResettingPassword(true);
+                  setStep('otp');
+                } catch (err: unknown) {
+                  const error = err as { response?: { data?: { error?: string } } };
+                  toast.error(error?.response?.data?.error || 'Error al enviar código');
+                }
+              }}
+              className="text-zinc-500 hover:text-white text-xs transition-colors"
+            >
+              ¿Olvidaste tu contraseña? Restablecer por correo
+            </button>
+          </div>
+        )}
       </div>
 
       {mode === 'signup' && (
@@ -619,7 +640,10 @@ const OTPScreen = ({
   onKeyDown,
   onVerify,
   onResend,
-  onBack
+  onBack,
+  isResettingPassword,
+  newResetPassword,
+  setNewResetPassword
 }: {
   otp: string[];
   isLoading: boolean;
@@ -628,6 +652,9 @@ const OTPScreen = ({
   onVerify: () => void;
   onResend: () => void;
   onBack: () => void;
+  isResettingPassword?: boolean;
+  newResetPassword?: string;
+  setNewResetPassword?: (v: string) => void;
 }) => (
   <div className="flex flex-col h-screen bg-zinc-950 text-white">
     <div className="p-4">
@@ -666,6 +693,22 @@ const OTPScreen = ({
         ))}
       </div>
 
+      {isResettingPassword && (
+        <div className="w-full max-w-sm space-y-2 mb-8">
+          <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-1">Nueva Contraseña</label>
+          <div className="relative">
+            <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+            <Input 
+              type="password"
+              value={newResetPassword}
+              onChange={e => setNewResetPassword && setNewResetPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              className="bg-zinc-900 border-zinc-800 h-14 text-white pl-10 focus:border-yellow-500/50 text-lg"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="text-center mb-8">
         <p className="text-zinc-500 text-sm mb-2">¿No recibiste el código?</p>
         <button onClick={onResend} className="text-yellow-500 font-semibold hover:underline">
@@ -674,11 +717,11 @@ const OTPScreen = ({
       </div>
 
       <Button 
-        className="w-full max-w-sm h-12 bg-yellow-600 hover:bg-yellow-700 text-black font-bold"
+        className="w-full max-w-sm h-14 bg-yellow-600 hover:bg-yellow-700 text-black font-bold text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
         onClick={onVerify}
         disabled={isLoading}
       >
-        {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Verificar'}
+        {isLoading ? <RefreshCw className="w-6 h-6 animate-spin" /> : 'Verificar'}
       </Button>
     </div>
   </div>
@@ -705,78 +748,76 @@ const ProfileScreen = ({
   onComplete: () => void;
   onBack: () => void;
 }) => (
-  <div className="flex flex-col h-screen bg-zinc-950 text-white p-8">
+  <div className="flex flex-col h-screen bg-zinc-950 text-white p-8 overflow-y-auto">
     <div className="flex items-center gap-4 mb-8">
       <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center relative group overflow-hidden">
         <User className="w-10 h-10 text-zinc-700" />
       </div>
       <div>
-        <h2 className="text-xl font-bold">Completa tu perfil</h2>
-        <p className="text-zinc-500 text-sm italic">Tu identidad en TakTak</p>
+        <h2 className="text-xl font-bold uppercase tracking-tight">Completa tu perfil</h2>
+        <p className="text-zinc-500 text-xs italic">Tu identidad en la red TakTak</p>
       </div>
     </div>
 
     <div className="space-y-6 flex-1">
       <div className="space-y-2">
-        <label htmlFor="username" className="text-sm font-medium text-zinc-400 ml-1">Nombre de usuario</label>
+        <label htmlFor="username" className="text-xs font-black text-zinc-500 uppercase ml-1">Nombre de usuario</label>
         <Input 
           id="username"
           placeholder="@usuario"
-          aria-label="Nombre de usuario"
-          className="bg-zinc-900 border-zinc-800 h-12"
+          className="bg-zinc-900/50 border-zinc-800 h-14 rounded-2xl text-lg"
           value={username}
           onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
         />
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="dob" className="text-sm font-medium text-zinc-400 ml-1">Fecha de nacimiento</label>
+        <label htmlFor="dob" className="text-xs font-black text-zinc-500 uppercase ml-1">Fecha de nacimiento</label>
         <Input 
           id="dob"
           type="date"
-          aria-label="Fecha de nacimiento"
-          className="bg-zinc-900 border-zinc-800 h-12"
+          className="bg-zinc-900/50 border-zinc-800 h-14 rounded-2xl text-lg text-white"
           value={dob}
           onChange={(e) => setDob(e.target.value)}
         />
       </div>
 
       <div className="space-y-4 pt-4">
-        <label className="flex items-start gap-3 cursor-pointer group">
+        <label className="flex items-start gap-4 cursor-pointer group">
           <input 
             type="checkbox" 
             checked={agreements.legal}
             onChange={(e) => setAgreements({ ...agreements, legal: e.target.checked })}
-            className="mt-1 w-5 h-5 rounded border-zinc-800 bg-zinc-900 text-yellow-500 focus:ring-yellow-500" 
+            className="mt-1 w-6 h-6 rounded-lg border-zinc-800 bg-zinc-900 text-yellow-500 focus:ring-yellow-500 transition-all" 
           />
-          <span className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">
-            Acepto los términos y condiciones de uso de TakTak.
+          <span className="text-xs text-zinc-400 group-hover:text-zinc-300 leading-tight">
+            Acepto los Términos y Condiciones de uso de TakTak y confirmo que soy mayor de edad.
           </span>
         </label>
 
-        <label className="flex items-start gap-3 cursor-pointer group">
+        <label className="flex items-start gap-4 cursor-pointer group">
           <input 
             type="checkbox" 
             checked={agreements.privacy}
             onChange={(e) => setAgreements({ ...agreements, privacy: e.target.checked })}
-            className="mt-1 w-5 h-5 rounded border-zinc-800 bg-zinc-900 text-yellow-500 focus:ring-yellow-500" 
+            className="mt-1 w-6 h-6 rounded-lg border-zinc-800 bg-zinc-900 text-yellow-500 focus:ring-yellow-500 transition-all" 
           />
-          <span className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">
-            He leído y acepto la política de privacidad de datos P2P.
+          <span className="text-xs text-zinc-400 group-hover:text-zinc-300 leading-tight">
+            He leído y acepto la Política de Privacidad y el manejo de mis datos de forma descentralizada.
           </span>
         </label>
       </div>
     </div>
 
-    <div className="mt-8 space-y-3">
+    <div className="mt-8 space-y-4">
       <Button 
-        className="w-full h-12 bg-yellow-600 hover:bg-yellow-700 text-black font-bold"
+        className="w-full h-14 bg-yellow-600 hover:bg-yellow-700 text-black font-black text-lg rounded-2xl shadow-[0_10px_30px_rgba(234,179,8,0.2)]"
         onClick={onComplete}
         disabled={isLoading}
       >
-        {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <><Check className="w-4 h-4 mr-2" /> Completar</>}
+        {isLoading ? <RefreshCw className="w-6 h-6 animate-spin" /> : 'Completar Perfil'}
       </Button>
-      <Button variant="ghost" className="w-full text-zinc-500" onClick={onBack}>
+      <Button variant="ghost" className="w-full text-zinc-600 hover:text-white" onClick={onBack}>
         Volver
       </Button>
     </div>
@@ -814,69 +855,68 @@ const SecurityScreen = ({
   return (
     <div className="flex flex-col h-screen bg-black text-white p-6 overflow-y-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Shield className="w-8 h-8 text-cyan-400" />
+        <Shield className="w-10 h-10 text-yellow-500" />
         <div>
-          <h2 className="text-xl font-bold">Seguridad Web3</h2>
-          <p className="text-zinc-500 text-sm">Respalda tu cuenta de forma descentralizada</p>
+          <h2 className="text-2xl font-black uppercase tracking-tighter">Seguridad P2P</h2>
+          <p className="text-zinc-500 text-xs italic">Respalda tu cuenta de forma descentralizada</p>
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-red-500/30 rounded-xl p-4 mb-6">
-        <h3 className="text-red-400 font-bold mb-2 flex items-center gap-2">
-          <span>⚠️</span> Frase de Recuperación (12 Palabras)
+      <div className="bg-zinc-900/50 border border-yellow-500/20 rounded-3xl p-6 mb-8 backdrop-blur-xl">
+        <h3 className="text-yellow-500 font-black mb-2 flex items-center gap-2 uppercase text-sm">
+          <span>⚠️</span> Frase de Recuperación
         </h3>
-        <p className="text-xs text-zinc-400 mb-4">
-          Copia estas 12 palabras en un papel seguro. Si las pierdes y estás inactivo, perderás tus fondos. No las compartas con nadie.
+        <p className="text-[10px] text-zinc-500 mb-6 leading-relaxed">
+          Copia estas 12 palabras en un lugar físico seguro. Si pierdes tu acceso y la frase, TakTak no podrá recuperar tus datos ni fondos.
         </p>
         
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-6">
           {words.map((word, i) => (
-            <div key={i} className="bg-black/50 border border-zinc-800 rounded p-2 text-center flex flex-col">
-              <span className="text-[9px] text-zinc-600 font-mono">{i + 1}</span>
-              <span className="text-sm font-semibold text-cyan-50">{word}</span>
+            <div key={i} className="bg-black/40 border border-zinc-800 rounded-2xl p-3 flex items-center gap-3">
+              <span className="text-[10px] text-zinc-700 font-black">{i + 1}</span>
+              <span className="text-sm font-bold text-white tracking-tight">{word}</span>
             </div>
           ))}
         </div>
 
         <Button 
           variant="outline" 
-          className={`w-full bg-zinc-800 border-zinc-700 ${copied ? 'text-green-400 border-green-500/50' : 'text-zinc-300'}`}
+          className={`w-full h-12 bg-zinc-900 border-zinc-800 rounded-2xl ${copied ? 'text-green-500 border-green-500/30' : 'text-zinc-400 hover:text-white'}`}
           onClick={handleCopy}
         >
-          {copied ? '¡Copiado!' : 'Copiar al portapapeles'}
+          {copied ? '¡FRASE COPIADA!' : 'COPIAR AL PORTAPAPELES'}
         </Button>
       </div>
 
-      <div className="space-y-4 mb-8">
-        <h3 className="text-sm font-bold text-zinc-300">Pregunta de Seguridad</h3>
+      <div className="space-y-6 mb-10">
+        <h3 className="text-xs font-black text-zinc-500 uppercase ml-1 tracking-widest">Pregunta de Seguridad</h3>
         
-        <div className="space-y-2">
-          <label className="text-xs text-zinc-500">Selecciona o escribe una pregunta</label>
+        <div className="space-y-3">
+          <label className="text-[10px] font-bold text-zinc-600 uppercase ml-1">Selecciona una pregunta</label>
           <select 
-            aria-label="Pregunta de seguridad"
-            className="w-full h-12 bg-zinc-900 border border-zinc-800 rounded-md px-3 text-sm text-white focus:outline-none focus:border-cyan-500"
+            className="w-full h-14 bg-zinc-900/50 border border-zinc-800 rounded-2xl px-4 text-sm text-white focus:outline-none focus:border-yellow-500/50 appearance-none"
             value={securityQuestion}
             onChange={(e) => setSecurityQuestion(e.target.value)}
           >
             <option>¿Cuál es el nombre de tu primera mascota?</option>
             <option>¿Cuál es la ciudad donde naciste?</option>
             <option>¿Cuál era el apodo de tu infancia?</option>
-            <option>Otra (personalizada...)</option>
+            <option>¿Nombre de tu escuela primaria?</option>
           </select>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-xs text-zinc-500">Respuesta</label>
+        <div className="space-y-3">
+          <label className="text-[10px] font-bold text-zinc-600 uppercase ml-1">Tu Respuesta Secreta</label>
           <div className="relative">
             <Input 
               type={showAnswer ? "text" : "password"}
               placeholder="Tu respuesta secreta"
-              className="bg-zinc-900 border-zinc-800 h-12 pr-12 text-white"
+              className="bg-zinc-900/50 border border-zinc-800 h-14 rounded-2xl pr-14 text-white text-lg"
               value={securityAnswer}
               onChange={(e) => setSecurityAnswer(e.target.value)}
             />
             <button 
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white text-xl"
               onClick={() => setShowAnswer(!showAnswer)}
             >
               {showAnswer ? '🙈' : '👁️'}
@@ -887,15 +927,14 @@ const SecurityScreen = ({
 
       <div className="mt-auto pb-4">
         <Button 
-          className="w-full h-12 bg-cyan-600 hover:bg-cyan-700 font-bold"
+          className="w-full h-16 bg-yellow-600 hover:bg-yellow-700 text-black font-black text-xl rounded-2xl shadow-[0_15px_40px_rgba(234,179,8,0.3)]"
           onClick={onComplete}
           disabled={isLoading || securityAnswer.length < 2 || !copied}
         >
-          {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Finalizar y Entrar'}
+          {isLoading ? <RefreshCw className="w-8 h-8 animate-spin" /> : 'FINALIZAR REGISTRO'}
         </Button>
-        {!copied && <p className="text-[10px] text-center text-red-400 mt-2">Debes copiar la frase antes de continuar</p>}
+        {!copied && <p className="text-[10px] text-center text-red-500/70 mt-3 font-bold uppercase tracking-widest">Primero debes copiar tu frase de seguridad</p>}
       </div>
     </div>
   );
 };
-

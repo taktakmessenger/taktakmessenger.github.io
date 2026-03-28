@@ -44,6 +44,9 @@ export const authApi = {
   loginWithPassword: (identifier: string, password: string) => 
     api.post('/auth/login-password', { identifier, password }),
   
+  resetPassword: (identifier: string, code: string, password: string) => 
+    api.post('/auth/reset-password', { identifier, code, password }),
+  
   getMe: () => api.get('/auth/me'),
 
   updateProfile: (data: { username: string; dob: string; legalAccepted: boolean; privacyAccepted: boolean }) => 

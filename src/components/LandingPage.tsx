@@ -37,6 +37,8 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
   });
   const [recoveryWords, setRecoveryWords] = useState<string[]>(new Array(12).fill(''));
   const [recoveryIdentifier, setRecoveryIdentifier] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [newResetPassword, setNewResetPassword] = useState('');
 
   const { login } = useStore();
 
@@ -128,6 +130,20 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
     const identifier = getFullIdentifier();
     setIsLoading(true);
     try {
+      if (isResettingPassword) {
+        if (newResetPassword.length < 6) {
+          toast.error('La nueva contraseña debe tener al menos 6 caracteres');
+          setIsLoading(false);
+          return;
+        }
+        await authApi.resetPassword(identifier, code, newResetPassword);
+        toast.success('¡Contraseña restablecida! Ahora puedes iniciar sesión.');
+        setFormMode('main');
+        setIsResettingPassword(false);
+        setNewResetPassword('');
+        return;
+      }
+
       const response = await authApi.verify(identifier, code);
       const data = response?.data;
       if (!data) { toast.error('Respuesta inválida'); return; }
@@ -280,10 +296,32 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
               {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Entrar / Crear Cuenta'}
             </Button>
 
-            {/* RECUPERAR */}
-            <button onClick={() => setFormMode('recovery')} className="w-full text-zinc-500 hover:text-yellow-500 text-[11px] transition-colors pt-1 flex items-center justify-center gap-1.5">
-              <Key className="w-3 h-3" /> ¿Perdiste tu cuenta? Recuperar con 12 palabras
-            </button>
+            {/* OLVIDÉ CONTRASEÑA */}
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={async () => {
+                  const id = getFullIdentifier();
+                  if (!id) { toast.error('Ingresa tu correo o teléfono primero'); return; }
+                  setIsLoading(true);
+                  try {
+                    await authApi.login(id);
+                    toast.success('Código de recuperación enviado.');
+                    setIsResettingPassword(true);
+                    setFormMode('otp');
+                  } catch (err: unknown) {
+                    const error = err as { response?: { data?: { error?: string } } };
+                    toast.error(error?.response?.data?.error || 'Error al enviar código');
+                  } finally { setIsLoading(false); }
+                }}
+                className="w-full text-zinc-400 hover:text-white text-[11px] transition-colors flex items-center justify-center gap-1"
+              >
+                ¿Olvidaste tu contraseña? Restablecer por correo
+              </button>
+
+              <button onClick={() => setFormMode('recovery')} className="w-full text-zinc-500 hover:text-yellow-500 text-[11px] transition-colors py-1 flex items-center justify-center gap-1.5">
+                <Key className="w-3 h-3" /> ¿Perdiste tu cuenta? Recuperar con 12 palabras
+              </button>
+            </div>
           </motion.div>
         );
 
@@ -292,6 +330,22 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-sm px-6 space-y-4 flex flex-col items-center">
             <h2 className="text-xl font-black text-white">Verificar Código</h2>
             <p className="text-zinc-500 text-sm text-center">Ingresa el código de 6 dígitos</p>
+            
+            {isResettingPassword && (
+              <div className="w-full space-y-2 mb-2">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Nueva Contraseña</label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                  <Input 
+                    type="password"
+                    value={newResetPassword}
+                    onChange={e => setNewResetPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="bg-zinc-900 border-zinc-800 h-11 text-white pl-10 focus:border-yellow-500/50"
+                  />
+                </div>
+              </div>
+            )}
             {debugOtp && (
               <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-3 w-full text-center">
                 <p className="text-yellow-500 text-xs font-bold">🔑 OTP DE DEPURACIÓN</p>
