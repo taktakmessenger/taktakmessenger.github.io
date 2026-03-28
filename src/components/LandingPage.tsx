@@ -21,6 +21,7 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
   const [formMode, setFormMode] = useState<FormMode>('main');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [countryCode, setCountryCode] = useState('+58');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,14 +65,27 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
     }
     setIsLoading(true);
     try {
-      // Try login first
+      // If password provided, try login-password first
+      if (password.trim()) {
+        const response = await authApi.loginWithPassword(identifier, password);
+        const data = response?.data;
+        if (data?.token && data?.user) {
+          localStorage.setItem('taktak_token', data.token);
+          login(data.user);
+          toast.success(`¡Bienvenido, ${data.user.username}!`);
+          onEnterApp();
+          return;
+        }
+      }
+
+      // Fallback to OTP flow
       const response = await authApi.login(identifier);
       const data = response?.data;
       if (data?.debugOtp) setDebugOtp(data.debugOtp);
       toast.success('Código enviado. Revisa tu teléfono o correo.');
       setFormMode('otp');
     } catch {
-      // If login fails, try register
+      // If login fails (and no password was tried or it failed), try register
       try {
         const response = await authApi.register({
           phone: identifier,
@@ -218,6 +232,21 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
                   onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
                   placeholder="Número"
                   className="bg-zinc-900/80 border-zinc-800 h-13 text-white flex-1 focus:border-yellow-500/50 text-base"
+                />
+              </div>
+            </div>
+
+            {/* CONTRASEÑA (OPCIONAL PARA ENTRADA DIRECTA) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Contraseña (opcional para OTP)</label>
+              <div className="relative">
+                <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-600" />
+                <Input 
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Tu contraseña"
+                  className="bg-zinc-900/80 border-zinc-800 h-13 text-white pl-10 focus:border-yellow-500/50 text-base"
                 />
               </div>
             </div>

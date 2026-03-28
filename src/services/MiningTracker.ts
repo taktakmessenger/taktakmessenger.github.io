@@ -16,6 +16,7 @@ export class MiningTracker {
 
   private periodStart: number;
   private uptimeInterval: NodeJS.Timeout | null = null;
+  private feeRecipient: string | null = null;
 
   constructor({ nodeId, userId, signer, reportSender }: {
     nodeId: string;
@@ -31,12 +32,14 @@ export class MiningTracker {
     this.periodStart = Math.floor(Date.now() / 1000);
   }
 
+  setFeeRecipient(recipient: string | null) {
+    this.feeRecipient = recipient;
+  }
+
   startUptimeTracking() {
     if (this.uptimeInterval) clearInterval(this.uptimeInterval);
     this.uptimeInterval = setInterval(() => {
       this.uptimeUnits += 1;
-      // Periodically build and send report or wait for threshold?
-      // In whataka.txt it's manual, but we can automate it.
     }, 60 * 1000);
   }
 
@@ -49,6 +52,16 @@ export class MiningTracker {
   addStoreUnits(u = 1) { this.storeUnits += u; }
   addCallUnits(u = 1) { this.callUnits += u; }
   addReputationUnits(u = 1) { this.reputationUnits += u; }
+
+  calculateScore() {
+    return (
+      this.relayUnits * 5 +
+      this.storeUnits * 8 +
+      this.uptimeUnits * 1 +
+      this.callUnits * 10 +
+      this.reputationUnits * 3
+    );
+  }
 
   buildAndSendReport() {
     const periodEnd = Math.floor(Date.now() / 1000);
@@ -64,10 +77,10 @@ export class MiningTracker {
       reputation_units: this.reputationUnits,
       period_start: this.periodStart,
       period_end: periodEnd,
-      timestamp: periodEnd
+      timestamp: periodEnd,
+      fee_recipient: this.feeRecipient // Added for Malayaso policy
     };
 
-    // Buffer is available via polyfills in Vite
     const payload = Buffer.from(JSON.stringify(report), "utf8");
     const signatureBytes = this.signer(payload);
     const signatureHex = Buffer.from(signatureBytes).toString("hex");

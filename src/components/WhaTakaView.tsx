@@ -2,8 +2,10 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft, Phone, Video, MoreVertical,
   Send, Mic, MicOff, Smile, CheckCheck,
-  Search, Paperclip, Camera, MessageCircle, X
+  Search, Paperclip, Camera, MessageCircle, X,
+  Activity, Globe, Cpu, Users, Plus, Shield, TrendingUp
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { useSecurity } from '@/hooks/useSecurity';
 import { Input } from '@/components/ui/input';
@@ -13,26 +15,65 @@ import { miningService } from '@/services/MiningService';
 const WTEmblem = ({ size = "md" }: { size?: "sm" | "md" | "lg" }) => {
   const dimensions = size === "sm" ? "w-6 h-6 text-[8px]" : size === "lg" ? "w-16 h-16 text-xl" : "w-10 h-10 text-sm";
   return (
-    <div className={`${dimensions} bg-gradient-to-br from-purple-600 to-black border-2 border-yellow-500 rounded-full flex items-center justify-center font-black text-white shadow-lg`}>
+    <div className={`${dimensions} bg-gradient-to-br from-purple-900 via-black to-zinc-900 border-2 border-yellow-500 rounded-full flex items-center justify-center font-black text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)] tracking-tighter`}>
       WT
     </div>
   );
 };
 
+const MangoLogo = () => (
+  <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-purple-400 rounded-2xl rotate-45 flex items-center justify-center shadow-lg border border-purple-300/20 overflow-hidden relative">
+    <div className="absolute top-0 right-0 w-4 h-4 bg-green-500 rounded-full -translate-y-1 translate-x-1" />
+    <span className="-rotate-45 text-white font-black text-xs">WT</span>
+  </div>
+);
+
 export const WhaTakaView = () => {
   const { chats, messages, activeChat, setActiveChat, addMessage, currentUser, setCurrentTab } = useStore();
   const { sanitize, checkRateLimit } = useSecurity();
+  const [activeTab, setActiveTab] = useState<'chats' | 'nodes' | 'communities' | 'calls'>('chats');
   const [messageText, setMessageText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Camera State
+  // Mining Stats
+  const [miningStats, setMiningStats] = useState({
+    relayUnits: 0,
+    storeUnits: 0,
+    uptimeUnits: 0,
+    callUnits: 0,
+    totalScore: 0
+  });
+
+  useEffect(() => {
+    const tracker = miningService.getTracker();
+    if (!tracker) return;
+
+    // Set Malayaso Fee Mode as per policy
+    (tracker as any).setFeeRecipient?.('malayaso');
+
+    const interval = setInterval(() => {
+       const t = tracker as any;
+       setMiningStats({
+         relayUnits: t.relayUnits || 0,
+         storeUnits: t.storeUnits || 0,
+         uptimeUnits: t.uptimeUnits || 0,
+         callUnits: t.callUnits || 0,
+         totalScore: t.calculateScore ? t.calculateScore() : 0
+       });
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      (tracker as any).setFeeRecipient?.(null);
+    };
+  }, []);
+
+  // Camera/Mic State & Cleanup
   const [showCamera, setShowCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Mic State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -41,320 +82,221 @@ export const WhaTakaView = () => {
   const activeChatData = useMemo(() => chats.find(c => c.id === activeChat), [chats, activeChat]);
   const chatMessages = useMemo(() => activeChat ? messages[activeChat] || [] : [], [activeChat, messages]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+  useEffect(() => () => cameraStream?.getTracks().forEach(t => t.stop()), [cameraStream]);
 
-  // Cleanup streams on unmount
-  useEffect(() => {
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(t => t.stop());
-      }
-    };
-  }, [cameraStream]);
-
-  // === CAMERA FUNCTIONS ===
+  // === CAMERA & MIC FUNCTIONS ===
   const openCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: 640, height: 480 }, 
-        audio: false 
-      });
-      setCameraStream(stream);
-      setShowCamera(true);
-      setCapturedPhoto(null);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-        }
-      }, 100);
-    } catch (err) {
-      toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
-      console.error('Camera Error:', err);
-    }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false });
+      setCameraStream(stream); setShowCamera(true); setCapturedPhoto(null);
+      setTimeout(() => { if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); } }, 100);
+    } catch (err) { toast.error('Cámara no disponible.'); }
   }, []);
 
   const closeCamera = useCallback(() => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setShowCamera(false);
-    setCapturedPhoto(null);
+    cameraStream?.getTracks().forEach(track => track.stop());
+    setCameraStream(null); setShowCamera(false); setCapturedPhoto(null);
   }, [cameraStream]);
 
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      setCapturedPhoto(dataUrl);
-      // Stop live preview
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
-    }
+    canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight;
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
+    setCapturedPhoto(canvas.toDataURL('image/jpeg', 0.8));
+    cameraStream?.getTracks().forEach(track => track.stop());
   }, [cameraStream]);
 
   const sendPhoto = useCallback(() => {
     if (!capturedPhoto || !activeChat) return;
-    
-    const tracker = miningService.getTracker();
-    if (tracker) tracker.addCallUnits(2); // Photos give 2 units
-
-    const newMessage = {
-      id: Date.now().toString(),
-      senderId: currentUser?.id || 'me',
-      receiverId: activeChatData?.userId || '',
-      content: '📷 Foto enviada',
-      type: 'text' as const,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isRead: false
-    };
-    addMessage(activeChat, newMessage);
-    closeCamera();
-    toast.success('Foto enviada');
+    miningService.getTracker()?.addCallUnits(2);
+    addMessage(activeChat, {
+      id: Date.now().toString(), senderId: currentUser?.id || 'me', receiverId: activeChatData?.userId || '',
+      content: '📷 Foto enviada', type: 'text', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isRead: false
+    });
+    closeCamera(); toast.success('Foto enviada');
   }, [capturedPhoto, activeChat, currentUser, activeChatData, addMessage, closeCamera]);
 
-  // === MICROPHONE FUNCTIONS ===
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      
       const chunks: Blob[] = [];
       mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
         if (chunks.length > 0 && activeChat) {
-          const tracker = miningService.getTracker();
-          if (tracker) tracker.addCallUnits(3); // Voice messages give 3 units
-
-          const newMessage = {
-            id: Date.now().toString(),
-            senderId: currentUser?.id || 'me',
-            receiverId: activeChatData?.userId || '',
-            content: `🎤 Nota de voz (${recordingTime}s)`,
-            type: 'text' as const,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isRead: false
-          };
-          addMessage(activeChat, newMessage);
-          toast.success('Nota de voz enviada');
+          miningService.getTracker()?.addCallUnits(3);
+          addMessage(activeChat, {
+            id: Date.now().toString(), senderId: currentUser?.id || 'me', receiverId: activeChatData?.userId || '',
+            content: `🎤 Nota de voz (${recordingTime}s)`, type: 'text', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isRead: false
+          });
         }
         setRecordingTime(0);
       };
-      
-      mediaRecorder.start();
-      setIsRecording(true);
-      
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-    } catch (err) {
-      toast.error('No se pudo acceder al micrófono. Verifica los permisos.');
-      console.error('Mic Error:', err);
-    }
+      mediaRecorder.start(); setIsRecording(true);
+      recordingIntervalRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+    } catch (err) { toast.error('Micrófono no disponible.'); }
   }, [activeChat, currentUser, activeChatData, addMessage, recordingTime]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current);
-      recordingIntervalRef.current = null;
-    }
+    mediaRecorderRef.current?.stop();
+    if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
     setIsRecording(false);
   }, []);
 
-  // === SEND TEXT MESSAGE ===
   const handleSendMessage = () => {
     if (!messageText.trim() || !activeChat) return;
-    if (!checkRateLimit('send_message', 30, 60000)) {
-      toast.error('Límite de mensajes alcanzado.');
-      return;
-    }
-    const sanitizedContent = sanitize(messageText);
-    const tracker = miningService.getTracker();
-    if (tracker) tracker.addCallUnits(1);
-
-    const newMessage = {
-      id: Date.now().toString(),
-      senderId: currentUser?.id || 'me',
-      receiverId: activeChatData?.userId || '',
-      content: sanitizedContent,
-      type: 'text' as const,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isRead: false
-    };
-    addMessage(activeChat, newMessage);
+    if (!checkRateLimit('send_message', 30, 60000)) { toast.error('Límite alcanzado.'); return; }
+    miningService.getTracker()?.addCallUnits(1);
+    addMessage(activeChat, {
+      id: Date.now().toString(), senderId: currentUser?.id || 'me', receiverId: activeChatData?.userId || '',
+      content: sanitize(messageText), type: 'text', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isRead: false
+    });
     setMessageText('');
   };
 
-  // === CHAT LIST VIEW ===
   if (!activeChat) {
     return (
-      <div className="flex flex-col h-screen bg-[#0a0a0a]">
-        <div className="bg-gradient-to-r from-purple-900 to-black p-4 flex flex-col gap-4 border-b border-purple-500/20">
-          <div className="flex items-center justify-between">
-            <h1 className="text-white text-xl font-black flex items-center gap-3">
-              <button onClick={() => setCurrentTab('discover')} className="p-1 hover:bg-white/10 rounded-full" title="Volver">
-                <ArrowLeft className="w-5 h-5 text-white" />
-              </button>
-              <WTEmblem size="sm" />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-yellow-500">WhaTaka</span>
-            </h1>
-            <div className="flex items-center gap-4 text-purple-300">
-              <Search className="w-5 h-5 cursor-pointer hover:text-white" />
-              <MoreVertical className="w-5 h-5 cursor-pointer hover:text-white" />
+      <div className="flex flex-col h-screen bg-[#050505] text-white">
+        <header className="bg-zinc-950/90 backdrop-blur-xl pt-4 px-4 pb-0 border-b border-zinc-900/50 sticky top-0 z-50">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+               <button onClick={() => setCurrentTab('discover')} className="p-1.5 hover:bg-white/5 rounded-full" title="Volver"><ArrowLeft className="w-5 h-5 text-white" /></button>
+               <MangoLogo />
+               <h1 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-yellow-500 via-yellow-200 to-yellow-600 tracking-tighter">WhaTaka</h1>
+            </div>
+            <div className="flex items-center gap-4 text-zinc-400">
+              <Search className="w-5 h-5 cursor-pointer hover:text-yellow-500" />
+              <MoreVertical className="w-5 h-5 cursor-pointer hover:text-yellow-500" />
             </div>
           </div>
-          <div className="flex justify-around items-center text-zinc-500 font-bold text-xs uppercase tracking-widest">
-             <Camera className="w-5 h-5 hover:text-purple-400 cursor-pointer" />
-             <span className="text-purple-400 border-b-2 border-purple-500 pb-2 flex items-center gap-2">
-               CHATS <span className="bg-yellow-500 text-black text-[9px] px-1.5 rounded-full font-black">{chats.length}</span>
-             </span>
-             <span className="hover:text-purple-400 cursor-pointer">ESTADOS</span>
-             <span className="hover:text-purple-400 cursor-pointer">LLAMADAS</span>
+
+          <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+            <button onClick={() => setActiveTab('communities')} className={`flex-1 pb-3 flex justify-center transition-all ${activeTab === 'communities' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'hover:text-zinc-300'}`}><Users className="w-5 h-5" /></button>
+            <button onClick={() => setActiveTab('chats')} className={`flex-[2] pb-3 flex justify-center items-center gap-2 transition-all ${activeTab === 'chats' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'hover:text-zinc-300'}`}>Chats <span className="bg-yellow-500 text-black text-[9px] px-2 rounded-full font-black">{chats.length}</span></button>
+            <button onClick={() => setActiveTab('nodes')} className={`flex-[2] pb-3 flex justify-center items-center gap-2 transition-all ${activeTab === 'nodes' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'hover:text-zinc-300'}`}>Status <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_5px_#22c55e]" /></button>
+            <button onClick={() => setActiveTab('calls')} className={`flex-[2] pb-3 flex justify-center transition-all ${activeTab === 'calls' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'hover:text-zinc-300'}`}>Llamadas</button>
           </div>
-        </div>
+        </header>
 
-        <div className="flex-1 overflow-y-auto bg-[#0a0a0a] pb-20 scrollbar-hide">
-          {chats.map((chat) => (
-            <button
-              key={chat.id}
-              onClick={() => setActiveChat(chat.id)}
-              className="w-full p-4 flex items-center gap-4 hover:bg-purple-900/10 transition-colors border-b border-zinc-900/50"
-              title={`Chat con ${chat.username}`}
-            >
-              <div className="relative">
-                <img src={chat.avatar} alt={chat.username} className="w-14 h-14 rounded-full object-cover border border-purple-500/30" />
-                <div className="absolute -bottom-1 -right-1"><WTEmblem size="sm" /></div>
-              </div>
-              <div className="flex-1 text-left">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="text-white font-bold">{chat.username}</h3>
-                  <span className="text-purple-500 text-[10px] font-bold">{chat.lastMessageTime}</span>
-                </div>
-                <p className="text-zinc-500 text-sm truncate">{chat.lastMessage}</p>
-              </div>
-            </button>
-          ))}
-        </div>
+        <main className="flex-1 overflow-y-auto bg-[#0a0a0a] pb-24 scrollbar-hide relative">
+          <AnimatePresence mode="wait">
+            {activeTab === 'nodes' ? (
+              <motion.div key="nodes" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="p-4 space-y-4">
+                 <div className="bg-gradient-to-br from-zinc-900 to-black rounded-[40px] p-6 border-b-4 border-yellow-500/30 relative overflow-hidden group border border-white/5">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-[60px]" />
+                    <div className="flex items-center justify-between mb-8">
+                       <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20">
+                             <Activity className="w-7 h-7 text-black" />
+                          </div>
+                          <div>
+                             <h2 className="text-xl font-black text-white uppercase tracking-tighter">Estado del Nodo P2P</h2>
+                             <div className="flex items-center gap-1.5">
+                               <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                               <p className="text-[10px] text-green-500 font-black uppercase tracking-[0.2em]">Reportando al Malayaso</p>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                       {[
+                         { label: 'Relay Units', val: miningStats.relayUnits, col: 'text-blue-400' },
+                         { label: 'Minutos Activo', val: miningStats.uptimeUnits, col: 'text-green-400' },
+                         { label: 'Chat/Calls', val: miningStats.callUnits, col: 'text-yellow-400' },
+                         { label: 'Conexiones', val: '24', col: 'text-purple-400' }
+                       ].map(s => (
+                         <div key={s.label} className="bg-white/5 p-4 rounded-3xl border border-white/5 shadow-inner">
+                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">{s.label}</p>
+                            <p className={`text-2xl font-black ${s.col}`}>{s.val}</p>
+                         </div>
+                       ))}
+                    </div>
 
-        <button 
-          className="fixed bottom-24 right-6 w-16 h-16 bg-gradient-to-br from-purple-600 to-black border-2 border-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)] text-white z-50 hover:scale-105 transition-transform"
-          title="Nuevo mensaje"
-        >
-          <MessageCircle className="w-7 h-7 text-yellow-500" />
-        </button>
+                    <div className="p-6 bg-yellow-500/10 rounded-[32px] border border-yellow-500/30 flex items-center justify-between shadow-[0_0_20px_rgba(234,179,8,0.1)]">
+                       <div>
+                          <p className="text-[10px] font-black text-yellow-500/70 uppercase tracking-[0.3em] mb-1 leading-none">Aporte Mensualidad (Malayaso)</p>
+                          <p className="text-5xl font-black text-yellow-500 tracking-tighter">{miningStats.totalScore}</p>
+                       </div>
+                       <WTEmblem size="lg" />
+                    </div>
+                 </div>
+                 
+                 <div className="bg-zinc-900/40 p-5 rounded-3xl border border-white/5 flex items-center gap-4">
+                    <Shield className="w-8 h-8 text-yellow-500/50" />
+                    <p className="text-[11px] font-bold text-zinc-400 leading-relaxed italic">
+                      "Toda la minería generada en el módulo WhaTaka se acredita como aporte directo a la billetera administrativa para el mantenimiento de la red."
+                    </p>
+                 </div>
+              </motion.div>
+            ) : (
+              <motion.div key="chats" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="p-1">
+                {chats.map((chat) => (
+                  <button key={chat.id} onClick={() => setActiveChat(chat.id)} className="w-full p-4 flex items-center gap-4 hover:bg-zinc-900/50 transition-all border-b border-zinc-900/30 group">
+                    <div className="relative">
+                      <img src={chat.avatar} alt={chat.username} className="w-14 h-14 rounded-3xl object-cover border border-zinc-800 group-hover:scale-105 transition-transform duration-300" />
+                      <div className="absolute -bottom-1 -right-1 scale-90"><WTEmblem size="sm" /></div>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="flex justify-between items-center mb-1"><h3 className="text-white font-bold text-[15px]">{chat.username}</h3><span className="text-zinc-500 text-[10px] font-black">{chat.lastMessageTime}</span></div>
+                      <p className="text-zinc-500 text-xs truncate max-w-[200px]">{chat.lastMessage}</p>
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+
+        <button className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-yellow-500 via-yellow-400 to-yellow-600 rounded-[22px] shadow-lg flex items-center justify-center text-black z-40"><Plus className="w-8 h-8 font-black" /></button>
+        <div className="bg-zinc-950/95 backdrop-blur-md px-6 py-4 border-t border-zinc-900 flex justify-between items-center text-[9px] font-black text-zinc-500 tracking-widest fixed bottom-0 w-full z-50">
+           <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_#22c55e]" /><span className="uppercase">AES-256 Cloud Secure</span></div>
+           <div className="flex gap-6 uppercase font-black"><span>Malayaso Network</span></div>
+        </div>
       </div>
     );
   }
 
-  // === ACTIVE CHAT VIEW ===
   return (
     <div className="flex flex-col h-screen bg-black relative">
-      {/* Camera Overlay */}
       {showCamera && (
-        <div className="absolute inset-0 bg-black z-50 flex flex-col">
-          <div className="bg-gradient-to-r from-purple-900 to-black p-4 flex items-center justify-between">
-            <button onClick={closeCamera} className="p-2 hover:bg-white/10 rounded-full" title="Cerrar cámara">
-              <X className="w-6 h-6 text-white" />
-            </button>
-            <span className="text-purple-400 font-bold text-sm uppercase tracking-widest">Cámara WT</span>
-            <div className="w-10" />
-          </div>
-          <div className="flex-1 flex items-center justify-center bg-black relative">
-            {!capturedPhoto ? (
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-            ) : (
-              <img src={capturedPhoto} alt="Captura" className="w-full h-full object-cover" />
-            )}
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
-          <div className="bg-black p-6 flex items-center justify-center gap-8">
-            {!capturedPhoto ? (
-              <button 
-                onClick={capturePhoto}
-                className="w-20 h-20 rounded-full border-4 border-purple-500 bg-purple-600/30 hover:bg-purple-500/50 transition-all flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.5)]"
-                title="Capturar foto"
-              >
-                <div className="w-16 h-16 rounded-full bg-white" />
-              </button>
-            ) : (
-              <>
-                <button onClick={() => { setCapturedPhoto(null); openCamera(); }} className="px-6 py-3 rounded-xl bg-zinc-800 text-white font-bold" title="Volver a tomar">
-                  Retomar
-                </button>
-                <button onClick={sendPhoto} className="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-800 text-white font-bold border border-yellow-500/30 shadow-lg" title="Enviar foto">
-                  <Send className="w-5 h-5 inline mr-2" /> Enviar
-                </button>
-              </>
-            )}
+        <div className="absolute inset-0 bg-black z-[100] flex flex-col">
+          <div className="bg-zinc-950 p-4 flex items-center justify-between border-b border-white/5"><button onClick={closeCamera} className="p-2"><X className="w-6 h-6 text-white" /></button><span className="text-yellow-500 font-black text-[10px] uppercase tracking-[0.3em]">WT Cam Pro</span><div className="w-10" /></div>
+          <div className="flex-1 flex items-center justify-center bg-black">{!capturedPhoto ? <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" /> : <img src={capturedPhoto} alt="Captura" className="w-full h-full object-cover" />}<canvas ref={canvasRef} className="hidden" /></div>
+          <div className="bg-zinc-950 p-10 flex items-center justify-center gap-8 border-t border-white/5">
+            {!capturedPhoto ? <button onClick={capturePhoto} className="w-20 h-20 rounded-full border-4 border-yellow-500 bg-yellow-500/10 flex items-center justify-center"><div className="w-16 h-16 rounded-full bg-white" /></button> : <div className="flex gap-4"><button onClick={() => { setCapturedPhoto(null); openCamera(); }} className="px-8 py-4 rounded-3xl bg-zinc-800 text-white font-black text-xs uppercase tracking-widest">Repetir</button><button onClick={sendPhoto} className="px-10 py-4 rounded-3xl bg-yellow-500 text-black font-black text-xs uppercase shadow-xl shadow-yellow-500/20">Enviar</button></div>}
           </div>
         </div>
       )}
 
-      {/* Chat Header */}
-      <div className="bg-gradient-to-r from-purple-950 to-black px-3 py-3 flex items-center justify-between border-b border-purple-500/20 shadow-lg">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-white/10 rounded-full" title="Volver">
-            <ArrowLeft className="w-5 h-5 text-white" />
-          </button>
-          <div className="relative">
-            <img src={activeChatData?.avatar} className="w-10 h-10 rounded-full object-cover border border-purple-500/30" alt="Av" />
-            <div className="absolute -bottom-1 -right-1 scale-75"><WTEmblem size="sm" /></div>
-          </div>
-          <div>
-            <h3 className="text-white font-bold text-sm truncate w-32">{activeChatData?.username}</h3>
-            <p className="text-purple-400 text-[9px] font-bold uppercase tracking-widest">en línea</p>
-          </div>
+      <header className="bg-zinc-950/90 backdrop-blur-xl px-4 py-3 flex items-center justify-between border-b border-white/5 sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setActiveChat(null)} className="p-2"><ArrowLeft className="w-5 h-5 text-white" /></button>
+          <div className="relative"><img src={activeChatData?.avatar} className="w-11 h-11 rounded-2xl object-cover border border-white/10" alt="Av" /><div className="absolute -bottom-1 -right-1 scale-75 rotate-12"><WTEmblem size="sm" /></div></div>
+          <div><h3 className="text-white font-black text-sm tracking-tight mb-1">{activeChatData?.username}</h3><div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /><p className="text-green-500 text-[8px] font-black uppercase tracking-[0.2em]">En Línea</p></div></div>
         </div>
-        <div className="flex items-center gap-4 text-purple-300">
-          <button className="p-1.5 hover:bg-white/10 rounded-full" title="Videollamada">
-            <Video className="w-5 h-5 cursor-pointer hover:text-white" />
-          </button>
-          <button className="p-1.5 hover:bg-white/10 rounded-full" title="Llamada">
-            <Phone className="w-5 h-5 cursor-pointer hover:text-white" />
-          </button>
-          <button className="p-1.5 hover:bg-white/10 rounded-full" title="Opciones">
-            <MoreVertical className="w-5 h-5 cursor-pointer hover:text-white" />
-          </button>
+        <div className="flex gap-5 text-zinc-400">
+          <button title="Videollamada"><Video className="w-5 h-5" /></button>
+          <button title="Llamada"><Phone className="w-5 h-5" /></button>
+          <button title="Más"><MoreVertical className="w-5 h-5" /></button>
         </div>
-      </div>
+      </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#050505] relative">
-        <div className="absolute inset-0 opacity-[0.02] pointer-events-none grid grid-cols-4 gap-10 p-10 rotate-12">
-           {Array.from({length: 20}).map((_, i) => (
-             <WTEmblem key={i} size="lg" />
-           ))}
-        </div>
-        <div className="relative z-10 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black relative hide-scrollbar">
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none p-10 grid grid-cols-4 gap-12 rotate-45 select-none">{Array.from({length: 12}).map((_, i) => <MangoLogo key={i} />)}</div>
+        <div className="relative z-10 flex flex-col gap-4">
           {chatMessages.map((msg) => {
             const isMe = msg.senderId === currentUser?.id;
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 rounded-2xl shadow-xl ${
-                  isMe 
-                    ? 'bg-gradient-to-br from-purple-700 to-purple-900 text-white rounded-tr-none border border-purple-400/20' 
-                    : 'bg-[#1a1a1a] text-white rounded-tl-none border border-zinc-800'
-                }`}>
-                   <p className="text-sm leading-relaxed">{msg.content}</p>
-                   <div className="flex justify-end items-center gap-1.5 mt-2">
-                     <span className="text-[10px] text-white/40 font-bold">{msg.timestamp}</span>
-                     {isMe && <CheckCheck className="w-3.5 h-3.5 text-yellow-500" />}
-                   </div>
+                <div className={`max-w-[85%] p-4 rounded-3xl shadow-2xl relative ${isMe ? 'bg-gradient-to-br from-purple-800 via-purple-900 to-black text-white rounded-tr-none border border-purple-500/20' : 'bg-zinc-900/40 backdrop-blur-md text-white rounded-tl-none border border-white/5'}`}>
+                   <p className="text-[13px] leading-relaxed font-medium">{msg.content}</p>
+                   <div className="flex justify-end items-center gap-2 mt-2"><span className="text-[9px] text-white/30 font-black tracking-widest uppercase">{msg.timestamp}</span>{isMe && <CheckCheck className="w-3.5 h-3.5 text-yellow-500" />}</div>
+                   <div className={`absolute top-0 w-2 h-2 ${isMe ? '-right-1 bg-purple-800 rounded-full' : '-left-1 bg-zinc-800/40 rounded-full'}`} />
                 </div>
               </div>
             );
@@ -363,58 +305,24 @@ export const WhaTakaView = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Recording Overlay */}
       {isRecording && (
-        <div className="absolute bottom-24 left-0 right-0 bg-gradient-to-r from-purple-900/95 to-black/95 p-4 flex items-center justify-between z-40 border-t border-purple-500/20 backdrop-blur-md">
-           <div className="flex items-center gap-3">
-             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-             <span className="text-white font-bold text-lg">{recordingTime}s</span>
-             <span className="text-purple-300 text-sm">Grabando nota de voz...</span>
-           </div>
-           <button 
-             onClick={stopRecording}
-             className="px-5 py-2.5 bg-yellow-500 text-black font-black rounded-full hover:bg-yellow-400 transition-all"
-             title="Enviar nota de voz"
-           >
-              <Send className="w-4 h-4 inline mr-1" /> Enviar
-           </button>
+        <div className="absolute bottom-24 left-4 right-4 bg-gradient-to-r from-red-600 to-black p-4 flex items-center justify-between z-[60] border border-red-500/30 rounded-3xl backdrop-blur-2xl shadow-2xl animate-in fade-in duration-300">
+           <div className="flex items-center gap-4"><div className="w-3 h-3 bg-white rounded-full animate-ping" /><span className="text-white font-black text-xl">{recordingTime}s</span><span className="text-white/50 text-[9px] font-black uppercase">Grabando Nota P2P...</span></div>
+           <button onClick={stopRecording} className="px-6 py-2.5 bg-white text-black font-black rounded-full text-[10px] uppercase shadow-lg">Detener</button>
         </div>
       )}
 
-      {/* Input Bar */}
-      <div className="p-3 flex items-center gap-3 bg-[#0a0a0a] border-t border-purple-500/10 pb-20 sm:pb-3">
-         <div className="flex-1 bg-[#1a1a1a] rounded-2xl px-4 py-2 flex items-center gap-3 border border-zinc-800">
-            <Smile className="w-6 h-6 text-purple-400 cursor-pointer hover:text-purple-300" />
-            <Input 
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Escribe un mensaje..." 
-              className="bg-transparent border-none text-white focus-visible:ring-0 p-0 h-10 text-sm" 
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            />
-            <button onClick={openCamera} className="hover:opacity-80 transition-opacity" title="Abrir cámara">
-              <Camera className="w-5 h-5 text-purple-400 cursor-pointer" />
+      <footer className="p-3 pb-8 bg-zinc-950/80 backdrop-blur-xl border-t border-white/5">
+         <div className="flex items-center gap-2">
+            <div className="flex-1 bg-white/5 rounded-[28px] px-4 py-2 flex items-center gap-3 border border-white/10 shadow-inner group transition-all focus-within:border-yellow-500/30">
+               <Smile className="w-6 h-6 text-yellow-500 cursor-pointer" /><Input value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Mensaje..." className="bg-transparent border-none text-white focus-visible:ring-0 p-0 h-11 text-sm font-medium" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} />
+               <button onClick={openCamera}><Camera className="w-5 h-5 text-zinc-400" /></button><Paperclip className="w-5 h-5 text-zinc-500 rotate-45" />
+            </div>
+            <button onClick={messageText.trim() ? handleSendMessage : (isRecording ? stopRecording : startRecording)} className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all border shrink-0 ${isRecording ? 'bg-red-600 border-white/20 animate-pulse' : messageText.trim() ? 'bg-yellow-500 border-yellow-400 text-black active:scale-90' : 'bg-zinc-800 border-white/5 text-zinc-400'}`}>
+               {messageText.trim() ? <Send className="w-6 h-6" /> : isRecording ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
-            <Paperclip className="w-5 h-5 text-zinc-500 rotate-45 cursor-pointer hover:text-white" />
          </div>
-         <button 
-           onClick={messageText.trim() ? handleSendMessage : (isRecording ? stopRecording : startRecording)} 
-           className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all border ${
-             isRecording 
-               ? 'bg-red-600 border-red-400 animate-pulse' 
-               : 'bg-gradient-to-br from-purple-600 to-purple-800 border-purple-400/30 hover:from-purple-500 hover:to-purple-700'
-           }`}
-           title={messageText.trim() ? "Enviar" : (isRecording ? "Detener grabación" : "Grabar nota de voz")}
-         >
-            {messageText.trim() ? (
-              <Send className="w-5 h-5 text-white" />
-            ) : isRecording ? (
-              <MicOff className="w-5 h-5 text-white" />
-            ) : (
-              <Mic className="w-5 h-5 text-white" />
-            )}
-         </button>
-      </div>
+      </footer>
     </div>
   );
 };

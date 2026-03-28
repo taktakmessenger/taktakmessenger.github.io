@@ -18,6 +18,7 @@ type AuthStep = 'phone' | 'otp' | 'profile' | 'security' | 'privacy' | 'terms' |
 export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'recovery' }) => {
   const [step, setStep] = useState<AuthStep>(mode === 'recovery' ? 'recovery' : 'phone');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [username, setUsername] = useState('');
@@ -69,6 +70,18 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
     const fullIdentifier = phone.includes('@') ? phone : (phone.startsWith('+') ? phone : countryCode + phone);
     
     try {
+      // If password provided, try login-password first
+      if (password.trim()) {
+        const response = await authApi.loginWithPassword(fullIdentifier, password);
+        const data = response?.data;
+        if (data?.token && data?.user) {
+          localStorage.setItem('taktak_token', data.token);
+          login(data.user);
+          toast.success(`¡Bienvenido de nuevo, ${data.user.username}!`);
+          return;
+        }
+      }
+
       const res = await authApi.login(fullIdentifier).catch(() => {
         if (fullIdentifier.includes('@')) {
           return authApi.register({ 
@@ -270,6 +283,8 @@ export const AuthView = ({ mode = 'signup' }: { mode?: 'login' | 'signup' | 'rec
         return <PhoneScreen 
           phone={phone} 
           setPhone={setPhone}
+          password={password}
+          setPassword={setPassword}
           countryCode={countryCode}
           setCountryCode={setCountryCode}
           referredByCode={referredByCode}
@@ -479,6 +494,8 @@ const RecoveryQuestionScreen = ({ onBack, onRecover, isLoading }: { onBack: () =
 const PhoneScreen = ({
   phone,
   setPhone,
+  password,
+  setPassword,
   countryCode,
   setCountryCode,
   referredByCode,
@@ -489,6 +506,8 @@ const PhoneScreen = ({
 }: {
   phone: string;
   setPhone: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
   countryCode: string;
   setCountryCode: (v: string) => void;
   referredByCode: string;
@@ -510,7 +529,7 @@ const PhoneScreen = ({
         {mode === 'login' ? 'Bienvenido de vuelta, ingresa tu número o correo' : 'Únete a la red P2P más grande'}
       </p>
 
-      <div className="w-full max-w-md mb-8">
+      <div className="w-full max-w-md space-y-4 mb-8">
         <div className={cn(
           "flex items-center bg-zinc-900/30 border border-zinc-800/80 rounded-2xl backdrop-blur-xl transition-all focus-within:border-yellow-500/40 focus-within:ring-1 focus-within:ring-yellow-500/10",
           "h-16 px-1 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
@@ -534,6 +553,23 @@ const PhoneScreen = ({
               className="bg-transparent border-none focus:ring-0 text-white h-full p-0 text-lg placeholder:text-zinc-700"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Password field */}
+        <div className={cn(
+          "flex items-center bg-zinc-900/30 border border-zinc-800/80 rounded-2xl backdrop-blur-xl transition-all focus-within:border-yellow-500/40 focus-within:ring-1 focus-within:ring-yellow-500/10",
+          "h-16 px-1 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+        )}>
+          <div className="flex-1 flex items-center gap-3 px-4 h-full">
+            <Shield className="w-5 h-5 text-zinc-600" />
+            <Input 
+              type="password"
+              placeholder="Tu contraseña (opcional para OTP)"
+              className="bg-transparent border-none focus:ring-0 text-white h-full p-0 text-lg placeholder:text-zinc-700"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
         </div>

@@ -194,6 +194,61 @@ router.post('/verify', [
   }
 });
 
+// Login with password
+router.post('/login-password', [
+  body('identifier').notEmpty(),
+  body('password').notEmpty()
+], async (req: Request, res: Response) => {
+  try {
+    const { identifier, password } = req.body;
+    const lowerId = identifier ? identifier.toString().toLowerCase().trim() : '';
+
+    const user = await User.findOne({ 
+      $or: [
+        { phone: identifier },
+        { email: lowerId }
+      ]
+    }).select('+password');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
+    }
+
+    if (!user.isVerified) {
+      return res.status(400).json({ error: 'Usuario no verificado' });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { userId: user._id },
+      config.jwt.secret as string,
+      { expiresIn: config.jwt.expiresIn as any }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        phone: user.phone,
+        avatar: user.avatar,
+        isVerified: user.isVerified,
+        isOwner: user.isOwner,
+        isAdmin: user.isAdmin
+      }
+    });
+  } catch (error) {
+    console.error('Login-password error:', error);
+    res.status(500).json({ error: 'Error al iniciar sesión' });
+  }
+});
+
 // Login
 router.post('/login', [
   body('identifier').optional(),

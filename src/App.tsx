@@ -30,7 +30,8 @@ function App() {
   const [showCamera, setShowCamera] = useState(false);
   const [showLanding, setShowLanding] = useState(() => {
     const visited = sessionStorage.getItem('taktak_visited');
-    // Si no está logueado y no ha "entrado" en esta sesión, mostramos la Landing
+    // Si ya estamos logueados, ocultamos la landing inmediatamente
+    if (useStore.getState().currentUser) return false;
     return !visited;
   });
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'recovery'>('signup');
