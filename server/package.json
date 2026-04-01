@@ -23,6 +23,7 @@
     "@libp2p/webrtc": "^6.0.14",
     "@noble/ed25519": "^3.0.0",
     "@types/nodemailer": "^7.0.11",
+    "aws-sdk": "^2.1693.0",
     "bcryptjs": "^2.4.3",
     "bittorrent-tracker": "^11.2.2",
     "compression": "^1.7.4",
@@ -46,7 +47,9 @@
     "twilio": "^4.19.0",
     "uint8arrays": "^5.1.0",
     "uuid": "^9.0.0",
-    "webtorrent": "^2.8.5"
+    "webtorrent": "^2.8.5",
+    "aws-sdk": "^2.1360.0",
+    "axios": "^1.6.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

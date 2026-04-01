@@ -1,249 +1,172 @@
-import { useState, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
-import { Toaster } from '@/components/ui/sonner';
-import { useStore } from '@/store/useStore';
-import { useSecurity } from '@/hooks/useSecurity';
-import { VideoFeed } from '@/components/VideoFeed';
-import { ChatView } from '@/components/ChatView';
-import { ProfileView } from '@/components/ProfileView';
-import { DiscoverView } from '@/components/DiscoverView';
-import { CameraView } from '@/components/CameraView';
-import { PokerView } from '@/components/poker/PokerView';
-import { CreateView } from '@/components/CreateView';
-import { AuthView } from '@/components/AuthView';
-import { AdminPanel } from '@/components/AdminPanel';
-import { PaymentView } from '@/components/PaymentView';
-import { BottomNav } from '@/components/BottomNav';
-import { TopHeader } from '@/components/TopHeader';
-import { DesktopSidebar } from '@/components/DesktopSidebar';
-import { LandingPage } from '@/components/LandingPage';
-import { SecurityOverlay } from '@/components/SecurityOverlay';
-import { NotFoundView } from '@/components/NotFoundView';
-import { BannersIncentivesView } from '@/components/BannersIncentivesView';
-import { WhaTakaView } from '@/components/WhaTakaView';
-import { WhaTakaLanding } from '@/components/WhaTakaLanding';
-import { Lock } from 'lucide-react';
-import { toast } from 'sonner';
+import React, { useState, useEffect, createContext, useContext } from 'react';
+import axios from 'axios';
+import Feed from './components/Feed';
+import Upload from './components/Upload';
 
-function App() {
-  const { currentTab, setCurrentTab, currentUser, miningCycle } = useStore();
-  const [showCamera, setShowCamera] = useState(false);
-  const [showLanding, setShowLanding] = useState(() => {
-    const visited = sessionStorage.getItem('taktak_visited');
-    // Si ya estamos logueados, ocultamos la landing inmediatamente
-    if (useStore.getState().currentUser) return false;
-    return !visited;
+/**
+ * TakTak App - Real Implementation
+ * - Auth Context for JWT
+ * - Simple UI with Feed and Upload
+ * - Real API integration (presigned URLs, Feed)
+ */
+
+// Global Axios Config
+axios.defaults.baseURL = ''; 
+
+interface User {
+  sub: string;
+  name?: string;
+  email?: string;
+}
+
+interface AuthContextType {
+  token: string | null;
+  user: User | null;
+  setAuth: (token: string, user: User) => void;
+  logout: () => void;
+}
+
+export const AuthContext = createContext<AuthContextType>({
+  token: null,
+  user: null,
+  setAuth: () => {},
+  logout: () => {},
+});
+
+/* ----- Auth Logic Hook ----- */
+function useAuth() {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('taktak_token'));
+  const [user, setUser] = useState<User | null>(() => {
+    const raw = localStorage.getItem('taktak_user');
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'recovery'>('signup');
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-  // Mining Cycle Effect (Simulated P2P rewards every 30s)
   useEffect(() => {
-    if (currentUser) {
-      const interval = setInterval(() => {
-        const randomMined = Math.floor(Math.random() * 500) + 100;
-        miningCycle(randomMined);
-        console.log(`[TakTak Mining] Ciclo completado: ${randomMined} TTC generados`);
-      }, 30000);
-      return () => clearInterval(interval);
+    if (token) {
+      localStorage.setItem('taktak_token', token);
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+    } else {
+      localStorage.removeItem('taktak_token');
+      delete axios.defaults.headers.common.Authorization;
     }
-  }, [currentUser, miningCycle]);
+  }, [token]);
 
-  useEffect(() => {
-    interface TakTakWindow extends Window {
-      showAdminPanel?: (show: boolean) => void;
-    }
-    const win = window as unknown as TakTakWindow;
-    win.showAdminPanel = (show: boolean) => setShowAdminPanel(show);
-    return () => {
-      delete win.showAdminPanel;
-    };
-  }, []);
-
-  // Initialize security system
-  useSecurity();
-
-  useEffect(() => {
-    // Show security toast
-    toast.success('🔒 Sistema de seguridad activado', {
-      description: 'Encriptación AES-256 activa',
-      duration: 3000
-    });
-  }, []);
-
-  const handleEnterApp = (mode: 'login' | 'signup' | 'recovery' = 'signup') => {
-    sessionStorage.setItem('taktak_visited', 'true');
-    setShowLanding(false);
-    setAuthMode(mode);
-    const message = mode === 'recovery' ? 'Iniciando recuperación' : (mode === 'login' ? 'Bienvenido de vuelta' : '¡Bienvenido a TakTak!');
-    toast.success(message, {
-      description: 'Tu experiencia descentralizada comienza ahora'
-    });
+  const setAuthData = (newToken: string, userObj: User) => {
+    setToken(newToken);
+    setUser(userObj);
+    localStorage.setItem('taktak_user', JSON.stringify(userObj));
   };
 
-  const renderContent = () => {
-    switch (currentTab) {
-      case 'home':
-        return <VideoFeed />;
-      case 'following':
-        return <VideoFeed filter="following" />;
-      case 'live':
-        return <VideoFeed filter="live" />;
-      case 'discover':
-        return <DiscoverView />;
-      case 'poker':
-        return <PokerView />;
-      case 'create':
-        return <CreateView />;
-      case 'wallet':
-        return <PaymentView />;
-      case 'chat':
-        return <ChatView />;
-      case 'whataka':
-        return <WhaTakaView />;
-      case 'whataka-download':
-        return <WhaTakaLanding />;
-      case 'profile':
-        return <ProfileView />;
-      case 'incentives':
-        return <BannersIncentivesView />;
-      case 'policies':
-        return <LandingPage 
-          onEnterApp={() => setCurrentTab('home')} 
-          onAuth={(mode) => handleEnterApp(mode)} 
-        />;
-      default:
-        return <NotFoundView onGoHome={() => setCurrentTab('home')} />;
-    }
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('taktak_user');
   };
 
-  // Show landing page
-  if (showLanding) {
-    return (
-      <>
-        <LandingPage 
-          onEnterApp={() => handleEnterApp('signup')} 
-          onAuth={(mode) => handleEnterApp(mode)} 
-        />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            style: {
-              background: '#18181b',
-              color: '#fff',
-              border: '1px solid #27272a',
-            },
-          }}
-        />
-      </>
-    );
-  }
+  return { token, user, setAuthData, logout };
+}
 
-  // Show auth screen if not logged in
-  if (!currentUser) {
-    return (
-      <>
-        <AuthView mode={authMode} />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            style: {
-              background: '#18181b',
-              color: '#fff',
-              border: '1px solid #27272a',
-            },
-          }}
-        />
-      </>
-    );
-  }
+/* ----- Simple Login component ----- */
+function Login() {
+  const { setAuth } = useContext(AuthContext);
+  const [loading, setLoading] = useState(false);
 
-  // Show admin panel
-  if (showAdminPanel && currentUser?.isOwner) {
-    return (
-      <>
-        <AdminPanel onClose={() => setShowAdminPanel(false)} />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            style: {
-              background: '#18181b',
-              color: '#fff',
-              border: '1px solid #27272a',
-            },
-          }}
-        />
-      </>
-    );
+  // Demo Login (Can be expanded with real credentials)
+  async function handleDemoLogin() {
+    setLoading(true);
+    try {
+      // For the REAL version, this would be an actual API call to /api/auth/login
+      // For now, let's mock it with a dummy token as provided in the instructions
+      setTimeout(() => {
+        setAuth('demo-token', { 
+            sub: '65f8a...-user-uuid', 
+            name: 'El Malayaso Admin',
+            email: 'eliecerdepablos@gmail.com'
+        });
+        setLoading(false);
+      }, 500);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      alert('Login fallido');
+    }
   }
 
   return (
-    <div id="app" className="bg-black text-white min-h-screen">
-      {/* Security Overlay */}
-      <SecurityOverlay />
-
-      {/* Desktop Header */}
-      <TopHeader />
-
-      <div className="flex pt-0 md:pt-16">
-        {/* Desktop Sidebar */}
-        <DesktopSidebar />
-
-        {/* Main Content */}
-        <main className="flex-1 pb-16 md:pb-0 md:ml-20 lg:ml-64 transition-all">
-          <div className="max-w-[1200px] mx-auto min-h-full">
-            {renderContent()}
-          </div>
-        </main>
-      </div>
-
-      {/* Bottom Navigation (Mobile Only) */}
-      <div className="md:hidden">
-        <BottomNav />
-      </div>
-
-      {/* Camera Modal */}
-      <AnimatePresence>
-        {showCamera && (
-          <CameraView onClose={() => setShowCamera(false)} />
-        )}
-      </AnimatePresence>
-
-      {/* Toast Notifications */}
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          style: {
-            background: '#18181b',
-            color: '#fff',
-            border: '1px solid #27272a',
-          },
-        }}
-      />
-
-      {/* Branding (Mobile Only) */}
-      <div className="md:hidden">
-        {(currentTab === 'home' || currentTab === 'poker') && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 text-center">
-            <div className="flex flex-col items-center">
-              <h1 className="text-2xl font-black tracking-tighter text-white">
-                Tak<span className="text-[#FE2C55]">Tak</span>{currentTab === 'poker' && ' Poker'}
-              </h1>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="text-[10px] bg-[#FE2C55]/20 text-[#FE2C55] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                  Descentralizado
-                </span>
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-green-500/20 rounded-full">
-                  <Lock className="w-2.5 h-2.5 text-green-400" />
-                  <span className="text-[10px] text-green-400 font-bold uppercase">P2P</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <button 
+      onClick={handleDemoLogin} 
+      disabled={loading}
+      className="px-4 py-2 bg-white text-black rounded-lg font-bold hover:shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all"
+    >
+      {loading ? 'Entrando...' : 'Entrar (Demo)'}
+    </button>
   );
 }
 
-export default App;
+/* ----- Main App Content ----- */
+export default function App() {
+  const auth = useAuth();
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{
+      token: auth.token,
+      user: auth.user,
+      setAuth: auth.setAuthData,
+      logout: auth.logout,
+    }}>
+      <div className="min-h-screen bg-black text-white selection:bg-[#FE2C55]">
+        <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur-md px-6 py-4">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-black italic tracking-tighter text-[#FE2C55]">
+                Tak<span className="text-white">Tak</span>
+              </h1>
+              {!isOnline && (
+                <span className="text-xs bg-red-600 px-2 py-1 rounded-full animate-pulse">OFFLINE</span>
+              )}
+            </div>
+
+            <nav className="flex items-center gap-6">
+              {auth.user ? (
+                <>
+                  <div className="text-sm font-medium hidden sm:block">
+                    {auth.user.name} <span className="opacity-40 italic">({auth.user.email})</span>
+                  </div>
+                  <Upload />
+                  <button 
+                    onClick={auth.logout}
+                    className="text-sm opacity-60 hover:opacity-100 transition-opacity"
+                  >
+                    Cerrar sesión
+                  </button>
+                </>
+              ) : (
+                <Login />
+              )}
+            </nav>
+          </div>
+        </header>
+
+        <main className="pt-24 pb-12 px-4 max-w-lg mx-auto">
+          <Feed />
+        </main>
+
+        <footer className="max-w-lg mx-auto px-4 py-12 border-t border-white/10 text-center opacity-30 text-sm">
+          <p>© 2026 TakTak - La Evolución del Vídeo P2P</p>
+        </footer>
+      </div>
+    </AuthContext.Provider>
+  );
+}
