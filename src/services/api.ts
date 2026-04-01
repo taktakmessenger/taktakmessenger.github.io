@@ -2,10 +2,8 @@ import axios from 'axios';
 
 const getBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
-    return 'https://taktak-app.onrender.com/api';
-  }
-  return '/api';
+  // Configurado para el nuevo VPS con almacenamiento local
+  return 'http://157.90.244.93:3000/api';
 };
 
 const API_URL = getBaseUrl();
