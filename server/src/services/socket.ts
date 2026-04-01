@@ -1,6 +1,9 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
+import { Message } from '../models/Message.js';
+import { Chat } from '../models/Chat.js';
+import mongoose from 'mongoose';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -40,18 +43,63 @@ export const setupSocketHandlers = (io: Server) => {
       socket.leave(`chat:${chatId}`);
     });
 
-    // Handle sending messages
-    socket.on('send_message', (data: {
+    // Handle sending messages (With DB Persistence)
+    socket.on('send_message', async (data: {
       chatId: string;
       content: string;
-      type: string;
+      type: 'text' | 'image' | 'video' | 'audio' | 'file';
     }) => {
-      // Broadcast to chat room
-      io.to(`chat:${data.chatId}`).emit('new_message', {
-        ...data,
-        senderId: socket.userId,
-        createdAt: new Date()
-      });
+      try {
+        if (!socket.userId) return;
+
+        // 1. Create and save message
+        const message = new Message({
+          chatId: data.chatId,
+          senderId: socket.userId,
+          content: data.content,
+          type: data.type || 'text',
+          isRead: false
+        });
+
+        const savedMessage = await message.save();
+
+        // 2. Update chat last message
+        await Chat.findByIdAndUpdate(data.chatId, {
+          lastMessage: savedMessage._id,
+          lastMessageAt: savedMessage.createdAt
+        });
+
+        // 3. Broadcast to chat room
+        const messageData = {
+          id: savedMessage._id,
+          chatId: data.chatId,
+          senderId: socket.userId,
+          content: data.content,
+          type: data.type || 'text',
+          createdAt: savedMessage.createdAt,
+          isRead: false
+        };
+
+        io.to(`chat:${data.chatId}`).emit('new_message', messageData);
+        
+        // Also notify participants who aren't in the room (notifications)
+        const chat = await Chat.findById(data.chatId);
+        if (chat) {
+          chat.participants.forEach(participantId => {
+            if (participantId.toString() !== socket.userId) {
+              io.to(`user:${participantId}`).emit('notification', {
+                type: 'chat_message',
+                chatId: data.chatId,
+                senderId: socket.userId,
+                content: data.content,
+                messageId: savedMessage._id
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Socket send_message error:', error);
+      }
     });
 
     // Handle typing indicators
@@ -63,11 +111,20 @@ export const setupSocketHandlers = (io: Server) => {
     });
 
     // Handle read receipts
-    socket.on('mark_read', (data: { chatId: string; messageId: string }) => {
-      io.to(`chat:${data.chatId}`).emit('messages_read', {
-        userId: socket.userId,
-        messageId: data.messageId
-      });
+    socket.on('mark_read', async (data: { chatId: string; messageId: string }) => {
+      try {
+        await Message.findByIdAndUpdate(data.messageId, {
+          isRead: true,
+          readAt: new Date()
+        });
+
+        io.to(`chat:${data.chatId}`).emit('messages_read', {
+          userId: socket.userId,
+          messageId: data.messageId
+        });
+      } catch (err) {
+        console.error('Socket mark_read error:', err);
+      }
     });
 
     // Voice call signaling

@@ -1,5 +1,7 @@
 version: '3.8'
+
 services:
+  # TakTak Core Blockchain Node
   taktak-node:
     image: ethereum/client-go:latest
     container_name: taktaknew_core
@@ -21,4 +23,41 @@ services:
       --nodiscover
       --syncmode "full"
       --allow-insecure-unlock
+    restart: unless-stopped
+
+  # S3 Storage (MinIO)
+  taktak-storage:
+    image: minio/minio:latest
+    container_name: taktaknew_s3
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    volumes:
+      - ./minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+  # Database (Optional, as MongoDB is used in index.ts)
+  taktak-postgres:
+    image: postgres:15
+    container_name: taktaknew_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=taktak
+      - POSTGRES_PASSWORD=taktak_secure
+      - POSTGRES_DB=taktak_real
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Cache
+  taktak-redis:
+    image: redis:7
+    container_name: taktaknew_cache
+    ports:
+      - "6379:6379"
     restart: unless-stopped

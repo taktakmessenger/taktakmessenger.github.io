@@ -222,6 +222,13 @@ export const VideoFeed = ({ filter }: { filter?: 'all' | 'following' | 'live' })
   }, [currentVideoIndex, filteredVideos.length, setCurrentVideoIndex, isScrolling]);
 
   useEffect(() => {
+    setCurrentVideoIndex(0);
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [filter, setCurrentVideoIndex]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (container) {
       container.addEventListener('scroll', handleScroll, { passive: true });

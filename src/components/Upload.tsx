@@ -14,30 +14,33 @@ export default function Upload() {
 
     setUploading(true);
     try {
-      // Step 1: Get presigned URL
-      const response = await axios.post('/api/presign', 
-        { filename: f.name, contentType: f.type },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const { url, key } = response.data;
+      console.log('🎞️ Iniciando subida local de:', f.name);
+      
+      const formData = new FormData();
+      formData.append('video', f);
+      formData.append('title', f.name);
 
-      // Step 2: PUT file to S3
-      await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': f.type },
-        body: f,
+      console.log('📤 Subiendo archivo al servidor VPS...');
+      const response = await axios.post('/api/upload', formData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+          console.log(`📊 Progreso: ${percentCompleted}%`);
+        }
       });
 
-      // Step 3: Notify backend
-      await axios.post('/api/upload-complete', 
-        { key, title: f.name },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      alert('Upload completo!');
-    } catch (err) {
-      console.error(err);
-      alert('Error al subir el video.');
+      if (response.data.ok) {
+        console.log('✅ Archivo subido con éxito al VPS');
+        alert('¡Vídeo subido con éxito!');
+      } else {
+        throw new Error('Respuesta del servidor no válida');
+      }
+    } catch (err: any) {
+      console.error('❌ Error en el proceso de subida:', err);
+      alert(`Error: ${err.message || 'Fallo desconocido'}`);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';

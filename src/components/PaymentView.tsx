@@ -420,8 +420,8 @@ export const PaymentView = () => {
                   className="bg-transparent border-none text-3xl font-bold text-white"
                 />
               </div>
-              <p className="text-xs text-zinc-500 mt-2 italic">Solo puedes retirar monedas ganadas de regalos y minado.</p>
-            </div>
+              <p className="text-xs text-zinc-500 mt-2 italic">Solo puedes retirar monedas ganadas de regalos y actividades del ecosistema.</p>
+ drum. .!            </div>
 
             <div>
               <h3 className="text-white font-semibold mb-3">Método de retiro</h3>

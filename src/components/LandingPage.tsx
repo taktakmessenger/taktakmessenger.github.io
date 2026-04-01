@@ -19,6 +19,7 @@ type FormMode = 'main' | 'otp' | 'profile' | 'security' | 'recovery';
 
 export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
   const [formMode, setFormMode] = useState<FormMode>('main');
+  const [authIntent, setAuthIntent] = useState<'login' | 'signup' | 'recovery'>('login');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,64 +61,65 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
 
   // --- AUTH HANDLERS ---
 
-  const handleSubmitIdentity = async () => {
+  const handleSubmitIdentity = async (intent?: 'login' | 'signup' | 'recovery') => {
+    const selectedIntent = intent || authIntent;
     const identifier = getFullIdentifier();
     if (!phone.trim() && !email.trim()) {
-      toast.error('Ingresa tu correo o teléfono'); return;
+      toast.error('Por favor, ingresa tu correo o teléfono'); return;
     }
     setIsLoading(true);
     try {
-      // If password provided, try login-password first
-      if (password.trim()) {
-        try {
-          const response = await authApi.loginWithPassword(identifier, password);
-          const data = response?.data;
-          if (data?.token && data?.user) {
-            localStorage.setItem('taktak_token', data.token);
-            login(data.user);
-            toast.success(`¡Bienvenido, ${data.user.username}!`);
-            onEnterApp();
-            return;
-          }
-        } catch (err: unknown) {
-          const error = err as { response?: { status: number, data?: { error: string } } };
-          // If it's a 401 (Wrong Password), stop and show error
-          if (error.response?.status === 401 || error.response?.status === 404) {
-             toast.error(error.response?.data?.error || 'Credenciales incorrectas');
-             setIsLoading(false);
-             return;
-          }
-          // For other errors, we can let it fall back or show error
-          console.error("Password login error:", err);
+      // Recovery Intent: Direct to OTP for Reset
+      if (selectedIntent === 'recovery') {
+        await authApi.login(identifier);
+        toast.success('Código de recuperación enviado.');
+        setIsResettingPassword(true);
+        setFormMode('otp');
+        return;
+      }
+
+      // Login Intent: Try password first
+      if (selectedIntent === 'login' && password.trim()) {
+        const response = await authApi.loginWithPassword(identifier, password);
+        const data = response?.data;
+        if (data?.token && data?.user) {
+          localStorage.setItem('taktak_token', data.token);
+          login(data.user);
+          toast.success(`¡Bienvenido de nuevo, ${data.user.username}!`);
+          onEnterApp();
+          return;
         }
       }
 
-      // Fallback to OTP flow
+      // Normal Login/OTP Intent
       const response = await authApi.login(identifier);
       const data = response?.data;
       if (data?.debugOtp) setDebugOtp(data.debugOtp);
       toast.success('Código enviado. Revisa tu teléfono o correo.');
       setFormMode('otp');
-    } catch {
-      // If login fails (and no password was tried or it failed), try register
-      try {
-        const response = await authApi.register({
-          phone: identifier,
-          username: identifier.replace(/[^a-z0-9]/g, '').slice(0, 15),
-          email: email || undefined,
-          dob: '2000-01-01',
-          legalAccepted: true,
-          privacyAccepted: true,
-          referredByCode: referredByCode || undefined,
-        });
-        const data = response?.data;
-        if (data?.token) localStorage.setItem('taktak_token', data.token);
-        if (data?.debugOtp) setDebugOtp(data.debugOtp);
-        toast.success('¡Cuenta creada! Código enviado.');
-        setFormMode('otp');
-      } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error?.response?.data?.error || 'Error de conexión con el servidor');
+    } catch (err: any) {
+      // If intent was signup or login failed, try registration
+      if (selectedIntent === 'signup' || err.response?.status === 404) {
+        try {
+          const response = await authApi.register({
+            phone: identifier.includes('@') ? 'temp_' + Date.now() : identifier,
+            username: identifier.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 15),
+            email: identifier.includes('@') ? identifier : undefined,
+            dob: '2000-01-01',
+            legalAccepted: true,
+            privacyAccepted: true,
+            referredByCode: referredByCode || undefined,
+          });
+          const data = response?.data;
+          if (data?.token) localStorage.setItem('taktak_token', data.token);
+          if (data?.debugOtp) setDebugOtp(data.debugOtp);
+          toast.success('¡Casi listo! Código enviado para activar tu cuenta.');
+          setFormMode('otp');
+        } catch (regErr: any) {
+          toast.error(regErr?.response?.data?.error || 'Error al crear cuenta');
+        }
+      } else {
+        toast.error(err?.response?.data?.error || 'Error de conexión');
       }
     } finally {
       setIsLoading(false);
@@ -287,39 +289,39 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
               className="bg-zinc-900/30 border-zinc-800 h-9 text-zinc-500 text-center text-xs"
             />
 
-            {/* BOTÓN PRINCIPAL */}
-            <Button 
-              onClick={handleSubmitIdentity}
-              disabled={isLoading || (!phone.trim() && !email.trim())}
-              className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black rounded-xl font-black text-lg transition-all active:scale-95 shadow-[0_10px_30px_rgba(234,179,8,0.25)]"
-            >
-              {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Entrar / Crear Cuenta'}
-            </Button>
-
-            {/* OLVIDÉ CONTRASEÑA */}
-            <div className="flex flex-col gap-2">
-              <button 
-                onClick={async () => {
-                  const id = getFullIdentifier();
-                  if (!id) { toast.error('Ingresa tu correo o teléfono primero'); return; }
-                  setIsLoading(true);
-                  try {
-                    await authApi.login(id);
-                    toast.success('Código de recuperación enviado.');
-                    setIsResettingPassword(true);
-                    setFormMode('otp');
-                  } catch (err: unknown) {
-                    const error = err as { response?: { data?: { error?: string } } };
-                    toast.error(error?.response?.data?.error || 'Error al enviar código');
-                  } finally { setIsLoading(false); }
-                }}
-                className="w-full text-zinc-400 hover:text-white text-[11px] transition-colors flex items-center justify-center gap-1"
+            {/* BOTONES DE ACCIÓN SEPARADOS */}
+            <div className="space-y-3 pt-4">
+              <Button 
+                onClick={() => { setAuthIntent('login'); handleSubmitIdentity('login'); }}
+                disabled={isLoading || (!phone.trim() && !email.trim())}
+                className="w-full h-14 bg-yellow-600 hover:bg-yellow-500 text-black rounded-xl font-black text-lg transition-all active:scale-95 shadow-[0_10px_30px_rgba(234,179,8,0.25)]"
               >
-                ¿Olvidaste tu contraseña? Restablecer por correo
-              </button>
+                {isLoading && authIntent === 'login' ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Entrar'}
+              </Button>
 
-              <button onClick={() => setFormMode('recovery')} className="w-full text-zinc-500 hover:text-yellow-500 text-[11px] transition-colors py-1 flex items-center justify-center gap-1.5">
-                <Key className="w-3 h-3" /> ¿Perdiste tu cuenta? Recuperar con 12 palabras
+              <div className="grid grid-cols-2 gap-3">
+                <Button 
+                  variant="outline"
+                  onClick={() => { setAuthIntent('signup'); handleSubmitIdentity('signup'); }}
+                  disabled={isLoading || (!phone.trim() && !email.trim())}
+                  className="h-12 border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-white rounded-xl font-bold text-sm"
+                >
+                  Crear Cuenta
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => { setAuthIntent('recovery'); handleSubmitIdentity('recovery'); }}
+                  disabled={isLoading || (!phone.trim() && !email.trim())}
+                  className="h-12 border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-400 rounded-xl font-bold text-sm"
+                >
+                  Recuperar
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button onClick={() => setFormMode('recovery')} className="w-full text-zinc-600 hover:text-yellow-500 text-[10px] transition-colors py-1 flex items-center justify-center gap-1.5 uppercase font-bold tracking-widest">
+                <Key className="w-3 h-3" /> ¿Perdiste tu frase? Recuperar con 12 palabras
               </button>
             </div>
           </motion.div>

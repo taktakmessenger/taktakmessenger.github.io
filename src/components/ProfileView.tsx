@@ -4,7 +4,7 @@ import {
   Settings, Share2, Edit3, Grid, Heart,
   Bookmark, Gift, Wallet,
   TrendingUp, Eye, X,
-  Shield, Lock, Crown
+  Shield, Lock, Crown, History as HistoryIcon
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useSecurity } from '@/hooks/useSecurity';
@@ -74,25 +74,15 @@ const AnalyticsModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             </div>
 
             <div className="p-5 bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-2xl border border-zinc-700 mb-8">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-yellow-500/20 rounded-md">
-                    <Eye className="w-4 h-4 text-yellow-500" />
+                    <HistoryIcon className="w-4 h-4 text-yellow-500" />
                   </div>
-                  <span className="text-white font-semibold">Minería TTC</span>
+                  <span className="text-white font-semibold">Balance TakTak Premios</span>
                 </div>
-                <span className="text-yellow-500 font-bold">+{ttcR.toFixed(2)} TTC</span>
+                <span className="text-yellow-500 font-bold">{ttcR.toFixed(2)} TTC-R</span>
               </div>
-              <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: '65%' }}
-                  className="h-full bg-yellow-500"
-                />
-              </div>
-              <p className="text-[10px] text-zinc-500 mt-2 italic">
-                Recompensas basadas en ancho de banda P2P y engagement.
-              </p>
             </div>
 
             <div className="mb-8">
@@ -469,7 +459,9 @@ export const ProfileView = () => {
             </Button>
           </div>
         </div>
-      </div>      {/* Security Section */}
+      </div>
+
+      {/* Security Section */}
       <div className="px-4 py-2">
         <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
           <div className="flex items-center justify-between mb-3">

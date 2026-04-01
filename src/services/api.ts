@@ -30,6 +30,7 @@ export const authApi = {
   register: (data: { 
     phone: string; 
     username: string; 
+    password?: string;
     email?: string; 
     dob: string; 
     legalAccepted: boolean; 
@@ -49,8 +50,14 @@ export const authApi = {
   
   getMe: () => api.get('/auth/me'),
 
-  updateProfile: (data: { username: string; dob: string; legalAccepted: boolean; privacyAccepted: boolean }) => 
-    api.put('/auth/profile', data),
+  updateProfile: (data: { 
+    username: string; 
+    dob: string; 
+    legalAccepted: boolean; 
+    privacyAccepted: boolean;
+    firstName?: string;
+    lastName?: string;
+  }) => api.put('/auth/profile', data),
 
   setupSecurity: (data: { securityQuestion: string; securityAnswer: string; recoveryPhrase: string }) => 
     api.post('/auth/security-setup', data),
@@ -63,6 +70,18 @@ export const paymentApi = {
   createIntent: (amount: number, currency = 'usd') => api.post('/payments/create-intent', { amount, currency }),
   confirm: (paymentIntentId: string) => api.post('/payments/confirm', { paymentIntentId }),
   withdraw: (data: { amount: number; method: string; details: Record<string, unknown> }) => api.post('/payments/withdraw', data),
+};
+
+export const chatApi = {
+  getChats: () => api.get('/chats'),
+  createChat: (participantId: string) => api.post('/chats', { participantId }),
+  getChatById: (chatId: string) => api.get(`/chats/${chatId}`)
+};
+
+export const messageApi = {
+  getHistory: (chatId: string, skip = 0, limit = 50) => 
+    api.get(`/messages/${chatId}?skip=${skip}&limit=${limit}`),
+  markAsRead: (chatId: string) => api.post(`/messages/${chatId}/read`)
 };
 
 export default api;
