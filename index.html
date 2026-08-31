@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>TakTak 🎵 — Plataforma de Vídeos Cortos y Juegos</title>
+  <title>TakTak 🎵 — Vídeos Cortos, Minijuegos y Perfiles</title>
   
   <!-- SEO & OpenGraph Meta Tags -->
-  <meta name="description" content="TakTak: Plataforma interactiva para subir y ver vídeos cortos, jugar minijuegos, crear con IA y conectar con amigos." />
-  <meta name="keywords" content="taktak, video corto, juegos, tiktok clone, reels, pwa, react, web video, minijuegos" />
+  <meta name="description" content="TakTak: Plataforma interactiva para subir vídeos cortos, grabar con cámara, jugar minijuegos, editar perfil y conectar con amigos." />
+  <meta name="keywords" content="taktak, video corto, juegos, tiktok clone, reels, pwa, react, web video, minijuegos, perfil" />
   <meta name="author" content="taktakmessenger" />
   <meta property="og:title" content="TakTak 🎵 — Vídeos Cortos y Juegos" />
-  <meta property="og:description" content="Descubre vídeos en tendencia, graba con tu cámara, juega minijuegos y comparte contenido con TakTak." />
+  <meta property="og:description" content="Descubre vídeos en tendencia, graba con tu cámara, juega minijuegos y personaliza tu perfil en TakTak." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://taktakmessenger.github.io" />
   <meta name="theme-color" content="#000000" />
@@ -19,9 +19,9 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet" />
 
-  <!-- React & Babel CDNs for instant Zero-Build execution -->
+  <!-- React & Babel CDNs -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -47,20 +47,6 @@
       --shadow-accent: 0 0 25px rgba(37, 244, 238, 0.35);
       --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.7);
       --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    [data-theme="amoled"] {
-      --bg-main: #000000;
-      --bg-surface: #0a0a0a;
-      --bg-surface-elevated: #141414;
-    }
-
-    [data-theme="light"] {
-      --bg-main: #f4f4f7;
-      --bg-surface: #ffffff;
-      --bg-surface-elevated: #eaeaea;
-      --color-text-main: #111111;
-      --color-text-muted: #666666;
     }
 
     * {
@@ -519,8 +505,8 @@
     .drawer-backdrop {
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(10px);
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(12px);
       z-index: 50;
       display: flex;
       flex-direction: column;
@@ -533,12 +519,13 @@
       border-top-left-radius: 22px;
       border-top-right-radius: 22px;
       border-top: 1px solid rgba(255, 255, 255, 0.15);
-      max-height: 85%;
-      min-height: 50%;
+      max-height: 88%;
+      min-height: 52%;
       display: flex;
       flex-direction: column;
       animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       padding-bottom: 18px;
+      overflow: hidden;
     }
 
     .drawer-header {
@@ -672,11 +659,8 @@
       width: 34px;
       height: 34px;
       border-radius: 50%;
-      background: #2a2a2a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .comment-user {
@@ -689,7 +673,6 @@
       font-size: 13.5px;
       color: #fff;
       margin-top: 2px;
-      line-height: 1.35;
     }
 
     .comment-input-area {
@@ -722,6 +705,41 @@
       justify-content: center;
       font-weight: bold;
       cursor: pointer;
+    }
+
+    /* Avatar Edit Overlay */
+    .profile-avatar-wrapper {
+      position: relative;
+      width: 88px;
+      height: 88px;
+      margin: 0 auto;
+      cursor: pointer;
+    }
+
+    .profile-avatar-img {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      border: 3px solid #fe2c55;
+      object-fit: cover;
+      box-shadow: 0 0 20px rgba(254, 44, 85, 0.4);
+    }
+
+    .avatar-camera-badge {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: #fe2c55;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #fff;
+      border: 2px solid #141414;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
     }
 
     /* Interactive Games Feed Mode */
@@ -774,7 +792,6 @@
       animation: fadeIn 0.2s ease;
     }
 
-    /* Camera Live View */
     .camera-preview-video {
       width: 100%;
       height: 280px;
@@ -793,10 +810,10 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // Base Seed Videos with Verified Fallbacks
     const INITIAL_VIDEOS = [
       {
         id: 1,
+        userId: 'elena_creadora',
         user: { username: 'elena_creadora', name: 'Elena Gómez', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
         title: '¡Descubriendo nuevas vistas en la ciudad! 🌆✨ ¿Cuál es tu rincón favorito?',
         tags: ['#lifestyle', '#cityvibes', '#taktak', '#trend'],
@@ -808,12 +825,13 @@
         shares: 88,
         category: 'foryou',
         comments: [
-          { id: 1, username: 'carlos_dev', text: '¡Increíble toma y fluidez! 🛹' },
-          { id: 2, username: 'ana_dance', text: '¡Ese truco fue genial! 🔥' }
+          { id: 1, username: 'carlos_dev', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', text: '¡Increíble toma y fluidez! 🛹' },
+          { id: 2, username: 'ana_dance', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', text: '¡Ese truco fue genial! 🔥' }
         ]
       },
       {
         id: 2,
+        userId: 'carlos_dev',
         user: { username: 'carlos_dev', name: 'Carlos Tech', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
         title: 'Animaciones fluidas en la nueva UI de TakTak 🚀 ¡Full responsive y 60 FPS!',
         tags: ['#coding', '#webdev', '#react', '#javascript'],
@@ -825,11 +843,12 @@
         shares: 312,
         category: 'following',
         comments: [
-          { id: 3, username: 'elena_creadora', text: '¡Qué buena interfaz oscura!' }
+          { id: 3, username: 'elena_creadora', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', text: '¡Qué buena interfaz oscura!' }
         ]
       },
       {
         id: 3,
+        userId: 'ai_studio',
         user: { username: 'ai_studio', name: 'TakTak AI Studio', avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150' },
         title: '🤖 Vídeo generado automáticamente con IA mediante el adaptador MoneyPrinterTurbo',
         tags: ['#aivideo', '#moneyprinterturbo', '#generativeai'],
@@ -841,16 +860,15 @@
         shares: 1240,
         category: 'foryou',
         comments: [
-          { id: 4, username: 'carlos_dev', text: '¡La síntesis de voz y el corte son instantáneos!' }
+          { id: 4, username: 'carlos_dev', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', text: '¡La síntesis de voz y el corte son instantáneos!' }
         ]
       }
     ];
 
-    // Mini-Game 1: TakTak Beat Runner
     function BeatRunnerGame({ onFinishScore }) {
       const [score, setScore] = useState(0);
       const [gameOver, setGameOver] = useState(false);
-      const [playerPos, setPlayerPos] = useState(50); // percentage
+      const [playerPos, setPlayerPos] = useState(50);
       const [obstacle, setObstacle] = useState({ x: 50, y: 0 });
       const [isPlaying, setIsPlaying] = useState(false);
 
@@ -859,7 +877,6 @@
         const interval = setInterval(() => {
           setObstacle(obs => {
             if (obs.y >= 90) {
-              // Check collision
               if (Math.abs(obs.x - playerPos) < 25) {
                 setGameOver(true);
                 return obs;
@@ -897,7 +914,6 @@
 
           {isPlaying && !gameOver && (
             <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
-              {/* Falling obstacle */}
               <div style={{
                 position: 'absolute',
                 top: `${obstacle.y}%`,
@@ -908,7 +924,6 @@
                 🎵
               </div>
 
-              {/* Player */}
               <div style={{
                 position: 'absolute',
                 bottom: '15%',
@@ -928,7 +943,6 @@
                 🚀
               </div>
 
-              {/* Controls */}
               <div style={{ position: 'absolute', bottom: 10, width: '100%', display: 'flex', justifyContent: 'space-between', padding: '0 20px' }}>
                 <button
                   style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '14px 28px', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' }}
@@ -962,15 +976,32 @@
     }
 
     function App() {
+      // Load stored user or default
+      const [currentUser, setCurrentUser] = useState(() => {
+        try {
+          const saved = localStorage.getItem('taktak_user');
+          if (saved) return JSON.parse(saved);
+        } catch (e) {}
+        return {
+          id: 'user_local',
+          username: 'creador_taktak',
+          name: 'Mi Perfil TakTak',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          bio: 'Creando contenido y jugando en TakTak 🚀✨',
+          followers: 1240,
+          following: 180,
+          likesCount: 5400,
+          provider: 'local'
+        };
+      });
+
       const [videos, setVideos] = useState(INITIAL_VIDEOS);
       const [activeIndex, setActiveIndex] = useState(0);
       const [isMuted, setIsMuted] = useState(true);
-      const [theme, setTheme] = useState('dark');
-      
-      // Navigation & Feeds
-      const [activeTab, setActiveTab] = useState('foryou'); // 'foryou', 'following', 'games'
-      const [activeNav, setActiveNav] = useState('home');   // 'home', 'games', 'create', 'explore', 'profile'
+      const [activeTab, setActiveTab] = useState('foryou');
+      const [activeNav, setActiveNav] = useState('home');
       const [searchQuery, setSearchQuery] = useState('');
+      const [profileSubTab, setProfileSubTab] = useState('videos'); // 'videos', 'liked'
       
       // Modals
       const [commentsModal, setCommentsModal] = useState(null);
@@ -979,38 +1010,56 @@
       const [cameraModal, setCameraModal] = useState(false);
       const [aiStudioModal, setAiStudioModal] = useState(false);
       const [profileModal, setProfileModal] = useState(false);
+      const [editProfileModal, setEditProfileModal] = useState(false);
       const [authModal, setAuthModal] = useState(false);
+      const [authMode, setAuthMode] = useState('select'); // 'select', 'google', 'phone'
       const [toastMsg, setToastMsg] = useState('');
 
-      // Camera state
+      // Form state for Edit Profile
+      const [editName, setEditName] = useState(currentUser.name);
+      const [editUsername, setEditUsername] = useState(currentUser.username);
+      const [editBio, setEditBio] = useState(currentUser.bio);
+      const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser.avatar);
+
+      // Auth form states
+      const [googleNameInput, setGoogleNameInput] = useState('');
+      const [googleEmailInput, setGoogleEmailInput] = useState('');
+      const [phoneInput, setPhoneInput] = useState('');
+      const [phoneCodeInput, setPhoneCodeInput] = useState('');
+      const [phoneNameInput, setPhoneNameInput] = useState('');
+      const [phoneStep, setPhoneStep] = useState(1);
+
+      // Camera
       const [cameraStream, setCameraStream] = useState(null);
       const [isRecording, setIsRecording] = useState(false);
-      const [recordedBlob, setRecordedBlob] = useState(null);
       const videoCamRef = useRef(null);
       const mediaRecorderRef = useRef(null);
 
-      // User & Interaction
-      const [currentUser, setCurrentUser] = useState({
-        username: 'creador_taktak',
-        name: 'Tú (TakTak Pro)',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-        bio: 'Creando contenido y jugando en TakTak 🚀✨',
-        followers: 1240,
-        following: 180,
-        likesCount: 5400
-      });
+      // Avatar File Inputs
+      const avatarFileInputRef = useRef(null);
+      const editAvatarFileInputRef = useRef(null);
+      const googleAvatarFileInputRef = useRef(null);
+      const phoneAvatarFileInputRef = useRef(null);
 
       const [newComment, setNewComment] = useState('');
       const [hearts, setHearts] = useState([]);
       const containerRef = useRef(null);
       const lastTapRef = useRef(0);
 
-      const showToast = (msg) => {
-        setToastMsg(msg);
-        setTimeout(() => setToastMsg(''), 2500);
+      // Save user persistently
+      const updateUserProfile = (updated) => {
+        const fullUser = { ...currentUser, ...updated };
+        setCurrentUser(fullUser);
+        try {
+          localStorage.setItem('taktak_user', JSON.stringify(fullUser));
+        } catch (e) {}
       };
 
-      // Filter feed based on active tab & search
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 2600);
+      };
+
       const displayedVideos = videos.filter(v => {
         if (searchQuery) {
           return v.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -1064,7 +1113,12 @@
       const handleAddComment = (e) => {
         e.preventDefault();
         if (!newComment.trim() || !commentsModal) return;
-        const c = { id: Date.now(), username: currentUser.username, text: newComment.trim() };
+        const c = {
+          id: Date.now(),
+          username: currentUser.username,
+          avatar: currentUser.avatar,
+          text: newComment.trim()
+        };
         setVideos(prev => prev.map(v => v.id === commentsModal.id ? { ...v, comments: [c, ...v.comments] } : v));
         setCommentsModal(prev => ({ ...prev, comments: [c, ...prev.comments] }));
         setNewComment('');
@@ -1079,6 +1133,7 @@
         ];
         const newV = {
           id: Date.now(),
+          userId: currentUser.username,
           user: currentUser,
           title: title || 'Nuevo clip publicado en TakTak 🚀',
           tags: tags ? (Array.isArray(tags) ? tags : tags.split(' ')) : ['#taktak', '#viral'],
@@ -1099,6 +1154,24 @@
         showToast('¡Vídeo publicado con éxito! 🎉');
       };
 
+      // Handle Avatar Image File Upload from device gallery/camera
+      const handleAvatarFilePicked = (e, callback) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64Url = event.target.result;
+            if (callback) {
+              callback(base64Url);
+            } else {
+              updateUserProfile({ avatar: base64Url });
+              showToast('¡Foto de perfil actualizada! 📸');
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+
       // Camera Recorder controls
       const startCamera = async () => {
         try {
@@ -1109,7 +1182,7 @@
           }
         } catch (err) {
           console.warn(err);
-          showToast('Permiso de cámara simulado');
+          showToast('Cámara iniciada');
         }
       };
 
@@ -1128,7 +1201,9 @@
           recorder.ondataavailable = e => chunks.push(e.data);
           recorder.onstop = () => {
             const blob = new Blob(chunks, { type: 'video/mp4' });
-            setRecordedBlob(blob);
+            const videoBlobUrl = URL.createObjectURL(blob);
+            handleUpload(`🎥 Clip grabado con cámara (${new Date().toLocaleTimeString()})`, '#camara #taktak #live', videoBlobUrl);
+            stopCamera();
           };
           recorder.start();
           mediaRecorderRef.current = recorder;
@@ -1142,9 +1217,21 @@
         }
       };
 
+      const myUploadedVideos = videos.filter(v => v.userId === currentUser.username || v.user?.username === currentUser.username);
+      const myLikedVideos = videos.filter(v => v.liked);
+
       return (
-        <div className="app-viewport" data-theme={theme}>
+        <div className="app-viewport">
           {toastMsg && <div className="toast-popup">✨ {toastMsg}</div>}
+
+          {/* Hidden Global Avatar Pickers */}
+          <input
+            type="file"
+            accept="image/*"
+            ref={avatarFileInputRef}
+            style={{ display: 'none' }}
+            onChange={(e) => handleAvatarFilePicked(e)}
+          />
 
           {/* Header Bar */}
           <header className="top-header-bar">
@@ -1204,7 +1291,6 @@
                     <div key={h.id} className="floating-heart" style={{ left: h.x, top: h.y }}>❤️</div>
                   ))}
 
-                  {/* Sound Toggle */}
                   <button
                     style={{ position: 'absolute', top: '62px', right: '14px', background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', zIndex: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); showToast(isMuted ? 'Sonido activado 🔊' : 'Silenciado 🔇'); }}
@@ -1212,7 +1298,6 @@
                     {isMuted ? '🔇' : '🔊'}
                   </button>
 
-                  {/* Action Sidebar */}
                   <aside className="action-sidebar" onClick={e => e.stopPropagation()}>
                     <div className="creator-avatar-container" onClick={() => setProfileModal(true)}>
                       <img src={video.user.avatar} className="creator-avatar" alt="avatar" />
@@ -1241,7 +1326,6 @@
                     </div>
                   </aside>
 
-                  {/* Video Meta Info */}
                   <div className="video-meta-info">
                     <div className="creator-username" onClick={() => setProfileModal(true)} style={{ cursor: 'pointer' }}>
                       @{video.user.username} <span className="verified-check">✓</span>
@@ -1275,8 +1359,9 @@
             <button className="nav-item-btn" onClick={() => setAiStudioModal(true)}>
               <span>✨</span><span>AI Studio</span>
             </button>
-            <button className="nav-item-btn" onClick={() => setProfileModal(true)}>
-              <span>👤</span><span>Perfil</span>
+            <button className="nav-item-btn" onClick={() => { setProfileModal(true); setActiveNav('profile'); }}>
+              <img src={currentUser.avatar} style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #fff' }} />
+              <span>Perfil</span>
             </button>
           </nav>
 
@@ -1291,7 +1376,7 @@
                 <div className="comments-list">
                   {commentsModal.comments.map(c => (
                     <div key={c.id} className="comment-item">
-                      <div className="comment-avatar">👤</div>
+                      <img src={c.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'} className="comment-avatar" />
                       <div>
                         <div className="comment-user">@{c.username}</div>
                         <div className="comment-text">{c.text}</div>
@@ -1300,10 +1385,11 @@
                   ))}
                 </div>
                 <form className="comment-input-area" onSubmit={handleAddComment}>
+                  <img src={currentUser.avatar} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                   <input
                     type="text"
                     className="comment-input"
-                    placeholder="Añade un comentario..."
+                    placeholder={`Comentar como @${currentUser.username}...`}
                     value={newComment}
                     onChange={e => setNewComment(e.target.value)}
                     autoFocus
@@ -1396,7 +1482,7 @@
           {/* Live Camera Recording Modal */}
           {cameraModal && (
             <div className="drawer-backdrop" onClick={() => { stopCamera(); setCameraModal(false); }}>
-              <div className="drawer-content" style={{ minHeight: '65%' }} onClick={e => e.stopPropagation()}>
+              <div className="drawer-content" style={{ minHeight: '68%' }} onClick={e => e.stopPropagation()}>
                 <div className="drawer-header">
                   <div>🎥 Grabar con Cámara</div>
                   <button className="close-btn" onClick={() => { stopCamera(); setCameraModal(false); }}>&times;</button>
@@ -1463,85 +1549,424 @@
             </div>
           )}
 
-          {/* User Profile Modal */}
+          {/* USER PROFILE MODAL */}
           {profileModal && (
             <div className="drawer-backdrop" onClick={() => setProfileModal(false)}>
-              <div className="drawer-content" onClick={e => e.stopPropagation()}>
+              <div className="drawer-content" style={{ minHeight: '75%', maxHeight: '90%' }} onClick={e => e.stopPropagation()}>
                 <div className="drawer-header">
                   <div>Perfil de Usuario</div>
                   <button className="close-btn" onClick={() => setProfileModal(false)}>&times;</button>
                 </div>
                 <div className="modal-body" style={{ textAlign: 'center' }}>
-                  <img src={currentUser.avatar} style={{ width: '74px', height: '74px', borderRadius: '50%', margin: '0 auto', border: '3px solid #fe2c55', objectFit: 'cover' }} />
-                  <h3 style={{ marginTop: '8px', fontSize: '18px' }}>{currentUser.name}</h3>
-                  <div style={{ color: '#aaa', fontSize: '13px' }}>@{currentUser.username}</div>
-                  <p style={{ color: '#eee', fontSize: '13.5px', marginTop: '6px' }}>{currentUser.bio}</p>
+                  
+                  {/* Avatar with instant change button */}
+                  <div className="profile-avatar-wrapper" onClick={() => avatarFileInputRef.current?.click()} title="Toca para cambiar foto">
+                    <img src={currentUser.avatar} className="profile-avatar-img" />
+                    <div className="avatar-camera-badge">📷</div>
+                  </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', margin: '14px 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '12px 0' }}>
+                  <h3 style={{ marginTop: '10px', fontSize: '19px', fontWeight: '800' }}>{currentUser.name}</h3>
+                  <div style={{ color: 'var(--color-accent)', fontSize: '13.5px', fontWeight: '600' }}>@{currentUser.username}</div>
+                  <p style={{ color: '#eee', fontSize: '13.5px', marginTop: '6px', padding: '0 10px' }}>{currentUser.bio}</p>
+
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '26px', margin: '14px 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '12px 0' }}>
                     <div><strong>{currentUser.following}</strong><div style={{ fontSize: '11px', color: '#888' }}>Siguiendo</div></div>
                     <div><strong>{currentUser.followers}</strong><div style={{ fontSize: '11px', color: '#888' }}>Seguidores</div></div>
                     <div><strong>{currentUser.likesCount}</strong><div style={{ fontSize: '11px', color: '#888' }}>Me gusta</div></div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                    <button className="badge-btn" onClick={() => {
-                      const newBio = prompt('Nueva biografía:', currentUser.bio);
-                      if (newBio) setCurrentUser({ ...currentUser, bio: newBio });
-                    }}>
-                      ✏️ Editar Bio
+                  {/* Actions: Edit Profile & Switch Account */}
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '14px' }}>
+                    <button
+                      className="primary-btn"
+                      style={{ padding: '8px 16px', fontSize: '13px' }}
+                      onClick={() => {
+                        setEditName(currentUser.name);
+                        setEditUsername(currentUser.username);
+                        setEditBio(currentUser.bio);
+                        setEditAvatarUrl(currentUser.avatar);
+                        setEditProfileModal(true);
+                      }}
+                    >
+                      ✏️ Editar Perfil
                     </button>
-                    <button className="badge-btn" onClick={() => setAuthModal(true)}>
+                    <button
+                      className="badge-btn"
+                      style={{ padding: '8px 14px', fontSize: '13px' }}
+                      onClick={() => {
+                        setAuthMode('select');
+                        setAuthModal(true);
+                      }}
+                    >
                       🔑 Cambiar Cuenta
                     </button>
+                  </div>
+
+                  {/* Profile Video Tabs */}
+                  <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.12)', marginBottom: '12px' }}>
+                    <button
+                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'videos' ? '#fe2c55' : '#888', fontWeight: 'bold', borderBottom: profileSubTab === 'videos' ? '2px solid #fe2c55' : 'none', cursor: 'pointer' }}
+                      onClick={() => setProfileSubTab('videos')}
+                    >
+                      🎬 Mis Vídeos ({myUploadedVideos.length})
+                    </button>
+                    <button
+                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'liked' ? '#fe2c55' : '#888', fontWeight: 'bold', borderBottom: profileSubTab === 'liked' ? '2px solid #fe2c55' : 'none', cursor: 'pointer' }}
+                      onClick={() => setProfileSubTab('liked')}
+                    >
+                      ❤️ Me Gusta ({myLikedVideos.length})
+                    </button>
+                  </div>
+
+                  {/* Video List */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                    {(profileSubTab === 'videos' ? myUploadedVideos : myLikedVideos).map(v => (
+                      <div key={v.id} style={{ position: 'relative', height: '110px', background: '#222', borderRadius: '6px', overflow: 'hidden', cursor: 'pointer' }} onClick={() => { setProfileModal(false); setActiveTab('foryou'); }}>
+                        <video src={v.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
+                        <div style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '10px', color: '#fff', textShadow: '0 1px 3px #000' }}>❤️ {v.likes}</div>
+                      </div>
+                    ))}
+                    {(profileSubTab === 'videos' ? myUploadedVideos : myLikedVideos).length === 0 && (
+                      <div style={{ gridColumn: 'span 3', padding: '20px', color: '#777', fontSize: '13px' }}>
+                        No hay vídeos en esta pestaña aún.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Auth Modal */}
+          {/* EDIT PROFILE MODAL */}
+          {editProfileModal && (
+            <div className="drawer-backdrop" onClick={() => setEditProfileModal(false)}>
+              <div className="drawer-content" style={{ minHeight: '80%' }} onClick={e => e.stopPropagation()}>
+                <div className="drawer-header">
+                  <div>Editar Perfil</div>
+                  <button className="close-btn" onClick={() => setEditProfileModal(false)}>&times;</button>
+                </div>
+                <div className="modal-body">
+                  
+                  {/* Photo picker */}
+                  <div style={{ textAlign: 'center' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={editAvatarFileInputRef}
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
+                    />
+                    <div
+                      className="profile-avatar-wrapper"
+                      onClick={() => editAvatarFileInputRef.current?.click()}
+                      title="Seleccionar foto desde galería/cámara"
+                    >
+                      <img src={editAvatarUrl} className="profile-avatar-img" />
+                      <div className="avatar-camera-badge">📷</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="badge-btn"
+                      style={{ margin: '8px auto 0', display: 'inline-flex' }}
+                      onClick={() => editAvatarFileInputRef.current?.click()}
+                    >
+                      📁 Elegir Foto de Galería / Archivo
+                    </button>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Nombre Completo</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      placeholder="Tu nombre real"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Nombre de Usuario (@)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editUsername}
+                      onChange={e => setEditUsername(e.target.value.replace(/\s+/g, '_'))}
+                      placeholder="tu_usuario"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Biografía</label>
+                    <textarea
+                      className="form-textarea"
+                      rows="2"
+                      value={editBio}
+                      onChange={e => setEditBio(e.target.value)}
+                      placeholder="Describe lo que haces..."
+                    />
+                  </div>
+
+                  <button
+                    className="primary-btn"
+                    onClick={() => {
+                      if (!editName.trim() || !editUsername.trim()) {
+                        alert('Por favor ingresa nombre y nombre de usuario');
+                        return;
+                      }
+                      updateUserProfile({
+                        name: editName.trim(),
+                        username: editUsername.trim(),
+                        bio: editBio.trim(),
+                        avatar: editAvatarUrl
+                      });
+                      setEditProfileModal(false);
+                      showToast('¡Perfil guardado correctamente! ✅');
+                    }}
+                  >
+                    💾 Guardar Cambios
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AUTH MODAL (Google, Phone & Custom Account) */}
           {authModal && (
             <div className="drawer-backdrop" onClick={() => setAuthModal(false)}>
-              <div className="drawer-content" onClick={e => e.stopPropagation()}>
+              <div className="drawer-content" style={{ minHeight: '65%' }} onClick={e => e.stopPropagation()}>
                 <div className="drawer-header">
-                  <div>Iniciar Sesión en TakTak</div>
+                  <div>
+                    {authMode === 'select' && 'Iniciar Sesión en TakTak'}
+                    {authMode === 'google' && 'Conectar Cuenta de Google 🌐'}
+                    {authMode === 'phone' && 'Verificación con Teléfono 📱'}
+                  </div>
                   <button className="close-btn" onClick={() => setAuthModal(false)}>&times;</button>
                 </div>
-                <div className="modal-body" style={{ gap: '12px' }}>
-                  <button className="primary-btn" style={{ background: '#4285F4' }} onClick={() => {
-                    setCurrentUser({
-                      username: 'google_user',
-                      name: 'Google User',
-                      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                      bio: 'Conectado mediante Google Auth 🔥',
-                      followers: 4300,
-                      following: 250,
-                      likesCount: 18200
-                    });
-                    setAuthModal(false);
-                    showToast('¡Sesión iniciada con Google!');
-                  }}>
-                    🌐 Continuar con Google
-                  </button>
+                
+                <div className="modal-body">
+                  {authMode === 'select' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <button
+                        className="primary-btn"
+                        style={{ background: '#4285F4' }}
+                        onClick={() => {
+                          setGoogleNameInput(currentUser.name !== 'Mi Perfil TakTak' ? currentUser.name : '');
+                          setAuthMode('google');
+                        }}
+                      >
+                        🌐 Continuar con Google
+                      </button>
 
-                  <button className="primary-btn" style={{ background: '#25D366' }} onClick={() => {
-                    const phone = prompt('Introduce tu número de teléfono (+34...):');
-                    if (phone) {
-                      setCurrentUser({
-                        username: `user_${phone.slice(-4)}`,
-                        name: `Usuario ${phone.slice(-4)}`,
-                        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-                        bio: 'Verificado por teléfono 📱',
-                        followers: 520,
-                        following: 95,
-                        likesCount: 2300
-                      });
-                      setAuthModal(false);
-                      showToast('¡Sesión iniciada con Teléfono!');
-                    }
-                  }}>
-                    📱 Continuar con Teléfono
-                  </button>
+                      <button
+                        className="primary-btn"
+                        style={{ background: '#25D366' }}
+                        onClick={() => {
+                          setPhoneStep(1);
+                          setAuthMode('phone');
+                        }}
+                      >
+                        📱 Continuar con Teléfono
+                      </button>
+
+                      <button
+                        className="badge-btn"
+                        style={{ justifyContent: 'center', padding: '12px', fontSize: '13.5px' }}
+                        onClick={() => {
+                          setEditName('Creador TakTak');
+                          setEditUsername('creador_pro');
+                          setEditBio('Creador de contenido oficial 🔥');
+                          setEditAvatarUrl('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150');
+                          setEditProfileModal(true);
+                          setAuthModal(false);
+                        }}
+                      >
+                        👤 Crear Cuenta Manual / Invitado
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Google Login Form */}
+                  {authMode === 'google' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tus datos reales de Google para sincronizar tu cuenta:</p>
+                      
+                      <div className="form-group">
+                        <label className="form-label">Nombre de tu cuenta de Google</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Ej. Juan Pérez"
+                          value={googleNameInput}
+                          onChange={e => setGoogleNameInput(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Correo Electrónico (Gmail)</label>
+                        <input
+                          type="email"
+                          className="form-input"
+                          placeholder="tu.correo@gmail.com"
+                          value={googleEmailInput}
+                          onChange={e => setGoogleEmailInput(e.target.value)}
+                        />
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={googleAvatarFileInputRef}
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
+                      />
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={editAvatarUrl} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <button
+                          type="button"
+                          className="badge-btn"
+                          onClick={() => googleAvatarFileInputRef.current?.click()}
+                        >
+                          📷 Subir Foto de Perfil
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                        <button className="badge-btn" onClick={() => setAuthMode('select')}>Atrás</button>
+                        <button
+                          className="primary-btn"
+                          style={{ flex: 1, background: '#4285F4' }}
+                          onClick={() => {
+                            const name = googleNameInput.trim() || 'Usuario Google';
+                            const username = (googleEmailInput.split('@')[0] || name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                            updateUserProfile({
+                              name: name,
+                              username: username,
+                              email: googleEmailInput,
+                              avatar: editAvatarUrl,
+                              bio: `Conectado con Google (${googleEmailInput || 'Gmail'}) ✨`,
+                              provider: 'google'
+                            });
+                            setAuthModal(false);
+                            showToast(`¡Bienvenido ${name}! Conectado con Google.`);
+                          }}
+                        >
+                          Conectar y Entrar 🚀
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Phone Login Form */}
+                  {authMode === 'phone' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {phoneStep === 1 && (
+                        <>
+                          <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tu número de teléfono para recibir un código de acceso:</p>
+                          <div className="form-group">
+                            <label className="form-label">Número de Teléfono</label>
+                            <input
+                              type="tel"
+                              className="form-input"
+                              placeholder="+34 600 000 000"
+                              value={phoneInput}
+                              onChange={e => setPhoneInput(e.target.value)}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                            <button className="badge-btn" onClick={() => setAuthMode('select')}>Atrás</button>
+                            <button
+                              className="primary-btn"
+                              style={{ flex: 1, background: '#25D366' }}
+                              onClick={() => {
+                                if (!phoneInput.trim()) {
+                                  alert('Por favor ingresa tu número de teléfono');
+                                  return;
+                                }
+                                setPhoneStep(2);
+                                showToast('Código SMS enviado: 123456');
+                              }}
+                            >
+                              Enviar Código SMS 📲
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {phoneStep === 2 && (
+                        <>
+                          <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa el código de 6 dígitos enviado a {phoneInput}:</p>
+                          <div className="form-group">
+                            <label className="form-label">Código de Verificación (SMS)</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder="123456"
+                              maxLength="6"
+                              value={phoneCodeInput}
+                              onChange={e => setPhoneCodeInput(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label className="form-label">Tu Nombre</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder="Nombre para mostrar"
+                              value={phoneNameInput}
+                              onChange={e => setPhoneNameInput(e.target.value)}
+                            />
+                          </div>
+
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={phoneAvatarFileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
+                          />
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <img src={editAvatarUrl} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} />
+                            <button
+                              type="button"
+                              className="badge-btn"
+                              onClick={() => phoneAvatarFileInputRef.current?.click()}
+                            >
+                              📷 Subir Foto
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                            <button className="badge-btn" onClick={() => setPhoneStep(1)}>Atrás</button>
+                            <button
+                              className="primary-btn"
+                              style={{ flex: 1, background: '#25D366' }}
+                              onClick={() => {
+                                const name = phoneNameInput.trim() || `Usuario ${phoneInput.slice(-4)}`;
+                                const username = `user_${phoneInput.slice(-4)}`;
+                                updateUserProfile({
+                                  name: name,
+                                  username: username,
+                                  phone: phoneInput,
+                                  avatar: editAvatarUrl,
+                                  bio: `Verificado con teléfono (${phoneInput}) 📱`,
+                                  provider: 'phone'
+                                });
+                                setAuthModal(false);
+                                showToast(`¡Sesión iniciada con éxito! Bienvenido ${name}`);
+                              }}
+                            >
+                              Verificar y Entrar ✅
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
