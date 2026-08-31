@@ -3,23 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>TakTak 🎵 — Vídeos Cortos, Minijuegos y Perfiles</title>
+  <title>TakTak 🎵 — Plataforma de Vídeos Cortos y Juegos</title>
   
   <!-- SEO & OpenGraph Meta Tags -->
-  <meta name="description" content="TakTak: Plataforma interactiva para subir vídeos cortos, grabar con cámara, jugar minijuegos, editar perfil y conectar con amigos." />
-  <meta name="keywords" content="taktak, video corto, juegos, tiktok clone, reels, pwa, react, web video, minijuegos, perfil" />
+  <meta name="description" content="TakTak: Plataforma de vídeos cortos, minijuegos y creación con IA con diseño neón fosforescente." />
+  <meta name="keywords" content="taktak, video corto, juegos, reels, neon, react, web video, minijuegos, perfil" />
   <meta name="author" content="taktakmessenger" />
   <meta property="og:title" content="TakTak 🎵 — Vídeos Cortos y Juegos" />
-  <meta property="og:description" content="Descubre vídeos en tendencia, graba con tu cámara, juega minijuegos y personaliza tu perfil en TakTak." />
+  <meta property="og:description" content="Descubre vídeos, juega minijuegos y crea con los colores fosforescentes de TakTak." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://taktakmessenger.github.io" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#07070d" />
   <link rel="manifest" href="manifest.json" />
 
-  <!-- Fonts -->
+  <!-- Fonts: Outfit & Plus Jakarta Sans matching the TakTak logo typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
 
   <!-- React & Babel CDNs -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -28,25 +28,36 @@
 
   <style>
     :root {
-      --bg-main: #000000;
-      --bg-surface: #121212;
-      --bg-surface-elevated: #1e1e1e;
-      --color-primary: #fe2c55;
-      --color-primary-hover: #e02449;
-      --color-accent: #25f4ee;
-      --color-accent-gold: #ffd700;
+      /* Palette based on the official TakTak phosphorescent logo */
+      --taktak-pink: #ff2d8d;
+      --taktak-pink-glow: rgba(255, 45, 141, 0.45);
+      --taktak-purple: #b04bfb;
+      --taktak-cyan: #00f7d4;
+      --taktak-cyan-glow: rgba(0, 247, 212, 0.4);
+      --taktak-gold: #ffd600;
+      
+      --gradient-taktak: linear-gradient(135deg, #ff2d8d 0%, #b04bfb 50%, #00f7d4 100%);
+      --gradient-taktak-reverse: linear-gradient(135deg, #00f7d4 0%, #b04bfb 50%, #ff2d8d 100%);
+      --gradient-btn-pink: linear-gradient(135deg, #ff2d8d 0%, #ff529f 100%);
+      --gradient-btn-cyan: linear-gradient(135deg, #00f7d4 0%, #00d4b6 100%);
+
+      --bg-main: #05050a;
+      --bg-surface: #0e0e17;
+      --bg-surface-elevated: #181826;
       --color-text-main: #ffffff;
-      --color-text-muted: #a0a0a0;
-      --font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      --font-heading: 'Outfit', 'Inter', sans-serif;
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 22px;
+      --color-text-muted: #9e9eb4;
+      
+      --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-heading: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+      
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
       --radius-full: 9999px;
-      --shadow-glow: 0 0 25px rgba(254, 44, 85, 0.4);
-      --shadow-accent: 0 0 25px rgba(37, 244, 238, 0.35);
-      --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.7);
-      --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      
+      --shadow-glow: 0 0 30px var(--taktak-pink-glow), 0 0 20px var(--taktak-cyan-glow);
+      --shadow-card: 0 15px 40px rgba(0, 0, 0, 0.85);
+      --transition-fast: 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     * {
@@ -72,7 +83,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background: radial-gradient(circle at center top, #141829 0%, #000000 80%);
+      background: radial-gradient(circle at center top, #160d26 0%, #05050a 80%);
     }
 
     .app-viewport {
@@ -91,9 +102,166 @@
       .app-viewport {
         height: 92vh;
         border-radius: var(--radius-lg);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(254, 44, 85, 0.25);
+        border: 1px solid rgba(255, 45, 141, 0.25);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(255, 45, 141, 0.25), 0 0 25px rgba(0, 247, 212, 0.2);
       }
+    }
+
+    /* ================= CINEMATIC SPLASH OPENING ANIMATION ================= */
+    .splash-opening-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 300;
+      background: #000000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: splashCinematic 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      pointer-events: none;
+    }
+
+    .splash-opening-logo {
+      width: 170px;
+      height: 170px;
+      border-radius: 38px;
+      object-fit: cover;
+      box-shadow: 0 0 60px var(--taktak-pink-glow), 0 0 35px var(--taktak-cyan-glow);
+      animation: logoPulseGrow 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes splashCinematic {
+      0% { opacity: 1; transform: scale(1); }
+      70% { opacity: 1; transform: scale(1.05); }
+      100% { opacity: 0; transform: scale(1.6); visibility: hidden; }
+    }
+
+    @keyframes logoPulseGrow {
+      0% { transform: scale(0.8); opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+      35% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 30px var(--taktak-cyan)); }
+      65% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+
+    /* ================= COVER / PORTADA SPLASH SCREEN ================= */
+    .cover-landing-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 200;
+      background: radial-gradient(circle at center 20%, #1f0b2a 0%, #070710 65%, #000000 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 34px 24px 38px;
+      text-align: center;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .cover-hero-glow {
+      position: relative;
+      margin-top: 15px;
+    }
+
+    .cover-hero-glow::before {
+      content: '';
+      position: absolute;
+      inset: -15px;
+      background: var(--gradient-taktak);
+      border-radius: 46px;
+      filter: blur(28px);
+      opacity: 0.65;
+      z-index: 0;
+      animation: glowBreathing 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes glowBreathing {
+      0% { opacity: 0.45; filter: blur(22px); transform: scale(0.96); }
+      100% { opacity: 0.85; filter: blur(34px); transform: scale(1.04); }
+    }
+
+    .cover-logo-img {
+      width: 160px;
+      height: 160px;
+      border-radius: 36px;
+      object-fit: cover;
+      position: relative;
+      z-index: 1;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    }
+
+    .cover-title {
+      font-family: var(--font-heading);
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-top: 18px;
+      background: var(--gradient-taktak);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 20px var(--taktak-pink-glow));
+    }
+
+    .cover-subtitle {
+      font-size: 14.5px;
+      color: var(--color-text-muted);
+      margin-top: 8px;
+      line-height: 1.45;
+      max-width: 320px;
+      font-weight: 500;
+    }
+
+    .cover-actions {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+      margin-top: 24px;
+    }
+
+    .auth-provider-btn {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      font-family: var(--font-heading);
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      border: none;
+      transition: transform var(--transition-fast), filter var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .auth-provider-btn:active {
+      transform: scale(0.97);
+    }
+
+    .auth-provider-btn:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.1);
+    }
+
+    .btn-google {
+      background: #ffffff;
+      color: #070710;
+      box-shadow: 0 6px 20px rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-phone {
+      background: var(--gradient-btn-cyan);
+      color: #051412;
+      box-shadow: 0 6px 20px var(--taktak-cyan-glow);
+    }
+
+    .btn-guest {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
     }
 
     /* Feed Container */
@@ -138,10 +306,10 @@
       pointer-events: none;
       background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.5) 0%,
-        transparent 20%,
+        rgba(0, 0, 0, 0.55) 0%,
+        transparent 18%,
         transparent 55%,
-        rgba(0, 0, 0, 0.88) 95%
+        rgba(5, 5, 10, 0.9) 95%
       );
       z-index: 2;
     }
@@ -157,21 +325,31 @@
       align-items: center;
       justify-content: space-between;
       padding: 12px 16px;
-      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+      background: linear-gradient(to bottom, rgba(5, 5, 10, 0.88) 0%, transparent 100%);
     }
 
     .brand-logo {
       font-family: var(--font-heading);
       font-weight: 900;
-      font-size: 21px;
+      font-size: 22px;
       letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #ffffff 30%, var(--color-accent) 100%);
+      background: var(--gradient-taktak);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       cursor: pointer;
+      filter: drop-shadow(0 0 10px var(--taktak-pink-glow));
+    }
+
+    .brand-logo-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid var(--taktak-cyan);
+      box-shadow: 0 0 10px var(--taktak-cyan-glow);
     }
 
     .header-tabs {
@@ -184,8 +362,9 @@
       background: none;
       border: none;
       color: rgba(255, 255, 255, 0.6);
+      font-family: var(--font-heading);
       font-size: 14.5px;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
       position: relative;
       transition: var(--transition-fast);
@@ -200,18 +379,18 @@
     .header-tab-btn.active::after {
       content: '';
       position: absolute;
-      bottom: -2px;
-      left: 10%;
-      right: 10%;
+      bottom: -3px;
+      left: 0;
+      right: 0;
       height: 3px;
-      background-color: var(--color-primary);
+      background: var(--gradient-taktak);
       border-radius: var(--radius-full);
-      box-shadow: 0 0 8px var(--color-primary);
+      box-shadow: 0 0 12px var(--taktak-pink);
     }
 
     .header-tab-btn.game-tab.active::after {
-      background-color: var(--color-accent-gold);
-      box-shadow: 0 0 8px var(--color-accent-gold);
+      background: linear-gradient(135deg, var(--taktak-gold) 0%, var(--taktak-cyan) 100%);
+      box-shadow: 0 0 12px var(--taktak-cyan);
     }
 
     .header-right-actions {
@@ -221,23 +400,26 @@
     }
 
     .badge-btn {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.1);
       backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #fff;
+      border: 1px solid rgba(0, 247, 212, 0.35);
+      color: var(--taktak-cyan);
       border-radius: 18px;
-      padding: 5px 11px;
-      font-size: 11.5px;
-      font-weight: 700;
+      padding: 5px 12px;
+      font-family: var(--font-heading);
+      font-size: 12px;
+      font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 4px;
-      transition: transform var(--transition-fast);
+      gap: 5px;
+      box-shadow: 0 0 10px rgba(0, 247, 212, 0.2);
+      transition: transform var(--transition-fast), background var(--transition-fast);
     }
 
     .badge-btn:hover {
       transform: scale(1.05);
+      background: rgba(0, 247, 212, 0.2);
     }
 
     /* Right Action Sidebar */
@@ -269,12 +451,12 @@
     }
 
     .action-icon-circle {
-      width: 44px;
-      height: 44px;
+      width: 45px;
+      height: 45px;
       border-radius: 50%;
-      background: rgba(25, 25, 25, 0.65);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(14, 14, 23, 0.7);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -283,16 +465,17 @@
     }
 
     .action-icon-circle.liked {
-      color: var(--color-primary);
-      border-color: rgba(254, 44, 85, 0.5);
-      background: rgba(254, 44, 85, 0.2);
+      color: var(--taktak-pink);
+      border-color: rgba(255, 45, 141, 0.6);
+      background: rgba(255, 45, 141, 0.25);
+      box-shadow: 0 0 18px var(--taktak-pink-glow);
       animation: heartPulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
     .action-label {
       font-size: 11.5px;
       font-weight: 700;
-      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
     }
 
     .creator-avatar-container {
@@ -302,21 +485,22 @@
     }
 
     .creator-avatar {
-      width: 46px;
-      height: 46px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
-      border: 2px solid #ffffff;
+      border: 2px solid var(--taktak-cyan);
+      box-shadow: 0 0 12px var(--taktak-cyan-glow);
       object-fit: cover;
     }
 
     .follow-badge-plus {
       position: absolute;
-      bottom: -6px;
+      bottom: -5px;
       left: 50%;
       transform: translateX(-50%);
-      width: 18px;
-      height: 18px;
-      background-color: var(--color-primary);
+      width: 19px;
+      height: 19px;
+      background: var(--gradient-btn-pink);
       color: #ffffff;
       border-radius: 50%;
       display: flex;
@@ -324,21 +508,21 @@
       justify-content: center;
       font-size: 13px;
       font-weight: bold;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 2px 8px var(--taktak-pink-glow);
     }
 
     .vinyl-sound-disc {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: #111;
-      border: 3px solid #282828;
+      background: #0d0d16;
+      border: 3px solid #1a1a2e;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       animation: spinVinyl 5s linear infinite;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 0 12px rgba(0, 247, 212, 0.3);
     }
 
     .vinyl-sound-disc img {
@@ -367,8 +551,9 @@
     }
 
     .creator-username {
-      font-size: 15.5px;
-      font-weight: 700;
+      font-size: 16px;
+      font-family: var(--font-heading);
+      font-weight: 800;
       color: #ffffff;
       display: flex;
       align-items: center;
@@ -376,7 +561,7 @@
     }
 
     .verified-check {
-      background: var(--color-accent);
+      background: var(--taktak-cyan);
       color: #000;
       border-radius: 50%;
       width: 14px;
@@ -401,15 +586,16 @@
     }
 
     .tag-badge {
-      color: var(--color-accent);
+      color: var(--taktak-cyan);
       font-weight: 700;
       font-size: 13px;
       cursor: pointer;
       transition: opacity var(--transition-fast);
+      text-shadow: 0 0 8px var(--taktak-cyan-glow);
     }
 
     .tag-badge:hover {
-      opacity: 0.8;
+      opacity: 0.85;
       text-decoration: underline;
     }
 
@@ -430,7 +616,7 @@
       transform: translate(-50%, -50%) scale(0);
       animation: burstHeart 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
       z-index: 25;
-      filter: drop-shadow(0 0 18px rgba(254, 44, 85, 0.9));
+      filter: drop-shadow(0 0 22px var(--taktak-pink));
     }
 
     @keyframes burstHeart {
@@ -451,9 +637,9 @@
       bottom: 0;
       left: 0;
       right: 0;
-      height: 60px;
-      background: rgba(8, 8, 8, 0.95);
-      backdrop-filter: blur(20px);
+      height: 62px;
+      background: rgba(5, 5, 10, 0.95);
+      backdrop-filter: blur(24px);
       border-top: 1px solid rgba(255, 255, 255, 0.09);
       display: flex;
       align-items: center;
@@ -469,31 +655,33 @@
       align-items: center;
       gap: 3px;
       color: var(--color-text-muted);
+      font-family: var(--font-heading);
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       transition: var(--transition-fast);
       min-width: 48px;
     }
 
     .nav-item-btn.active {
-      color: #ffffff;
+      color: var(--taktak-cyan);
+      text-shadow: 0 0 8px var(--taktak-cyan-glow);
     }
 
     .nav-create-btn {
-      background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
+      background: var(--gradient-taktak);
       border: none;
-      width: 46px;
-      height: 32px;
-      border-radius: 10px;
+      width: 48px;
+      height: 33px;
+      border-radius: 11px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #000;
+      color: #05050a;
       font-weight: 900;
-      font-size: 20px;
+      font-size: 22px;
       cursor: pointer;
-      box-shadow: 0 2px 12px rgba(254, 44, 85, 0.45);
+      box-shadow: 0 0 20px var(--taktak-pink-glow);
       transition: transform var(--transition-fast);
     }
 
@@ -505,8 +693,8 @@
     .drawer-backdrop {
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.78);
-      backdrop-filter: blur(12px);
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(14px);
       z-index: 50;
       display: flex;
       flex-direction: column;
@@ -515,10 +703,11 @@
     }
 
     .drawer-content {
-      background: #141414;
-      border-top-left-radius: 22px;
-      border-top-right-radius: 22px;
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      background: #0f0f1c;
+      border-top-left-radius: 24px;
+      border-top-right-radius: 24px;
+      border-top: 1px solid rgba(255, 45, 141, 0.3);
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9), 0 0 30px rgba(255, 45, 141, 0.15);
       max-height: 88%;
       min-height: 52%;
       display: flex;
@@ -529,13 +718,14 @@
     }
 
     .drawer-header {
-      padding: 14px 18px;
+      padding: 15px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 15.5px;
-      font-weight: 700;
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 800;
     }
 
     .close-btn {
@@ -548,11 +738,11 @@
     }
 
     .close-btn:hover {
-      color: #fff;
+      color: var(--taktak-cyan);
     }
 
     .modal-body {
-      padding: 16px 18px;
+      padding: 18px 20px;
       display: flex;
       flex-direction: column;
       gap: 14px;
@@ -567,15 +757,15 @@
 
     .form-label {
       font-size: 12.5px;
-      font-weight: 600;
+      font-weight: 700;
       color: #ccc;
     }
 
     .form-input, .form-textarea, .form-select {
-      background: #202020;
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #181829;
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: var(--radius-sm);
-      padding: 10px 14px;
+      padding: 11px 14px;
       color: #fff;
       font-size: 14px;
       outline: none;
@@ -583,60 +773,65 @@
     }
 
     .form-input:focus, .form-textarea:focus, .form-select:focus {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 10px rgba(254, 44, 85, 0.2);
+      border-color: var(--taktak-pink);
+      box-shadow: 0 0 15px var(--taktak-pink-glow);
     }
 
     .primary-btn {
-      background: var(--color-primary);
+      background: var(--gradient-btn-pink);
       color: #fff;
       border: none;
       border-radius: var(--radius-md);
-      padding: 12px 18px;
-      font-size: 14.5px;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: background var(--transition-fast), transform var(--transition-fast);
-    }
-
-    .primary-btn:hover {
-      background: var(--color-primary-hover);
-      transform: translateY(-1px);
-    }
-
-    .ai-gradient-btn {
-      background: linear-gradient(135deg, #fe2c55 0%, #a855f7 50%, #25f4ee 100%);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-md);
-      padding: 12px 18px;
-      font-size: 14.5px;
+      padding: 13px 18px;
+      font-family: var(--font-heading);
+      font-size: 15px;
       font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 7px;
+      box-shadow: 0 4px 18px var(--taktak-pink-glow);
+      transition: transform var(--transition-fast), filter var(--transition-fast);
+    }
+
+    .primary-btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .ai-gradient-btn {
+      background: var(--gradient-taktak);
+      color: #05050a;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 13px 18px;
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       gap: 8px;
-      box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+      box-shadow: 0 6px 20px var(--taktak-pink-glow);
     }
 
     .gold-btn {
-      background: linear-gradient(135deg, #ffd700 0%, #ff8800 100%);
-      color: #000;
+      background: linear-gradient(135deg, var(--taktak-gold) 0%, var(--taktak-cyan) 100%);
+      color: #05050a;
       border: none;
       border-radius: var(--radius-md);
-      padding: 12px 18px;
-      font-size: 14.5px;
+      padding: 13px 18px;
+      font-family: var(--font-heading);
+      font-size: 15px;
       font-weight: 900;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
+      box-shadow: 0 4px 20px var(--taktak-cyan-glow);
     }
 
     /* Comments Section */
@@ -660,13 +855,14 @@
       height: 34px;
       border-radius: 50%;
       object-fit: cover;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(0, 247, 212, 0.4);
     }
 
     .comment-user {
-      font-size: 12px;
-      font-weight: 700;
-      color: #ddd;
+      font-size: 12.5px;
+      font-family: var(--font-heading);
+      font-weight: 800;
+      color: var(--taktak-cyan);
     }
 
     .comment-text {
@@ -684,69 +880,70 @@
 
     .comment-input {
       flex: 1;
-      background: #222;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #181829;
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: var(--radius-full);
-      padding: 9px 16px;
+      padding: 10px 16px;
       color: #fff;
       font-size: 13.5px;
       outline: none;
     }
 
     .comment-send-btn {
-      background: var(--color-primary);
+      background: var(--gradient-btn-pink);
       border: none;
       border-radius: 50%;
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       color: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: bold;
       cursor: pointer;
+      box-shadow: 0 0 12px var(--taktak-pink-glow);
     }
 
     /* Avatar Edit Overlay */
     .profile-avatar-wrapper {
       position: relative;
-      width: 88px;
-      height: 88px;
+      width: 92px;
+      height: 92px;
       margin: 0 auto;
       cursor: pointer;
     }
 
     .profile-avatar-img {
-      width: 88px;
-      height: 88px;
+      width: 92px;
+      height: 92px;
       border-radius: 50%;
-      border: 3px solid #fe2c55;
+      border: 3px solid var(--taktak-pink);
       object-fit: cover;
-      box-shadow: 0 0 20px rgba(254, 44, 85, 0.4);
+      box-shadow: 0 0 25px var(--taktak-pink-glow), 0 0 15px var(--taktak-cyan-glow);
     }
 
     .avatar-camera-badge {
       position: absolute;
       bottom: 0;
       right: 0;
-      background: #fe2c55;
-      width: 28px;
-      height: 28px;
+      background: var(--gradient-btn-cyan);
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 14px;
-      color: #fff;
-      border: 2px solid #141414;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+      color: #000;
+      border: 2px solid #0f0f1c;
+      box-shadow: 0 2px 8px var(--taktak-cyan-glow);
     }
 
     /* Interactive Games Feed Mode */
     .game-viewport-card {
       width: 100%;
       height: 100%;
-      background: radial-gradient(circle at center, #1b1035 0%, #080511 100%);
+      background: radial-gradient(circle at center, #1e0d30 0%, #080512 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -759,12 +956,12 @@
       width: 100%;
       max-width: 360px;
       height: 480px;
-      background: #0d0d1a;
-      border: 2px solid var(--color-accent-gold);
-      border-radius: 16px;
+      background: #0b0716;
+      border: 2px solid var(--taktak-cyan);
+      border-radius: 20px;
       position: relative;
       overflow: hidden;
-      box-shadow: 0 0 30px rgba(255, 215, 0, 0.25);
+      box-shadow: 0 0 35px var(--taktak-cyan-glow);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -777,15 +974,16 @@
       top: 60px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(20, 20, 20, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(15, 15, 28, 0.96);
+      border: 1px solid var(--taktak-cyan);
       color: #fff;
       padding: 10px 18px;
       border-radius: var(--radius-full);
-      font-size: 13px;
-      font-weight: 600;
+      font-family: var(--font-heading);
+      font-size: 13.5px;
+      font-weight: 700;
       z-index: 100;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+      box-shadow: 0 6px 25px rgba(0,0,0,0.9), 0 0 15px var(--taktak-cyan-glow);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -796,8 +994,9 @@
       width: 100%;
       height: 280px;
       background: #000;
-      border-radius: 14px;
+      border-radius: 16px;
       object-fit: cover;
+      border: 2px solid var(--taktak-pink);
     }
 
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -899,15 +1098,15 @@
 
       return (
         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 15, left: 20, fontSize: '18px', fontWeight: '900', color: '#ffd700' }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, fontSize: '18px', fontWeight: '900', color: 'var(--taktak-gold)' }}>
             🏆 Puntos: {score}
           </div>
 
           {!isPlaying && !gameOver && (
             <div style={{ textAlign: 'center', padding: 20 }}>
-              <div style={{ fontSize: '42px', marginBottom: 10 }}>🎮</div>
-              <h2 style={{ color: '#fff', fontSize: '20px', marginBottom: 8 }}>TakTak Beat Runner</h2>
-              <p style={{ color: '#aaa', fontSize: '13px', marginBottom: 20 }}>Desliza o toca izquierda/derecha para esquivar las notas musicales neón.</p>
+              <div style={{ fontSize: '46px', marginBottom: 10 }}>🎮</div>
+              <h2 style={{ color: '#fff', fontFamily: 'var(--font-heading)', fontSize: '22px', marginBottom: 8, background: 'var(--gradient-taktak)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>TakTak Beat Runner</h2>
+              <p style={{ color: '#aaa', fontSize: '13.5px', marginBottom: 20 }}>Desliza o toca izquierda/derecha para esquivar las notas musicales neón.</p>
               <button className="gold-btn" onClick={startGame}>⚡ Iniciar Juego</button>
             </div>
           )}
@@ -919,7 +1118,8 @@
                 top: `${obstacle.y}%`,
                 left: `${obstacle.x}%`,
                 transform: 'translate(-50%, -50%)',
-                fontSize: '28px'
+                fontSize: '30px',
+                filter: 'drop-shadow(0 0 10px var(--taktak-pink))'
               }}>
                 🎵
               </div>
@@ -929,15 +1129,15 @@
                 bottom: '15%',
                 left: `${playerPos}%`,
                 transform: 'translate(-50%, 0)',
-                width: '44px',
-                height: '44px',
+                width: '46px',
+                height: '46px',
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #fe2c55, #25f4ee)',
+                background: 'var(--gradient-taktak)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '22px',
-                boxShadow: '0 0 15px #fe2c55',
+                fontSize: '24px',
+                boxShadow: '0 0 20px var(--taktak-cyan)',
                 transition: 'left 0.1s ease'
               }}>
                 🚀
@@ -945,13 +1145,13 @@
 
               <div style={{ position: 'absolute', bottom: 10, width: '100%', display: 'flex', justifyContent: 'space-between', padding: '0 20px' }}>
                 <button
-                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '14px 28px', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' }}
+                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid var(--taktak-cyan)', color: '#fff', padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: 'bold' }}
                   onClick={() => setPlayerPos(p => Math.max(15, p - 20))}
                 >
                   ◀ Izq
                 </button>
                 <button
-                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '14px 28px', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' }}
+                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid var(--taktak-pink)', color: '#fff', padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: 'bold' }}
                   onClick={() => setPlayerPos(p => Math.min(85, p + 20))}
                 >
                   Der ▶
@@ -962,9 +1162,9 @@
 
           {gameOver && (
             <div style={{ textAlign: 'center', padding: 20 }}>
-              <div style={{ fontSize: '42px', marginBottom: 8 }}>💥</div>
-              <h2 style={{ color: '#fe2c55', fontSize: '22px', marginBottom: 6 }}>¡Juego Terminado!</h2>
-              <p style={{ color: '#fff', fontSize: '16px', marginBottom: 18 }}>Puntuación Final: <strong>{score}</strong></p>
+              <div style={{ fontSize: '46px', marginBottom: 8 }}>💥</div>
+              <h2 style={{ color: 'var(--taktak-pink)', fontSize: '24px', fontFamily: 'var(--font-heading)', fontWeight: '900', marginBottom: 6 }}>¡Juego Terminado!</h2>
+              <p style={{ color: '#fff', fontSize: '16px', marginBottom: 18 }}>Puntuación Final: <strong style={{ color: 'var(--taktak-cyan)' }}>{score}</strong></p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 <button className="gold-btn" onClick={startGame}>Reintentar 🔄</button>
                 <button className="primary-btn" onClick={() => onFinishScore && onFinishScore(score)}>Compartir Récord 📢</button>
@@ -976,7 +1176,6 @@
     }
 
     function App() {
-      // Load stored user or default
       const [currentUser, setCurrentUser] = useState(() => {
         try {
           const saved = localStorage.getItem('taktak_user');
@@ -986,14 +1185,22 @@
           id: 'user_local',
           username: 'creador_taktak',
           name: 'Mi Perfil TakTak',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          avatar: 'copilot_image_1758359058839.jpeg',
           bio: 'Creando contenido y jugando en TakTak 🚀✨',
           followers: 1240,
           following: 180,
           likesCount: 5400,
-          provider: 'local'
+          provider: 'local',
+          isLoggedIn: false
         };
       });
+
+      const [showCoverScreen, setShowCoverScreen] = useState(() => {
+        return !localStorage.getItem('taktak_cover_seen');
+      });
+
+      // Opening Cinematic Splash state (like TikTok logo animation)
+      const [isOpeningAnimation, setIsOpeningAnimation] = useState(false);
 
       const [videos, setVideos] = useState(INITIAL_VIDEOS);
       const [activeIndex, setActiveIndex] = useState(0);
@@ -1001,9 +1208,8 @@
       const [activeTab, setActiveTab] = useState('foryou');
       const [activeNav, setActiveNav] = useState('home');
       const [searchQuery, setSearchQuery] = useState('');
-      const [profileSubTab, setProfileSubTab] = useState('videos'); // 'videos', 'liked'
+      const [profileSubTab, setProfileSubTab] = useState('videos');
       
-      // Modals
       const [commentsModal, setCommentsModal] = useState(null);
       const [shareModal, setShareModal] = useState(null);
       const [uploadModal, setUploadModal] = useState(false);
@@ -1012,16 +1218,14 @@
       const [profileModal, setProfileModal] = useState(false);
       const [editProfileModal, setEditProfileModal] = useState(false);
       const [authModal, setAuthModal] = useState(false);
-      const [authMode, setAuthMode] = useState('select'); // 'select', 'google', 'phone'
+      const [authMode, setAuthMode] = useState('select');
       const [toastMsg, setToastMsg] = useState('');
 
-      // Form state for Edit Profile
       const [editName, setEditName] = useState(currentUser.name);
       const [editUsername, setEditUsername] = useState(currentUser.username);
       const [editBio, setEditBio] = useState(currentUser.bio);
       const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser.avatar);
 
-      // Auth form states
       const [googleNameInput, setGoogleNameInput] = useState('');
       const [googleEmailInput, setGoogleEmailInput] = useState('');
       const [phoneInput, setPhoneInput] = useState('');
@@ -1029,13 +1233,11 @@
       const [phoneNameInput, setPhoneNameInput] = useState('');
       const [phoneStep, setPhoneStep] = useState(1);
 
-      // Camera
       const [cameraStream, setCameraStream] = useState(null);
       const [isRecording, setIsRecording] = useState(false);
       const videoCamRef = useRef(null);
       const mediaRecorderRef = useRef(null);
 
-      // Avatar File Inputs
       const avatarFileInputRef = useRef(null);
       const editAvatarFileInputRef = useRef(null);
       const googleAvatarFileInputRef = useRef(null);
@@ -1046,13 +1248,30 @@
       const containerRef = useRef(null);
       const lastTapRef = useRef(0);
 
-      // Save user persistently
+      const triggerOpeningAnimation = (callback) => {
+        setIsOpeningAnimation(true);
+        setTimeout(() => {
+          setIsOpeningAnimation(false);
+          if (callback) callback();
+        }, 1300);
+      };
+
       const updateUserProfile = (updated) => {
-        const fullUser = { ...currentUser, ...updated };
+        const fullUser = { ...currentUser, ...updated, isLoggedIn: true };
         setCurrentUser(fullUser);
         try {
           localStorage.setItem('taktak_user', JSON.stringify(fullUser));
+          localStorage.setItem('taktak_cover_seen', 'true');
         } catch (e) {}
+      };
+
+      const dismissCover = () => {
+        triggerOpeningAnimation(() => {
+          setShowCoverScreen(false);
+          try {
+            localStorage.setItem('taktak_cover_seen', 'true');
+          } catch (e) {}
+        });
       };
 
       const showToast = (msg) => {
@@ -1154,7 +1373,6 @@
         showToast('¡Vídeo publicado con éxito! 🎉');
       };
 
-      // Handle Avatar Image File Upload from device gallery/camera
       const handleAvatarFilePicked = (e, callback) => {
         const file = e.target.files[0];
         if (file) {
@@ -1172,7 +1390,6 @@
         }
       };
 
-      // Camera Recorder controls
       const startCamera = async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -1224,7 +1441,7 @@
         <div className="app-viewport">
           {toastMsg && <div className="toast-popup">✨ {toastMsg}</div>}
 
-          {/* Hidden Global Avatar Pickers */}
+          {/* Hidden Global Avatar Picker */}
           <input
             type="file"
             accept="image/*"
@@ -1233,10 +1450,78 @@
             onChange={(e) => handleAvatarFilePicked(e)}
           />
 
-          {/* Header Bar */}
+          {/* ================= OPENING CINEMATIC SPLASH ANIMATION ================= */}
+          {isOpeningAnimation && (
+            <div className="splash-opening-overlay">
+              <img
+                src="copilot_image_1758359058839.jpeg"
+                onError={e => e.target.src='taktak_cover.jpeg'}
+                className="splash-opening-logo"
+                alt="TakTak"
+              />
+            </div>
+          )}
+
+          {/* ================= COVER / PORTADA SPLASH SCREEN ================= */}
+          {showCoverScreen && (
+            <div className="cover-landing-screen">
+              <div>
+                <div className="cover-hero-glow">
+                  <img
+                    src="copilot_image_1758359058839.jpeg"
+                    onError={(e) => { e.target.src = 'taktak_cover.jpeg'; }}
+                    className="cover-logo-img"
+                    alt="TakTak Logo"
+                  />
+                </div>
+                <h1 className="cover-title">TakTak</h1>
+                <p className="cover-subtitle">Vídeos cortos en vertical, minijuegos y creación con IA.</p>
+              </div>
+
+              <div className="cover-actions">
+                <button
+                  className="auth-provider-btn btn-google"
+                  onClick={() => {
+                    setAuthMode('google');
+                    setAuthModal(true);
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  Crear cuenta con Google
+                </button>
+
+                <button
+                  className="auth-provider-btn btn-phone"
+                  onClick={() => {
+                    setPhoneStep(1);
+                    setAuthMode('phone');
+                    setAuthModal(true);
+                  }}
+                >
+                  <span>📱</span>
+                  Iniciar sesión con Teléfono
+                </button>
+
+                <button
+                  className="auth-provider-btn btn-guest"
+                  onClick={dismissCover}
+                >
+                  🚀 Entrar al Feed directamente
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ================= HEADER BAR ================= */}
           <header className="top-header-bar">
             <div className="brand-logo" onClick={() => { setActiveTab('foryou'); setSearchQuery(''); }}>
-              TakTak <span>🎵</span>
+              <img src="copilot_image_1758359058839.jpeg" onError={e => e.target.src='taktak_cover.jpeg'} className="brand-logo-icon" />
+              TakTak
             </div>
             
             <div className="header-tabs">
@@ -1258,7 +1543,7 @@
             </div>
           </header>
 
-          {/* Feed Content or Games Mode */}
+          {/* ================= MAIN CONTENT ================= */}
           {activeTab === 'games' ? (
             <div className="game-viewport-card">
               <div className="game-canvas-container">
@@ -1292,7 +1577,7 @@
                   ))}
 
                   <button
-                    style={{ position: 'absolute', top: '62px', right: '14px', background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', zIndex: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    style={{ position: 'absolute', top: '62px', right: '14px', background: 'rgba(5,5,10,0.65)', border: '1px solid var(--taktak-cyan)', color: '#fff', borderRadius: '50%', width: '38px', height: '38px', cursor: 'pointer', zIndex: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px var(--taktak-cyan-glow)' }}
                     onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); showToast(isMuted ? 'Sonido activado 🔊' : 'Silenciado 🔇'); }}
                   >
                     {isMuted ? '🔇' : '🔊'}
@@ -1347,7 +1632,7 @@
             </div>
           )}
 
-          {/* Bottom Navigation */}
+          {/* ================= BOTTOM NAVIGATION ================= */}
           <nav className="bottom-nav-bar">
             <button className={`nav-item-btn ${activeNav === 'home' && activeTab !== 'games' ? 'active' : ''}`} onClick={() => { setActiveNav('home'); setActiveTab('foryou'); setSearchQuery(''); }}>
               <span>🏠</span><span>Inicio</span>
@@ -1360,10 +1645,12 @@
               <span>✨</span><span>AI Studio</span>
             </button>
             <button className="nav-item-btn" onClick={() => { setProfileModal(true); setActiveNav('profile'); }}>
-              <img src={currentUser.avatar} style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #fff' }} />
+              <img src={currentUser.avatar} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
               <span>Perfil</span>
             </button>
           </nav>
+
+          {/* ================= MODALS & DRAWERS ================= */}
 
           {/* Comments Drawer */}
           {commentsModal && (
@@ -1376,7 +1663,7 @@
                 <div className="comments-list">
                   {commentsModal.comments.map(c => (
                     <div key={c.id} className="comment-item">
-                      <img src={c.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'} className="comment-avatar" />
+                      <img src={c.avatar || 'copilot_image_1758359058839.jpeg'} className="comment-avatar" />
                       <div>
                         <div className="comment-user">@{c.username}</div>
                         <div className="comment-text">{c.text}</div>
@@ -1385,7 +1672,7 @@
                   ))}
                 </div>
                 <form className="comment-input-area" onSubmit={handleAddComment}>
-                  <img src={currentUser.avatar} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={currentUser.avatar} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
                   <input
                     type="text"
                     className="comment-input"
@@ -1411,20 +1698,20 @@
                 <div className="modal-body">
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', textAlign: 'center' }}>
                     <div style={{ cursor: 'pointer' }} onClick={() => { navigator.clipboard?.writeText(window.location.href); showToast('¡Enlace copiado al portapapeles! 📋'); setShareModal(null); }}>
-                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#25F4EE', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>🔗</div>
-                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>Copiar</span>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--gradient-btn-cyan)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px', boxShadow: '0 0 15px var(--taktak-cyan-glow)' }}>🔗</div>
+                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>Copiar</span>
                     </div>
                     <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('¡Mira este vídeo en TakTak! ' + window.location.href)}`); setShareModal(null); }}>
-                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#25D366', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>💬</div>
-                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>WhatsApp</span>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#25D366', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>💬</div>
+                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>WhatsApp</span>
                     </div>
                     <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent('Increíble vídeo en @TakTakApp ' + window.location.href)}`); setShareModal(null); }}>
-                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#1DA1F2', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>🐦</div>
-                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>Twitter</span>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#1DA1F2', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>🐦</div>
+                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>Twitter</span>
                     </div>
                     <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=TakTak`); setShareModal(null); }}>
-                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#0088cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>✈️</div>
-                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>Telegram</span>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#0088cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>✈️</div>
+                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>Telegram</span>
                     </div>
                   </div>
                 </div>
@@ -1496,11 +1783,11 @@
                     ) : (
                       <>
                         {!isRecording ? (
-                          <button className="primary-btn" style={{ background: '#fe2c55' }} onClick={startRecording}>
+                          <button className="primary-btn" onClick={startRecording}>
                             🔴 Empezar Grabación
                           </button>
                         ) : (
-                          <button className="primary-btn" style={{ background: '#25f4ee', color: '#000' }} onClick={stopRecording}>
+                          <button className="primary-btn" style={{ background: 'var(--gradient-btn-cyan)', color: '#000' }} onClick={stopRecording}>
                             ⏹ Detener y Publicar
                           </button>
                         )}
@@ -1559,14 +1846,13 @@
                 </div>
                 <div className="modal-body" style={{ textAlign: 'center' }}>
                   
-                  {/* Avatar with instant change button */}
                   <div className="profile-avatar-wrapper" onClick={() => avatarFileInputRef.current?.click()} title="Toca para cambiar foto">
-                    <img src={currentUser.avatar} className="profile-avatar-img" />
+                    <img src={currentUser.avatar} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} className="profile-avatar-img" />
                     <div className="avatar-camera-badge">📷</div>
                   </div>
 
-                  <h3 style={{ marginTop: '10px', fontSize: '19px', fontWeight: '800' }}>{currentUser.name}</h3>
-                  <div style={{ color: 'var(--color-accent)', fontSize: '13.5px', fontWeight: '600' }}>@{currentUser.username}</div>
+                  <h3 style={{ marginTop: '10px', fontSize: '20px', fontFamily: 'var(--font-heading)', fontWeight: '800' }}>{currentUser.name}</h3>
+                  <div style={{ color: 'var(--taktak-cyan)', fontSize: '14px', fontWeight: '700' }}>@{currentUser.username}</div>
                   <p style={{ color: '#eee', fontSize: '13.5px', marginTop: '6px', padding: '0 10px' }}>{currentUser.bio}</p>
 
                   <div style={{ display: 'flex', justifyContent: 'center', gap: '26px', margin: '14px 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '12px 0' }}>
@@ -1575,7 +1861,6 @@
                     <div><strong>{currentUser.likesCount}</strong><div style={{ fontSize: '11px', color: '#888' }}>Me gusta</div></div>
                   </div>
 
-                  {/* Actions: Edit Profile & Switch Account */}
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '14px' }}>
                     <button
                       className="primary-btn"
@@ -1594,34 +1879,32 @@
                       className="badge-btn"
                       style={{ padding: '8px 14px', fontSize: '13px' }}
                       onClick={() => {
-                        setAuthMode('select');
-                        setAuthModal(true);
+                        setShowCoverScreen(true);
+                        setProfileModal(false);
                       }}
                     >
-                      🔑 Cambiar Cuenta
+                      🚪 Portada / Cambiar Cuenta
                     </button>
                   </div>
 
-                  {/* Profile Video Tabs */}
                   <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.12)', marginBottom: '12px' }}>
                     <button
-                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'videos' ? '#fe2c55' : '#888', fontWeight: 'bold', borderBottom: profileSubTab === 'videos' ? '2px solid #fe2c55' : 'none', cursor: 'pointer' }}
+                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'videos' ? 'var(--taktak-pink)' : '#888', fontFamily: 'var(--font-heading)', fontWeight: '800', borderBottom: profileSubTab === 'videos' ? '2px solid var(--taktak-pink)' : 'none', cursor: 'pointer' }}
                       onClick={() => setProfileSubTab('videos')}
                     >
                       🎬 Mis Vídeos ({myUploadedVideos.length})
                     </button>
                     <button
-                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'liked' ? '#fe2c55' : '#888', fontWeight: 'bold', borderBottom: profileSubTab === 'liked' ? '2px solid #fe2c55' : 'none', cursor: 'pointer' }}
+                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'liked' ? 'var(--taktak-pink)' : '#888', fontFamily: 'var(--font-heading)', fontWeight: '800', borderBottom: profileSubTab === 'liked' ? '2px solid var(--taktak-pink)' : 'none', cursor: 'pointer' }}
                       onClick={() => setProfileSubTab('liked')}
                     >
                       ❤️ Me Gusta ({myLikedVideos.length})
                     </button>
                   </div>
 
-                  {/* Video List */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
                     {(profileSubTab === 'videos' ? myUploadedVideos : myLikedVideos).map(v => (
-                      <div key={v.id} style={{ position: 'relative', height: '110px', background: '#222', borderRadius: '6px', overflow: 'hidden', cursor: 'pointer' }} onClick={() => { setProfileModal(false); setActiveTab('foryou'); }}>
+                      <div key={v.id} style={{ position: 'relative', height: '110px', background: '#161628', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer' }} onClick={() => { setProfileModal(false); setActiveTab('foryou'); }}>
                         <video src={v.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
                         <div style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '10px', color: '#fff', textShadow: '0 1px 3px #000' }}>❤️ {v.likes}</div>
                       </div>
@@ -1647,7 +1930,6 @@
                 </div>
                 <div className="modal-body">
                   
-                  {/* Photo picker */}
                   <div style={{ textAlign: 'center' }}>
                     <input
                       type="file"
@@ -1661,13 +1943,13 @@
                       onClick={() => editAvatarFileInputRef.current?.click()}
                       title="Seleccionar foto desde galería/cámara"
                     >
-                      <img src={editAvatarUrl} className="profile-avatar-img" />
+                      <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} className="profile-avatar-img" />
                       <div className="avatar-camera-badge">📷</div>
                     </div>
                     <button
                       type="button"
                       className="badge-btn"
-                      style={{ margin: '8px auto 0', display: 'inline-flex' }}
+                      style={{ margin: '10px auto 0', display: 'inline-flex' }}
                       onClick={() => editAvatarFileInputRef.current?.click()}
                     >
                       📁 Elegir Foto de Galería / Archivo
@@ -1731,15 +2013,15 @@
             </div>
           )}
 
-          {/* AUTH MODAL (Google, Phone & Custom Account) */}
+          {/* AUTH MODAL (Google & Phone Registration) */}
           {authModal && (
             <div className="drawer-backdrop" onClick={() => setAuthModal(false)}>
               <div className="drawer-content" style={{ minHeight: '65%' }} onClick={e => e.stopPropagation()}>
                 <div className="drawer-header">
                   <div>
-                    {authMode === 'select' && 'Iniciar Sesión en TakTak'}
-                    {authMode === 'google' && 'Conectar Cuenta de Google 🌐'}
-                    {authMode === 'phone' && 'Verificación con Teléfono 📱'}
+                    {authMode === 'select' && 'Crear Cuenta o Iniciar Sesión'}
+                    {authMode === 'google' && 'Crear cuenta con Google 🌐'}
+                    {authMode === 'phone' && 'Iniciar con Teléfono 📱'}
                   </div>
                   <button className="close-btn" onClick={() => setAuthModal(false)}>&times;</button>
                 </div>
@@ -1748,45 +2030,34 @@
                   {authMode === 'select' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <button
-                        className="primary-btn"
-                        style={{ background: '#4285F4' }}
+                        className="auth-provider-btn btn-google"
                         onClick={() => {
                           setGoogleNameInput(currentUser.name !== 'Mi Perfil TakTak' ? currentUser.name : '');
                           setAuthMode('google');
                         }}
                       >
-                        🌐 Continuar con Google
+                        <svg width="20" height="20" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                        Continuar con Google
                       </button>
 
                       <button
-                        className="primary-btn"
-                        style={{ background: '#25D366' }}
+                        className="auth-provider-btn btn-phone"
                         onClick={() => {
                           setPhoneStep(1);
                           setAuthMode('phone');
                         }}
                       >
-                        📱 Continuar con Teléfono
-                      </button>
-
-                      <button
-                        className="badge-btn"
-                        style={{ justifyContent: 'center', padding: '12px', fontSize: '13.5px' }}
-                        onClick={() => {
-                          setEditName('Creador TakTak');
-                          setEditUsername('creador_pro');
-                          setEditBio('Creador de contenido oficial 🔥');
-                          setEditAvatarUrl('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150');
-                          setEditProfileModal(true);
-                          setAuthModal(false);
-                        }}
-                      >
-                        👤 Crear Cuenta Manual / Invitado
+                        <span>📱</span>
+                        Continuar con Teléfono
                       </button>
                     </div>
                   )}
 
-                  {/* Google Login Form */}
                   {authMode === 'google' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tus datos reales de Google para sincronizar tu cuenta:</p>
@@ -1822,7 +2093,7 @@
                       />
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img src={editAvatarUrl} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-cyan)' }} />
                         <button
                           type="button"
                           className="badge-btn"
@@ -1836,7 +2107,7 @@
                         <button className="badge-btn" onClick={() => setAuthMode('select')}>Atrás</button>
                         <button
                           className="primary-btn"
-                          style={{ flex: 1, background: '#4285F4' }}
+                          style={{ flex: 1 }}
                           onClick={() => {
                             const name = googleNameInput.trim() || 'Usuario Google';
                             const username = (googleEmailInput.split('@')[0] || name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
@@ -1849,6 +2120,7 @@
                               provider: 'google'
                             });
                             setAuthModal(false);
+                            dismissCover();
                             showToast(`¡Bienvenido ${name}! Conectado con Google.`);
                           }}
                         >
@@ -1858,7 +2130,6 @@
                     </div>
                   )}
 
-                  {/* Phone Login Form */}
                   {authMode === 'phone' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {phoneStep === 1 && (
@@ -1879,7 +2150,7 @@
                             <button className="badge-btn" onClick={() => setAuthMode('select')}>Atrás</button>
                             <button
                               className="primary-btn"
-                              style={{ flex: 1, background: '#25D366' }}
+                              style={{ flex: 1, background: 'var(--gradient-btn-cyan)', color: '#000' }}
                               onClick={() => {
                                 if (!phoneInput.trim()) {
                                   alert('Por favor ingresa tu número de teléfono');
@@ -1930,7 +2201,7 @@
                           />
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <img src={editAvatarUrl} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} />
+                            <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
                             <button
                               type="button"
                               className="badge-btn"
@@ -1944,7 +2215,7 @@
                             <button className="badge-btn" onClick={() => setPhoneStep(1)}>Atrás</button>
                             <button
                               className="primary-btn"
-                              style={{ flex: 1, background: '#25D366' }}
+                              style={{ flex: 1, background: 'var(--gradient-btn-cyan)', color: '#000' }}
                               onClick={() => {
                                 const name = phoneNameInput.trim() || `Usuario ${phoneInput.slice(-4)}`;
                                 const username = `user_${phoneInput.slice(-4)}`;
@@ -1957,6 +2228,7 @@
                                   provider: 'phone'
                                 });
                                 setAuthModal(false);
+                                dismissCover();
                                 showToast(`¡Sesión iniciada con éxito! Bienvenido ${name}`);
                               }}
                             >
