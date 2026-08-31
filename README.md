@@ -1,98 +1,142 @@
-# TakTak 🎵 — Plataforma de Vídeo Corto (Node + React PWA)
+# TAKTAK — Plataforma de vídeos cortos y juegos
 
-TakTak es una plataforma moderna y completa de vídeo vertical en formato corto (estilo TikTok / Instagram Reels / Douyin). Incluye backend escalable en Express, frontend web PWA optimizado con feed vertical inmersivo, soporte para carga de vídeos directa y mediante URLs prefirmadas S3/MinIO, interacciones sociales y adaptadores para generación de vídeos con IA.
+TAKTAK es una plataforma para subir, ver y compartir vídeos cortos y pequeños juegos. Este proyecto está pensado para ser self‑hosted o desplegado rápidamente usando Firebase (autenticación, storage y Firestore). Inspirado en TikTok, ofrece las funciones básicas de una red social de vídeo.
 
----
+## Descripción
+Página para subir vídeos y juegos. Usuarios pueden registrarse, subir/editar vídeos, ver un feed por deslizamiento, dar like, comentar y compartir enlaces a perfiles y vídeos.
 
-## ⚡ Estructura del Repositorio
+## Características principales
+- Registro e inicio de sesión (Google / teléfono)  
+- Perfil de usuario con avatar y biografía  
+- Feed tipo "swipe" (recomendados y de amigos)  
+- Reproducción avanzada de vídeo con ExoPlayer  
+- Grabar vídeo desde la cámara o subir desde galería  
+- Likes, comentarios y búsqueda por hashtags  
+- Compartir enlaces públicos a perfiles/vídeos  
+- Temas (Claro/Oscuro) y notificaciones básicas  
+- Panel administrador (opcional) y reglas básicas de seguridad
 
-```text
-taktak/
-├── docker-compose.yml        # Infraestructura local: Postgres, Redis, MinIO, FFmpeg
-├── docs/
-│   └── OSS_ADAPTERS.md       # Guía de integración de IA & Licencias OSS (MoneyPrinterTurbo, KrillinAI)
-├── taktak-api/                # Backend API (Node.js + Express)
-│   ├── .env.example
-│   ├── index.js              # Endpoints auth, presigned S3, feed, likes, comentarios, AI generator
-│   ├── package.json
-│   └── Dockerfile
-└── taktak-web/                # Frontend React PWA (Vite + React)
-    ├── package.json
-    ├── vite.config.js
-    ├── public/               # Manifest PWA y Service Worker
-    └── src/
-        ├── components/       # Feed vertical, VideoCard, Upload, AI Studio, Comments, Likes
-        ├── context/          # Contexto de autenticación JWT
-        └── index.css         # Diseño ultra-oscuro estilo TikTok con Glassmorphism y Neón
+## Requisitos previos
+- Android Studio (SDK 28 o superior)  
+- Dispositivo Android (Android 9 / Pie o superior) o emulador con 4GB RAM recomendado  
+- Cuenta de Firebase (Firestore + Storage + Auth)  
+- Gradle compatible (recomendado: 7.x / Android Gradle Plugin acorde)
+
+## Instalación rápida (Android)
+1. Clona el repositorio:
+   git clone https://github.com/taktakmessenger/taktakmessenger.github.io
+2. Crea un proyecto en Firebase y añade Android app; descarga `google-services.json`.
+3. Coloca `google-services.json` en la carpeta `app/`.
+4. Abre el proyecto en Android Studio y sincroniza Gradle.
+5. Construye y ejecuta: `Run` → selecciona dispositivo/emulador.
+
+## Dependencias recomendadas (añadir a app/build.gradle — sección dependencies)
+```gradle
+implementation platform('com.google.firebase:firebase-bom:latest-version')
+implementation 'com.google.firebase:firebase-auth'
+implementation 'com.google.firebase:firebase-firestore'
+implementation 'com.google.firebase:firebase-storage'
+
+implementation 'com.google.android.exoplayer:exoplayer:2.20.2'
+implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+
+implementation 'com.google.dagger:hilt-android:2.46.1' // opcional pero recomendado
+kapt 'com.google.dagger:hilt-compiler:2.46.1'
+
+implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1'
+implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+implementation 'io.coil-kt:coil:2.4.0'
+implementation 'androidx.room:room-runtime:2.6.1'
+kapt 'androidx.room:room-compiler:2.6.1'
 ```
 
----
+## Permisos Android (AndroidManifest.xml)
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<!-- Evitar READ/WRITE_EXTERNAL_STORAGE en Android 10+; usar Scoped Storage/SAF -->
+```
+Usa permisos en tiempo de ejecución (ActivityCompat.requestPermissions / permisos por flujo).
 
-## 🚀 Inicio Rápido (Quickstart)
+## Ejemplo básico: subida a Firebase Storage (Java)
+```java
+StorageReference storageRef = FirebaseStorage.getInstance().getReference();
+Uri file = videoUri; // Uri del archivo de vídeo
+StorageReference videoRef = storageRef.child("videos/" + userId + "/" + System.currentTimeMillis() + ".mp4");
 
-### Opción 1: Con Docker Compose (Infraestructura Completa)
+UploadTask uploadTask = videoRef.putFile(file);
+uploadTask.addOnProgressListener(snapshot -> {
+    double progress = (100.0 * snapshot.getBytesTransferred()) / snapshot.getTotalByteCount();
+    // actualizar UI
+}).addOnSuccessListener(taskSnapshot -> {
+    videoRef.getDownloadUrl().addOnSuccessListener(uri -> {
+        String downloadUrl = uri.toString();
+        // guardar downloadUrl en Firestore como nuevo post
+    });
+}).addOnFailureListener(e -> {
+    // manejar error
+});
+```
 
-1. **Levantar los servicios base:**
-   ```bash
-   docker-compose up -d
-   ```
-   *Servicios inicializados:*
-   - **MinIO S3**: `http://localhost:9000` (Consola Web: `http://localhost:9001`, user: `minioadmin` / pass: `minioadmin`)
-   - **PostgreSQL**: `localhost:5432` (db: `taktak`, user: `taktak`, pass: `taktakpass`)
-   - **Redis**: `localhost:6379`
-   - **FFmpeg**: Contenedor listo para transcodificación
+## Reglas básicas sugeridas para Firebase
 
-2. **Iniciar el Backend:**
-   ```bash
-   cd taktak-api
-   npm install
-   npm start
-   ```
-   *API disponible en `http://localhost:4000`.*
+Storage.rules (ejemplo):
+```text
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /videos/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && request.resource.contentType.matches("video/.*")
+        && request.resource.size < 50 * 1024 * 1024;
+    }
+  }
+}
+```
 
-3. **Iniciar el Frontend:**
-   ```bash
-   cd taktak-web
-   npm install
-   npm run dev
-   ```
-   *App web disponible en `http://localhost:3000`.*
+Firestore.rules (ejemplo):
+```text
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+                    request.resource.data.keys().hasAll(['videoUrl','ownerId','createdAt']);
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+  }
+}
+```
 
----
+## Integración ExoPlayer (Kotlin)
+```kotlin
+val player = ExoPlayer.Builder(context).build()
+val mediaItem = MediaItem.fromUri(videoUri)
+player.setMediaItem(mediaItem)
+player.prepare()
+player.playWhenReady = true
+playerView.player = player
 
-### Opción 2: Modo Ligero (Sin Docker)
-TakTak cuenta con **fallback automático**: si no tienes MinIO o Docker corriendo, el backend gestiona las subidas directamente de forma local (`/uploads`) y carga vídeos de muestra en el feed para que puedas probar todas las funcionalidades al instante.
+override fun onStop() {
+  super.onStop()
+  player.release()
+}
+```
 
----
+## Buenas prácticas y mejoras recomendadas
+1. Reglas estrictas de Firebase (validación de campos y tamaños).  
+2. Subida resiliente y transcodificación (Cloud Functions + FFmpeg) para generar thumbnails y uniformizar codecs.  
+3. Background upload / WorkManager para reintentos con conectividad intermitente.  
+4. Introducir DI (Hilt) y arquitectura limpia (Repository, ViewModel, UseCases).  
+5. Tests unitarios y de UI (Espresso) para flujos críticos.  
+6. Monitoreo y límites (Cloud Functions y límites de Storage) para evitar abuso.
 
-## 📱 Características Principales
+## Contribuir
+Si utilizas este repo como base, incluye la LICENSE (MIT) y conserva el aviso de copyright si así lo decides. Pull requests y mejoras son bienvenidas.
 
-- 🎬 **Feed Vertical Inmersivo**: Snap-scrolling vertical, autoplay/pause inteligente mediante `IntersectionObserver`, barra de progreso y botón rápido de sonido.
-- ❤️ **Interacciones Sociales**: Doble toque con animación de corazones flotantes, contador reactivo de likes, drawer deslizable de comentarios y modal de compartir.
-- 📤 **Carga de Vídeos**: Selector con previsualización en tiempo real, etiquetas (#hashtags), asignación de audio y soporte de subida prefirmada a S3/MinIO.
-- ✨ **AI Creation Studio**: Generador de shorts automáticos a partir de un guión o prompt mediante el adaptador `MoneyPrinterTurbo`.
-- 📲 **PWA & Offline Ready**: Service Worker integrado, instalación en pantalla de inicio y detección de estado de conexión.
-- 🎨 **Diseño de Vanguardia**: Dark mode profundo (`#000000` / `#121212`), acentos neón (#FE2C55 / #25F4EE), tipografía moderna y micro-animaciones a 60 FPS.
-
----
-
-## 🔌 Endpoints de la API
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Estado del servicio |
-| `POST` | `/api/auth/login` | Inicio de sesión / token JWT |
-| `POST` | `/api/auth/demo` | Acceso rápido con usuario de demostración |
-| `GET` | `/api/feed` | Feed paginado con metadatos de vídeos, autor y tags |
-| `POST` | `/api/presign` | Generación de URL prefirmada para subida a S3/MinIO |
-| `POST` | `/api/upload-complete` | Notificación de subida finalizada a S3 |
-| `POST` | `/api/upload-direct` | Subida multipart directa (fallback local) |
-| `POST` | `/api/interactions/like` | Toggle de me gusta |
-| `POST` | `/api/interactions/comment` | Publicar nuevo comentario |
-| `POST` | `/api/interactions/share` | Registrar contador de compartidos |
-| `POST` | `/api/ai/generate` | Generar vídeo corto con IA (MoneyPrinterTurbo) |
-
----
-
-## 📄 Licencia
-Este prototipo está disponible bajo la licencia MIT. Consulta [docs/OSS_ADAPTERS.md](docs/OSS_ADAPTERS.md) para más detalles sobre licencias de librerías y modelos de terceros.
+## Licencia
+Este proyecto usa MIT License. Ver `LICENSE` para detalles.
