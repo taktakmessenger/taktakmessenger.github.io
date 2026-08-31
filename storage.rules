@@ -1,0 +1,28 @@
+// Reglas de seguridad para Firebase Storage - TakTak Plataforma de vídeos y juegos
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Subida de vídeos cortos y clips
+    match /videos/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.resource.contentType.matches('video/.*')
+                   && request.resource.size < 50 * 1024 * 1024; // Límite 50MB
+    }
+
+    // Subida de avatares de usuario y carátulas
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 5 * 1024 * 1024; // Límite 5MB
+    }
+
+    // Archivos de minijuegos / assets
+    match /games/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

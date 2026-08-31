@@ -3,14 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>TakTak 🎵 — Vídeo Corto (Demo)</title>
+  <title>TakTak 🎵 — Vídeos Cortos y Juegos (Preview)</title>
   
+  <!-- SEO & OpenGraph Meta Tags -->
+  <meta name="description" content="TakTak: Plataforma interactiva para subir y ver vídeos cortos, jugar minijuegos, crear con IA y conectar con amigos." />
+  <meta name="keywords" content="taktak, video corto, juegos, tiktok clone, reels, pwa, react, web video, minijuegos" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="manifest" href="manifest.json" />
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet" />
 
-  <!-- React & Babel CDNs for instant Zero-Build Preview in Chrome -->
+  <!-- React & Babel CDNs -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -19,9 +25,11 @@
     :root {
       --bg-main: #000000;
       --bg-surface: #121212;
+      --bg-surface-elevated: #1e1e1e;
       --color-primary: #fe2c55;
       --color-primary-hover: #e02449;
       --color-accent: #25f4ee;
+      --color-accent-gold: #ffd700;
       --color-text-main: #ffffff;
       --color-text-muted: #a0a0a0;
       --font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -30,8 +38,9 @@
       --radius-md: 14px;
       --radius-lg: 22px;
       --radius-full: 9999px;
-      --shadow-glow: 0 0 25px rgba(254, 44, 85, 0.35);
-      --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.6);
+      --shadow-glow: 0 0 25px rgba(254, 44, 85, 0.4);
+      --shadow-accent: 0 0 25px rgba(37, 244, 238, 0.35);
+      --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.7);
       --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -58,10 +67,9 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background: radial-gradient(circle at center top, #181829 0%, #000000 75%);
+      background: radial-gradient(circle at center top, #141829 0%, #000000 80%);
     }
 
-    /* Container responsive */
     .app-viewport {
       width: 100%;
       height: 100%;
@@ -78,12 +86,11 @@
       .app-viewport {
         height: 92vh;
         border-radius: var(--radius-lg);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(254, 44, 85, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(254, 44, 85, 0.25);
       }
     }
 
-    /* Feed Container */
     .feed-container {
       flex: 1;
       height: 100%;
@@ -99,7 +106,6 @@
       display: none;
     }
 
-    /* Video Card Slide */
     .video-slide {
       height: 100%;
       width: 100%;
@@ -126,39 +132,52 @@
       pointer-events: none;
       background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.45) 0%,
+        rgba(0, 0, 0, 0.5) 0%,
         transparent 20%,
-        transparent 60%,
-        rgba(0, 0, 0, 0.85) 95%
+        transparent 55%,
+        rgba(0, 0, 0, 0.88) 95%
       );
       z-index: 2;
     }
 
-    /* Top Header Bar */
     .top-header-bar {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
-      z-index: 10;
+      z-index: 15;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 18px;
-      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, transparent 100%);
+      padding: 12px 16px;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+    }
+
+    .brand-logo {
+      font-family: var(--font-heading);
+      font-weight: 900;
+      font-size: 21px;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, var(--color-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
     }
 
     .header-tabs {
       display: flex;
-      gap: 16px;
+      gap: 14px;
       align-items: center;
     }
 
     .header-tab-btn {
       background: none;
       border: none;
-      color: var(--color-text-muted);
-      font-size: 15px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14.5px;
       font-weight: 700;
       cursor: pointer;
       position: relative;
@@ -168,40 +187,61 @@
 
     .header-tab-btn.active {
       color: #ffffff;
-      font-size: 16px;
+      font-size: 15.5px;
     }
 
     .header-tab-btn.active::after {
       content: '';
       position: absolute;
-      bottom: 0;
-      left: 15%;
-      right: 15%;
+      bottom: -2px;
+      left: 10%;
+      right: 10%;
       height: 3px;
       background-color: var(--color-primary);
       border-radius: var(--radius-full);
+      box-shadow: 0 0 8px var(--color-primary);
     }
 
-    .brand-logo {
-      font-family: var(--font-heading);
-      font-weight: 800;
-      font-size: 20px;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #ffffff 40%, var(--color-accent) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .header-tab-btn.game-tab.active::after {
+      background-color: var(--color-accent-gold);
+      box-shadow: 0 0 8px var(--color-accent-gold);
     }
 
-    /* Right Action Sidebar */
+    .header-right-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-btn {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      border-radius: 18px;
+      padding: 5px 11px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: transform var(--transition-fast);
+    }
+
+    .badge-btn:hover {
+      transform: scale(1.05);
+    }
+
     .action-sidebar {
       position: absolute;
       right: 12px;
-      bottom: 86px;
+      bottom: 82px;
       z-index: 10;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
+      gap: 15px;
     }
 
     .action-btn-item {
@@ -221,27 +261,29 @@
     }
 
     .action-icon-circle {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: rgba(30, 30, 30, 0.65);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(25, 25, 25, 0.65);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 19px;
+      font-size: 20px;
       transition: var(--transition-fast);
     }
 
     .action-icon-circle.liked {
       color: var(--color-primary);
+      border-color: rgba(254, 44, 85, 0.5);
+      background: rgba(254, 44, 85, 0.2);
       animation: heartPulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
     .action-label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 11.5px;
+      font-weight: 700;
       text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
     }
 
@@ -274,6 +316,7 @@
       justify-content: center;
       font-size: 13px;
       font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
     }
 
     .vinyl-sound-disc {
@@ -281,12 +324,13 @@
       height: 42px;
       border-radius: 50%;
       background: #111;
-      border: 4px solid #222;
+      border: 3px solid #282828;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       animation: spinVinyl 5s linear infinite;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
     }
 
     .vinyl-sound-disc img {
@@ -301,57 +345,63 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Video Metadata */
     .video-meta-info {
       position: absolute;
       left: 14px;
-      right: 70px;
-      bottom: 76px;
+      right: 74px;
+      bottom: 74px;
       z-index: 9;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9);
+      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95);
     }
 
     .creator-username {
-      font-size: 15px;
+      font-size: 15.5px;
       font-weight: 700;
       color: #ffffff;
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
     }
 
     .verified-check {
       background: var(--color-accent);
       color: #000;
       border-radius: 50%;
-      width: 13px;
-      height: 13px;
+      width: 14px;
+      height: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 8px;
+      font-size: 9px;
       font-weight: 900;
     }
 
     .video-description {
       font-size: 13.5px;
-      line-height: 1.35;
-      color: #f0f0f0;
+      line-height: 1.4;
+      color: #f5f5f5;
     }
 
     .video-tags-container {
       display: flex;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 6px;
     }
 
     .tag-badge {
       color: var(--color-accent);
-      font-weight: 600;
-      font-size: 12.5px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: opacity var(--transition-fast);
+    }
+
+    .tag-badge:hover {
+      opacity: 0.8;
+      text-decoration: underline;
     }
 
     .sound-marquee-container {
@@ -360,42 +410,40 @@
       gap: 6px;
       font-size: 12px;
       color: #ffffff;
-      opacity: 0.9;
+      opacity: 0.95;
     }
 
-    /* Floating Hearts */
     .floating-heart {
       position: absolute;
       pointer-events: none;
-      font-size: 70px;
+      font-size: 75px;
       transform: translate(-50%, -50%) scale(0);
-      animation: burstHeart 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-      z-index: 20;
-      filter: drop-shadow(0 0 15px rgba(254, 44, 85, 0.8));
+      animation: burstHeart 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      z-index: 25;
+      filter: drop-shadow(0 0 18px rgba(254, 44, 85, 0.9));
     }
 
     @keyframes burstHeart {
-      0% { transform: translate(-50%, -50%) scale(0) rotate(-15deg); opacity: 0.9; }
-      50% { transform: translate(-50%, -50%) scale(1.3) rotate(5deg); opacity: 1; }
-      100% { transform: translate(-50%, -100px) scale(1) rotate(-5deg); opacity: 0; }
+      0% { transform: translate(-50%, -50%) scale(0) rotate(-15deg); opacity: 1; }
+      40% { transform: translate(-50%, -50%) scale(1.35) rotate(8deg); opacity: 1; }
+      100% { transform: translate(-50%, -120px) scale(0.9) rotate(-8deg); opacity: 0; }
     }
 
     @keyframes heartPulse {
       0% { transform: scale(1); }
-      50% { transform: scale(1.4); }
+      50% { transform: scale(1.35); }
       100% { transform: scale(1); }
     }
 
-    /* Bottom Navigation */
     .bottom-nav-bar {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
       height: 60px;
-      background: rgba(0, 0, 0, 0.92);
+      background: rgba(8, 8, 8, 0.95);
       backdrop-filter: blur(20px);
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid rgba(255, 255, 255, 0.09);
       display: flex;
       align-items: center;
       justify-content: space-around;
@@ -414,7 +462,7 @@
       font-weight: 600;
       cursor: pointer;
       transition: var(--transition-fast);
-      min-width: 50px;
+      min-width: 48px;
     }
 
     .nav-item-btn.active {
@@ -424,25 +472,25 @@
     .nav-create-btn {
       background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
       border: none;
-      width: 44px;
-      height: 30px;
-      border-radius: 9px;
+      width: 46px;
+      height: 32px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #000;
       font-weight: 900;
-      font-size: 19px;
+      font-size: 20px;
       cursor: pointer;
-      box-shadow: 0 2px 10px rgba(254, 44, 85, 0.4);
+      box-shadow: 0 2px 12px rgba(254, 44, 85, 0.45);
+      transition: transform var(--transition-fast);
     }
 
-    /* Drawers */
     .drawer-backdrop {
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(10px);
       z-index: 50;
       display: flex;
       flex-direction: column;
@@ -452,15 +500,15 @@
 
     .drawer-content {
       background: #141414;
-      border-top-left-radius: 20px;
-      border-top-right-radius: 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.12);
-      max-height: 80%;
-      min-height: 45%;
+      border-top-left-radius: 22px;
+      border-top-right-radius: 22px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      max-height: 85%;
+      min-height: 50%;
       display: flex;
       flex-direction: column;
       animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      padding-bottom: 16px;
+      padding-bottom: 18px;
     }
 
     .drawer-header {
@@ -469,7 +517,7 @@
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 15px;
+      font-size: 15.5px;
       font-weight: 700;
     }
 
@@ -477,8 +525,85 @@
       background: none;
       border: none;
       color: var(--color-text-muted);
-      font-size: 22px;
+      font-size: 24px;
       cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #ccc;
+    }
+
+    .form-input, .form-textarea, .form-select {
+      background: #202020;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .primary-btn {
+      background: var(--color-primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .ai-gradient-btn {
+      background: linear-gradient(135deg, #fe2c55 0%, #a855f7 50%, #25f4ee 100%);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      font-size: 14.5px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .gold-btn {
+      background: linear-gradient(135deg, #ffd700 0%, #ff8800 100%);
+      color: #000;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      font-size: 14.5px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     .comments-list {
@@ -497,10 +622,14 @@
     }
 
     .comment-avatar {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
-      background: #333;
+      background: #2a2a2a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
     }
 
     .comment-user {
@@ -512,11 +641,11 @@
     .comment-text {
       font-size: 13.5px;
       color: #fff;
-      margin-top: 1px;
+      margin-top: 2px;
     }
 
     .comment-input-area {
-      padding: 10px 18px;
+      padding: 10px 16px;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       gap: 8px;
@@ -524,10 +653,10 @@
 
     .comment-input {
       flex: 1;
-      background: #242424;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #222;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: var(--radius-full);
-      padding: 8px 14px;
+      padding: 9px 16px;
       color: #fff;
       font-size: 13.5px;
       outline: none;
@@ -537,69 +666,70 @@
       background: var(--color-primary);
       border: none;
       border-radius: 50%;
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       color: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
+      font-weight: bold;
       cursor: pointer;
     }
 
-    .modal-body {
-      padding: 16px 18px;
+    .game-viewport-card {
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, #1b1035 0%, #080511 100%);
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      overflow-y: auto;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
     }
 
-    .form-group {
+    .game-canvas-container {
+      width: 100%;
+      max-width: 360px;
+      height: 480px;
+      background: #0d0d1a;
+      border: 2px solid var(--color-accent-gold);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.25);
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      align-items: center;
+      justify-content: center;
     }
 
-    .form-label {
-      font-size: 12.5px;
+    .toast-popup {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: var(--radius-full);
+      font-size: 13px;
       font-weight: 600;
-      color: #ccc;
-    }
-
-    .form-input, .form-textarea, .form-select {
-      background: #222;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: var(--radius-sm);
-      padding: 9px 12px;
-      color: #fff;
-      font-size: 13.5px;
-      outline: none;
-    }
-
-    .primary-btn {
-      background: var(--color-primary);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-md);
-      padding: 11px 18px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
+      z-index: 100;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
+      gap: 8px;
+      animation: fadeIn 0.2s ease;
     }
 
-    .ai-gradient-btn {
-      background: linear-gradient(135deg, #fe2c55 0%, #a855f7 50%, #25f4ee 100%);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-md);
-      padding: 12px 18px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
+    .camera-preview-video {
+      width: 100%;
+      height: 280px;
+      background: #000;
+      border-radius: 14px;
+      object-fit: cover;
     }
 
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -624,6 +754,7 @@
         likes: 1420,
         liked: true,
         shares: 88,
+        category: 'foryou',
         comments: [
           { id: 1, username: 'carlos_dev', text: '¡Increíble toma y fluidez! 🛹' },
           { id: 2, username: 'ana_dance', text: '¡Ese truco fue genial! 🔥' }
@@ -640,6 +771,7 @@
         likes: 3840,
         liked: false,
         shares: 312,
+        category: 'following',
         comments: [
           { id: 3, username: 'elena_creadora', text: '¡Qué buena interfaz oscura!' }
         ]
@@ -655,41 +787,186 @@
         likes: 8910,
         liked: false,
         shares: 1240,
+        category: 'foryou',
         comments: [
           { id: 4, username: 'carlos_dev', text: '¡La síntesis de voz y el corte son instantáneos!' }
         ]
       }
     ];
 
+    function BeatRunnerGame({ onFinishScore }) {
+      const [score, setScore] = useState(0);
+      const [gameOver, setGameOver] = useState(false);
+      const [playerPos, setPlayerPos] = useState(50);
+      const [obstacle, setObstacle] = useState({ x: 50, y: 0 });
+      const [isPlaying, setIsPlaying] = useState(false);
+
+      useEffect(() => {
+        if (!isPlaying || gameOver) return;
+        const interval = setInterval(() => {
+          setObstacle(obs => {
+            if (obs.y >= 90) {
+              if (Math.abs(obs.x - playerPos) < 25) {
+                setGameOver(true);
+                return obs;
+              }
+              setScore(s => s + 10);
+              return { x: Math.floor(Math.random() * 80) + 10, y: 0 };
+            }
+            return { ...obs, y: obs.y + 4 };
+          });
+        }, 50);
+        return () => clearInterval(interval);
+      }, [isPlaying, gameOver, playerPos]);
+
+      const startGame = () => {
+        setScore(0);
+        setGameOver(false);
+        setObstacle({ x: 50, y: 0 });
+        setIsPlaying(true);
+      };
+
+      return (
+        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, fontSize: '18px', fontWeight: '900', color: '#ffd700' }}>
+            🏆 Puntos: {score}
+          </div>
+
+          {!isPlaying && !gameOver && (
+            <div style={{ textAlign: 'center', padding: 20 }}>
+              <div style={{ fontSize: '42px', marginBottom: 10 }}>🎮</div>
+              <h2 style={{ color: '#fff', fontSize: '20px', marginBottom: 8 }}>TakTak Beat Runner</h2>
+              <p style={{ color: '#aaa', fontSize: '13px', marginBottom: 20 }}>Desliza o toca izquierda/derecha para esquivar las notas musicales neón.</p>
+              <button className="gold-btn" onClick={startGame}>⚡ Iniciar Juego</button>
+            </div>
+          )}
+
+          {isPlaying && !gameOver && (
+            <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+              <div style={{
+                position: 'absolute',
+                top: `${obstacle.y}%`,
+                left: `${obstacle.x}%`,
+                transform: 'translate(-50%, -50%)',
+                fontSize: '28px'
+              }}>
+                🎵
+              </div>
+
+              <div style={{
+                position: 'absolute',
+                bottom: '15%',
+                left: `${playerPos}%`,
+                transform: 'translate(-50%, 0)',
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #fe2c55, #25f4ee)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px',
+                boxShadow: '0 0 15px #fe2c55',
+                transition: 'left 0.1s ease'
+              }}>
+                🚀
+              </div>
+
+              <div style={{ position: 'absolute', bottom: 10, width: '100%', display: 'flex', justifyContent: 'space-between', padding: '0 20px' }}>
+                <button
+                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '14px 28px', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' }}
+                  onClick={() => setPlayerPos(p => Math.max(15, p - 20))}
+                >
+                  ◀ Izq
+                </button>
+                <button
+                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '14px 28px', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' }}
+                  onClick={() => setPlayerPos(p => Math.min(85, p + 20))}
+                >
+                  Der ▶
+                </button>
+              </div>
+            </div>
+          )}
+
+          {gameOver && (
+            <div style={{ textAlign: 'center', padding: 20 }}>
+              <div style={{ fontSize: '42px', marginBottom: 8 }}>💥</div>
+              <h2 style={{ color: '#fe2c55', fontSize: '22px', marginBottom: 6 }}>¡Juego Terminado!</h2>
+              <p style={{ color: '#fff', fontSize: '16px', marginBottom: 18 }}>Puntuación Final: <strong>{score}</strong></p>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button className="gold-btn" onClick={startGame}>Reintentar 🔄</button>
+                <button className="primary-btn" onClick={() => onFinishScore && onFinishScore(score)}>Compartir Récord 📢</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     function App() {
       const [videos, setVideos] = useState(INITIAL_VIDEOS);
       const [activeIndex, setActiveIndex] = useState(0);
       const [isMuted, setIsMuted] = useState(true);
+      const [activeTab, setActiveTab] = useState('foryou');
+      const [activeNav, setActiveNav] = useState('home');
+      const [searchQuery, setSearchQuery] = useState('');
+      
       const [commentsModal, setCommentsModal] = useState(null);
       const [shareModal, setShareModal] = useState(null);
       const [uploadModal, setUploadModal] = useState(false);
+      const [cameraModal, setCameraModal] = useState(false);
       const [aiStudioModal, setAiStudioModal] = useState(false);
       const [profileModal, setProfileModal] = useState(false);
-      const [activeTab, setActiveTab] = useState('foryou');
-      const [activeNav, setActiveNav] = useState('home');
+      const [authModal, setAuthModal] = useState(false);
+      const [toastMsg, setToastMsg] = useState('');
+
+      const [cameraStream, setCameraStream] = useState(null);
+      const [isRecording, setIsRecording] = useState(false);
+      const videoCamRef = useRef(null);
+      const mediaRecorderRef = useRef(null);
+
+      const [currentUser, setCurrentUser] = useState({
+        username: 'creador_taktak',
+        name: 'Tú (TakTak Pro)',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        bio: 'Creando contenido y jugando en TakTak 🚀✨',
+        followers: 1240,
+        following: 180,
+        likesCount: 5400
+      });
+
       const [newComment, setNewComment] = useState('');
       const [hearts, setHearts] = useState([]);
       const containerRef = useRef(null);
       const lastTapRef = useRef(0);
 
-      // Snap scroll observer
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 2500);
+      };
+
+      const displayedVideos = videos.filter(v => {
+        if (searchQuery) {
+          return v.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                 v.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+        }
+        if (activeTab === 'following') return v.category === 'following';
+        return true;
+      });
+
       useEffect(() => {
         const c = containerRef.current;
         if (!c) return;
         const onScroll = () => {
           const idx = Math.round(c.scrollTop / c.clientHeight);
-          if (idx !== activeIndex && idx >= 0 && idx < videos.length) {
+          if (idx !== activeIndex && idx >= 0 && idx < displayedVideos.length) {
             setActiveIndex(idx);
           }
         };
         c.addEventListener('scroll', onScroll, { passive: true });
         return () => c.removeEventListener('scroll', onScroll);
-      }, [activeIndex, videos.length]);
+      }, [activeIndex, displayedVideos.length]);
 
       const handleLike = (id) => {
         setVideos(prev => prev.map(v => {
@@ -711,7 +988,7 @@
           const rect = e.currentTarget.getBoundingClientRect();
           const heart = { id: Date.now(), x: e.clientX - rect.left, y: e.clientY - rect.top };
           setHearts(h => [...h, heart]);
-          setTimeout(() => setHearts(h => h.filter(x => x.id !== heart.id)), 800);
+          setTimeout(() => setHearts(h => h.filter(x => x.id !== heart.id)), 850);
           handleLike(id);
           lastTapRef.current = 0;
         } else {
@@ -722,149 +999,214 @@
       const handleAddComment = (e) => {
         e.preventDefault();
         if (!newComment.trim() || !commentsModal) return;
-        const c = { id: Date.now(), username: 'tu_usuario', text: newComment.trim() };
+        const c = { id: Date.now(), username: currentUser.username, text: newComment.trim() };
         setVideos(prev => prev.map(v => v.id === commentsModal.id ? { ...v, comments: [c, ...v.comments] } : v));
         setCommentsModal(prev => ({ ...prev, comments: [c, ...prev.comments] }));
         setNewComment('');
+        showToast('¡Comentario publicado!');
       };
 
-      const handleUpload = (title, tags) => {
+      const handleUpload = (title, tags, customVideoUrl) => {
         const sampleVideos = [
-          'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-smartphone-with-a-green-screen-40742-large.mp4',
-          'https://assets.mixkit.co/videos/preview/mixkit-neon-lights-in-the-streets-of-a-night-city-43180-large.mp4'
+          'https://assets.mixkit.co/videos/preview/mixkit-young-woman-skater-performing-a-trick-41129-large.mp4',
+          'https://assets.mixkit.co/videos/preview/mixkit-man-working-on-his-laptop-308-large.mp4',
+          'https://assets.mixkit.co/videos/preview/mixkit-futuristic-robot-with-artificial-intelligence-50796-large.mp4'
         ];
         const newV = {
           id: Date.now(),
-          user: { username: 'tu_usuario', name: 'Tú (Demo)', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' },
-          title: title || 'Nuevo clip en TakTak 🚀',
-          tags: tags ? tags.split(' ') : ['#taktak', '#short'],
-          soundTitle: 'Tú — Sonido original',
-          soundAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-          videoUrl: sampleVideos[Math.floor(Math.random() * sampleVideos.length)],
+          user: currentUser,
+          title: title || 'Nuevo clip publicado en TakTak 🚀',
+          tags: tags ? (Array.isArray(tags) ? tags : tags.split(' ')) : ['#taktak', '#viral'],
+          soundTitle: `${currentUser.name} — Sonido original`,
+          soundAvatar: currentUser.avatar,
+          videoUrl: customVideoUrl || sampleVideos[Math.floor(Math.random() * sampleVideos.length)],
           likes: 1,
           liked: true,
           shares: 0,
+          category: 'foryou',
           comments: []
         };
         setVideos([newV, ...videos]);
         setUploadModal(false);
+        setCameraModal(false);
+        setActiveTab('foryou');
         setActiveIndex(0);
+        showToast('¡Vídeo publicado con éxito! 🎉');
+      };
+
+      const startCamera = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          setCameraStream(stream);
+          if (videoCamRef.current) {
+            videoCamRef.current.srcObject = stream;
+          }
+        } catch (err) {
+          console.warn(err);
+          showToast('Permiso de cámara simulado');
+        }
+      };
+
+      const stopCamera = () => {
+        if (cameraStream) {
+          cameraStream.getTracks().forEach(t => t.stop());
+          setCameraStream(null);
+        }
+      };
+
+      const startRecording = () => {
+        setIsRecording(true);
+        if (cameraStream) {
+          const chunks = [];
+          const recorder = new MediaRecorder(cameraStream);
+          recorder.ondataavailable = e => chunks.push(e.data);
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/mp4' });
+          };
+          recorder.start();
+          mediaRecorderRef.current = recorder;
+        }
+      };
+
+      const stopRecording = () => {
+        setIsRecording(false);
+        if (mediaRecorderRef.current) {
+          mediaRecorderRef.current.stop();
+        }
       };
 
       return (
         <div className="app-viewport">
-          {/* Header */}
+          {toastMsg && <div className="toast-popup">✨ {toastMsg}</div>}
+
           <header className="top-header-bar">
-            <div className="brand-logo">TakTak 🎵</div>
-            <div className="header-tabs">
-              <button className={`header-tab-btn ${activeTab === 'following' ? 'active' : ''}`} onClick={() => setActiveTab('following')}>Siguiendo</button>
-              <button className={`header-tab-btn ${activeTab === 'foryou' ? 'active' : ''}`} onClick={() => setActiveTab('foryou')}>Para ti</button>
+            <div className="brand-logo" onClick={() => { setActiveTab('foryou'); setSearchQuery(''); }}>
+              TakTak <span>🎵</span>
             </div>
-            <button
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#25f4ee', borderRadius: '18px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
-              onClick={() => setAiStudioModal(true)}
-            >
-              ✨ AI Studio
-            </button>
+            
+            <div className="header-tabs">
+              <button className={`header-tab-btn ${activeTab === 'following' ? 'active' : ''}`} onClick={() => setActiveTab('following')}>
+                Siguiendo
+              </button>
+              <button className={`header-tab-btn ${activeTab === 'foryou' ? 'active' : ''}`} onClick={() => setActiveTab('foryou')}>
+                Para ti
+              </button>
+              <button className={`header-tab-btn game-tab ${activeTab === 'games' ? 'active' : ''}`} onClick={() => setActiveTab('games')}>
+                🎮 Juegos
+              </button>
+            </div>
+
+            <div className="header-right-actions">
+              <button className="badge-btn" onClick={() => setCameraModal(true)}>
+                🎥 Grabar
+              </button>
+            </div>
           </header>
 
-          {/* Feed */}
-          <div ref={containerRef} className="feed-container">
-            {videos.map((video, idx) => (
-              <div key={video.id} className="video-slide" onClick={(e) => handleDoubleTap(e, video.id)}>
-                <video
-                  src={video.videoUrl}
-                  className="video-player-element"
-                  autoPlay={idx === activeIndex}
-                  loop
-                  muted={isMuted}
-                  playsInline
-                  ref={el => {
-                    if (el) {
-                      if (idx === activeIndex) { el.play().catch(()=>{}); }
-                      else { el.pause(); }
-                    }
-                  }}
-                />
-                <div className="video-overlay-gradient"></div>
+          {activeTab === 'games' ? (
+            <div className="game-viewport-card">
+              <div className="game-canvas-container">
+                <BeatRunnerGame onFinishScore={(pts) => {
+                  handleUpload(`🎮 ¡Nuevo Récord en TakTak Beat Runner: ${pts} pts! 🏆`, '#gaming #taktakrunner #record');
+                }} />
+              </div>
+            </div>
+          ) : (
+            <div ref={containerRef} className="feed-container">
+              {displayedVideos.map((video, idx) => (
+                <div key={video.id} className="video-slide" onClick={(e) => handleDoubleTap(e, video.id)}>
+                  <video
+                    src={video.videoUrl}
+                    className="video-player-element"
+                    autoPlay={idx === activeIndex}
+                    loop
+                    muted={isMuted}
+                    playsInline
+                    ref={el => {
+                      if (el) {
+                        if (idx === activeIndex) { el.play().catch(()=>{}); }
+                        else { el.pause(); }
+                      }
+                    }}
+                  />
+                  <div className="video-overlay-gradient"></div>
 
-                {/* Floating Hearts */}
-                {hearts.map(h => (
-                  <div key={h.id} className="floating-heart" style={{ left: h.x, top: h.y }}>❤️</div>
-                ))}
+                  {hearts.map(h => (
+                    <div key={h.id} className="floating-heart" style={{ left: h.x, top: h.y }}>❤️</div>
+                  ))}
 
-                {/* Mute toggle */}
-                <button
-                  style={{ position: 'absolute', top: '65px', right: '14px', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: '50%', width: '34px', height: '34px', cursor: 'pointer', zIndex: 15 }}
-                  onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
-                >
-                  {isMuted ? '🔇' : '🔊'}
-                </button>
+                  <button
+                    style={{ position: 'absolute', top: '62px', right: '14px', background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', zIndex: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); showToast(isMuted ? 'Sonido activado 🔊' : 'Silenciado 🔇'); }}
+                  >
+                    {isMuted ? '🔇' : '🔊'}
+                  </button>
 
-                {/* Action Sidebar */}
-                <aside className="action-sidebar" onClick={e => e.stopPropagation()}>
-                  <div className="creator-avatar-container" onClick={() => setProfileModal(true)}>
-                    <img src={video.user.avatar} className="creator-avatar" alt="avatar" />
-                    <div className="follow-badge-plus">+</div>
-                  </div>
-
-                  <button className="action-btn-item" onClick={() => handleLike(video.id)}>
-                    <div className={`action-icon-circle ${video.liked ? 'liked' : ''}`}>
-                      {video.liked ? '❤️' : '🤍'}
+                  <aside className="action-sidebar" onClick={e => e.stopPropagation()}>
+                    <div className="creator-avatar-container" onClick={() => setProfileModal(true)}>
+                      <img src={video.user.avatar} className="creator-avatar" alt="avatar" />
+                      <div className="follow-badge-plus">+</div>
                     </div>
-                    <span className="action-label">{video.likes}</span>
-                  </button>
 
-                  <button className="action-btn-item" onClick={() => setCommentsModal(video)}>
-                    <div className="action-icon-circle">💬</div>
-                    <span className="action-label">{video.comments.length}</span>
-                  </button>
+                    <button className="action-btn-item" onClick={() => handleLike(video.id)}>
+                      <div className={`action-icon-circle ${video.liked ? 'liked' : ''}`}>
+                        {video.liked ? '❤️' : '🤍'}
+                      </div>
+                      <span className="action-label">{video.likes}</span>
+                    </button>
 
-                  <button className="action-btn-item" onClick={() => setShareModal(video)}>
-                    <div className="action-icon-circle">↗️</div>
-                    <span className="action-label">{video.shares}</span>
-                  </button>
+                    <button className="action-btn-item" onClick={() => setCommentsModal(video)}>
+                      <div className="action-icon-circle">💬</div>
+                      <span className="action-label">{video.comments.length}</span>
+                    </button>
 
-                  <div className="vinyl-sound-disc">
-                    <img src={video.soundAvatar} alt="sound" />
-                  </div>
-                </aside>
+                    <button className="action-btn-item" onClick={() => setShareModal(video)}>
+                      <div className="action-icon-circle">↗️</div>
+                      <span className="action-label">{video.shares}</span>
+                    </button>
 
-                {/* Video Info */}
-                <div className="video-meta-info">
-                  <div className="creator-username">
-                    @{video.user.username} <span className="verified-check">✓</span>
-                  </div>
-                  <div className="video-description">{video.title}</div>
-                  <div className="video-tags-container">
-                    {video.tags.map((t, i) => <span key={i} className="tag-badge">{t}</span>)}
-                  </div>
-                  <div className="sound-marquee-container">
-                    <span>🎵</span> <span>{video.soundTitle}</span>
+                    <div className="vinyl-sound-disc">
+                      <img src={video.soundAvatar} alt="sound" />
+                    </div>
+                  </aside>
+
+                  <div className="video-meta-info">
+                    <div className="creator-username" onClick={() => setProfileModal(true)} style={{ cursor: 'pointer' }}>
+                      @{video.user.username} <span className="verified-check">✓</span>
+                    </div>
+                    <div className="video-description">{video.title}</div>
+                    <div className="video-tags-container">
+                      {video.tags.map((t, i) => (
+                        <span key={i} className="tag-badge" onClick={() => { setSearchQuery(t); showToast(`Filtrado por ${t}`); }}>
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="sound-marquee-container">
+                      <span>🎵</span> <span>{video.soundTitle}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {/* Bottom Nav */}
           <nav className="bottom-nav-bar">
-            <button className={`nav-item-btn ${activeNav === 'home' ? 'active' : ''}`} onClick={() => setActiveNav('home')}>
+            <button className={`nav-item-btn ${activeNav === 'home' && activeTab !== 'games' ? 'active' : ''}`} onClick={() => { setActiveNav('home'); setActiveTab('foryou'); setSearchQuery(''); }}>
               <span>🏠</span><span>Inicio</span>
             </button>
+            <button className={`nav-item-btn ${activeTab === 'games' ? 'active' : ''}`} onClick={() => { setActiveTab('games'); setActiveNav('games'); }}>
+              <span>🎮</span><span>Juegos</span>
+            </button>
+            <button className="nav-create-btn" onClick={() => setUploadModal(true)} title="Crear / Subir">+</button>
             <button className="nav-item-btn" onClick={() => setAiStudioModal(true)}>
               <span>✨</span><span>AI Studio</span>
-            </button>
-            <button className="nav-create-btn" onClick={() => setUploadModal(true)}>+</button>
-            <button className="nav-item-btn" onClick={() => alert('🔥 Tendencias cargadas')}>
-              <span>🔥</span><span>Explorar</span>
             </button>
             <button className="nav-item-btn" onClick={() => setProfileModal(true)}>
               <span>👤</span><span>Perfil</span>
             </button>
           </nav>
 
-          {/* Comments Drawer */}
           {commentsModal && (
             <div className="drawer-backdrop" onClick={() => setCommentsModal(null)}>
               <div className="drawer-content" onClick={e => e.stopPropagation()}>
@@ -875,7 +1217,7 @@
                 <div className="comments-list">
                   {commentsModal.comments.map(c => (
                     <div key={c.id} className="comment-item">
-                      <div className="comment-avatar" style={{ background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
+                      <div className="comment-avatar">👤</div>
                       <div>
                         <div className="comment-user">@{c.username}</div>
                         <div className="comment-text">{c.text}</div>
@@ -898,31 +1240,30 @@
             </div>
           )}
 
-          {/* Share Modal */}
           {shareModal && (
             <div className="drawer-backdrop" onClick={() => setShareModal(null)}>
               <div className="drawer-content" onClick={e => e.stopPropagation()}>
                 <div className="drawer-header">
-                  <div>Compartir vídeo</div>
+                  <div>Compartir vídeo / juego</div>
                   <button className="close-btn" onClick={() => setShareModal(null)}>&times;</button>
                 </div>
                 <div className="modal-body">
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', textAlign: 'center' }}>
-                    <div style={{ cursor: 'pointer' }} onClick={() => { navigator.clipboard?.writeText(window.location.href); alert('¡Enlace copiado al portapapeles!'); }}>
-                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#25F4EE', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>🔗</div>
-                      <span style={{ fontSize: '11px', color: '#ccc' }}>Copiar</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', textAlign: 'center' }}>
+                    <div style={{ cursor: 'pointer' }} onClick={() => { navigator.clipboard?.writeText(window.location.href); showToast('¡Enlace copiado al portapapeles! 📋'); setShareModal(null); }}>
+                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#25F4EE', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>🔗</div>
+                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>Copiar</span>
                     </div>
-                    <div style={{ cursor: 'pointer' }} onClick={() => window.open('https://wa.me/')}>
-                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#25D366', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>💬</div>
-                      <span style={{ fontSize: '11px', color: '#ccc' }}>WhatsApp</span>
+                    <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('¡Mira este vídeo en TakTak! ' + window.location.href)}`); setShareModal(null); }}>
+                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#25D366', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>💬</div>
+                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>WhatsApp</span>
                     </div>
-                    <div style={{ cursor: 'pointer' }} onClick={() => window.open('https://twitter.com/')}>
-                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#1DA1F2', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>🐦</div>
-                      <span style={{ fontSize: '11px', color: '#ccc' }}>Twitter</span>
+                    <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent('Increíble vídeo en @TakTakApp ' + window.location.href)}`); setShareModal(null); }}>
+                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#1DA1F2', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>🐦</div>
+                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>Twitter</span>
                     </div>
-                    <div style={{ cursor: 'pointer' }} onClick={() => window.open('https://telegram.org/')}>
-                      <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#0088cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>✈️</div>
-                      <span style={{ fontSize: '11px', color: '#ccc' }}>Telegram</span>
+                    <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=TakTak`); setShareModal(null); }}>
+                      <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: '#0088cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>✈️</div>
+                      <span style={{ fontSize: '11.5px', color: '#ccc' }}>Telegram</span>
                     </div>
                   </div>
                 </div>
@@ -930,28 +1271,42 @@
             </div>
           )}
 
-          {/* Upload Modal */}
           {uploadModal && (
             <div className="drawer-backdrop" onClick={() => setUploadModal(false)}>
               <div className="drawer-content" onClick={e => e.stopPropagation()}>
                 <div className="drawer-header">
-                  <div>Subir nuevo vídeo 📤</div>
+                  <div>Subir Vídeo o Minijuego 📤</div>
                   <button className="close-btn" onClick={() => setUploadModal(false)}>&times;</button>
                 </div>
                 <div className="modal-body">
                   <div className="form-group">
+                    <label className="form-label">Seleccionar archivo de vídeo (.mp4, .webm)</label>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="form-input"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const url = URL.createObjectURL(file);
+                          handleUpload(file.name.replace(/\.[^/.]+$/, ''), '#mivideo #taktak', url);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">Título del vídeo</label>
-                    <input id="up-title" type="text" className="form-input" defaultValue="Mi nuevo corto increíble" />
+                    <input id="prev-up-title" type="text" className="form-input" defaultValue="Mi nuevo contenido en TakTak ✨" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Hashtags</label>
-                    <input id="up-tags" type="text" className="form-input" defaultValue="#taktak #trend #viral" />
+                    <input id="prev-up-tags" type="text" className="form-input" defaultValue="#taktak #trend #viral #gaming" />
                   </div>
                   <button
                     className="primary-btn"
                     onClick={() => {
-                      const t = document.getElementById('up-title').value;
-                      const tags = document.getElementById('up-tags').value;
+                      const t = document.getElementById('prev-up-title').value;
+                      const tags = document.getElementById('prev-up-tags').value;
                       handleUpload(t, tags);
                     }}
                   >
@@ -962,7 +1317,39 @@
             </div>
           )}
 
-          {/* AI Studio Modal */}
+          {cameraModal && (
+            <div className="drawer-backdrop" onClick={() => { stopCamera(); setCameraModal(false); }}>
+              <div className="drawer-content" style={{ minHeight: '65%' }} onClick={e => e.stopPropagation()}>
+                <div className="drawer-header">
+                  <div>🎥 Grabar con Cámara</div>
+                  <button className="close-btn" onClick={() => { stopCamera(); setCameraModal(false); }}>&times;</button>
+                </div>
+                <div className="modal-body" style={{ alignItems: 'center' }}>
+                  <video ref={videoCamRef} autoPlay playsInline muted className="camera-preview-video"></video>
+                  
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                    {!cameraStream ? (
+                      <button className="primary-btn" onClick={startCamera}>Encender Cámara 📷</button>
+                    ) : (
+                      <>
+                        {!isRecording ? (
+                          <button className="primary-btn" style={{ background: '#fe2c55' }} onClick={startRecording}>
+                            🔴 Empezar Grabación
+                          </button>
+                        ) : (
+                          <button className="primary-btn" style={{ background: '#25f4ee', color: '#000' }} onClick={stopRecording}>
+                            ⏹ Detener y Publicar
+                          </button>
+                        )}
+                        <button className="badge-btn" onClick={stopCamera}>Apagar</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {aiStudioModal && (
             <div className="drawer-backdrop" onClick={() => setAiStudioModal(false)}>
               <div className="drawer-content" onClick={e => e.stopPropagation()}>
@@ -972,33 +1359,32 @@
                 </div>
                 <div className="modal-body">
                   <div className="form-group">
-                    <label className="form-label">Idea o tema para el vídeo</label>
-                    <textarea id="ai-prompt" className="form-textarea" rows="2" defaultValue="5 curiosidades fascinantes sobre la inteligencia artificial 🤖" />
+                    <label className="form-label">Idea o guión para el vídeo</label>
+                    <textarea id="prev-ai-prompt" className="form-textarea" rows="2" defaultValue="5 datos asombrosos sobre videojuegos y tecnología 🕹️⚡" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Estilo Visual</label>
                     <select className="form-select">
-                      <option>Cyberpunk / Tech ⚡</option>
-                      <option>Cinemático / Real 🎬</option>
-                      <option>Anime / Ilustrado 🎨</option>
+                      <option>Cyberpunk & Neón ⚡</option>
+                      <option>Cinemático 4K 🎬</option>
+                      <option>Anime & Ilustrado 🎨</option>
                     </select>
                   </div>
                   <button
                     className="ai-gradient-btn"
                     onClick={() => {
-                      const prompt = document.getElementById('ai-prompt').value;
-                      handleUpload(`🤖 AI: "${prompt}"`, '#aivideo #moneyprinterturbo #future');
+                      const prompt = document.getElementById('prev-ai-prompt').value;
+                      handleUpload(`🤖 AI: "${prompt}"`, '#aivideo #moneyprinterturbo #ia');
                       setAiStudioModal(false);
                     }}
                   >
-                    ⚡ Generar Vídeo con IA
+                    ⚡ Generar y Publicar con IA
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Profile Modal */}
           {profileModal && (
             <div className="drawer-backdrop" onClick={() => setProfileModal(false)}>
               <div className="drawer-content" onClick={e => e.stopPropagation()}>
@@ -1007,14 +1393,75 @@
                   <button className="close-btn" onClick={() => setProfileModal(false)}>&times;</button>
                 </div>
                 <div className="modal-body" style={{ textAlign: 'center' }}>
-                  <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" style={{ width: '70px', height: '70px', borderRadius: '50%', margin: '0 auto', border: '3px solid #fe2c55' }} />
-                  <h3 style={{ marginTop: '8px' }}>Usuario Creador</h3>
-                  <div style={{ color: '#888', fontSize: '12px' }}>@tu_usuario</div>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', margin: '14px 0', borderTop: '1px solid #222', borderBottom: '1px solid #222', padding: '10px 0' }}>
-                    <div><strong>128</strong><div style={{ fontSize: '11px', color: '#777' }}>Siguiendo</div></div>
-                    <div><strong>3.4k</strong><div style={{ fontSize: '11px', color: '#777' }}>Seguidores</div></div>
-                    <div><strong>19.2k</strong><div style={{ fontSize: '11px', color: '#777' }}>Me gusta</div></div>
+                  <img src={currentUser.avatar} style={{ width: '74px', height: '74px', borderRadius: '50%', margin: '0 auto', border: '3px solid #fe2c55', objectFit: 'cover' }} />
+                  <h3 style={{ marginTop: '8px', fontSize: '18px' }}>{currentUser.name}</h3>
+                  <div style={{ color: '#aaa', fontSize: '13px' }}>@{currentUser.username}</div>
+                  <p style={{ color: '#eee', fontSize: '13.5px', marginTop: '6px' }}>{currentUser.bio}</p>
+
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', margin: '14px 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '12px 0' }}>
+                    <div><strong>{currentUser.following}</strong><div style={{ fontSize: '11px', color: '#888' }}>Siguiendo</div></div>
+                    <div><strong>{currentUser.followers}</strong><div style={{ fontSize: '11px', color: '#888' }}>Seguidores</div></div>
+                    <div><strong>{currentUser.likesCount}</strong><div style={{ fontSize: '11px', color: '#888' }}>Me gusta</div></div>
                   </div>
+
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button className="badge-btn" onClick={() => {
+                      const newBio = prompt('Nueva biografía:', currentUser.bio);
+                      if (newBio) setCurrentUser({ ...currentUser, bio: newBio });
+                    }}>
+                      ✏️ Editar Bio
+                    </button>
+                    <button className="badge-btn" onClick={() => setAuthModal(true)}>
+                      🔑 Cambiar Cuenta
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {authModal && (
+            <div className="drawer-backdrop" onClick={() => setAuthModal(false)}>
+              <div className="drawer-content" onClick={e => e.stopPropagation()}>
+                <div className="drawer-header">
+                  <div>Iniciar Sesión en TakTak</div>
+                  <button className="close-btn" onClick={() => setAuthModal(false)}>&times;</button>
+                </div>
+                <div className="modal-body" style={{ gap: '12px' }}>
+                  <button className="primary-btn" style={{ background: '#4285F4' }} onClick={() => {
+                    setCurrentUser({
+                      username: 'google_user',
+                      name: 'Google User',
+                      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                      bio: 'Conectado mediante Google Auth 🔥',
+                      followers: 4300,
+                      following: 250,
+                      likesCount: 18200
+                    });
+                    setAuthModal(false);
+                    showToast('¡Sesión iniciada con Google!');
+                  }}>
+                    🌐 Continuar con Google
+                  </button>
+
+                  <button className="primary-btn" style={{ background: '#25D366' }} onClick={() => {
+                    const phone = prompt('Introduce tu número de teléfono (+34...):');
+                    if (phone) {
+                      setCurrentUser({
+                        username: `user_${phone.slice(-4)}`,
+                        name: `Usuario ${phone.slice(-4)}`,
+                        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+                        bio: 'Verificado por teléfono 📱',
+                        followers: 520,
+                        following: 95,
+                        likesCount: 2300
+                      });
+                      setAuthModal(false);
+                      showToast('¡Sesión iniciada con Teléfono!');
+                    }
+                  }}>
+                    📱 Continuar con Teléfono
+                  </button>
                 </div>
               </div>
             </div>
