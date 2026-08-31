@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>TakTak 🎵 — Plataforma de Vídeos Cortos y Juegos</title>
+  <title>TakTak 🎵 — Vídeos Cortos y Juegos</title>
   
   <!-- SEO & OpenGraph Meta Tags -->
   <meta name="description" content="TakTak: Plataforma de vídeos cortos, minijuegos y creación con IA con diseño neón fosforescente." />
@@ -111,7 +111,7 @@
     .splash-opening-overlay {
       position: absolute;
       inset: 0;
-      z-index: 300;
+      z-index: 500;
       background: #000000;
       display: flex;
       flex-direction: column;
@@ -153,14 +153,15 @@
       flex-direction: column;
       align-items: center;
       justify-content: space-between;
-      padding: 34px 24px 38px;
+      padding: 30px 24px 34px;
       text-align: center;
+      overflow-y: auto;
       animation: fadeIn 0.3s ease;
     }
 
     .cover-hero-glow {
       position: relative;
-      margin-top: 15px;
+      margin-top: 10px;
     }
 
     .cover-hero-glow::before {
@@ -181,9 +182,9 @@
     }
 
     .cover-logo-img {
-      width: 160px;
-      height: 160px;
-      border-radius: 36px;
+      width: 140px;
+      height: 140px;
+      border-radius: 32px;
       object-fit: cover;
       position: relative;
       z-index: 1;
@@ -193,10 +194,10 @@
 
     .cover-title {
       font-family: var(--font-heading);
-      font-size: 36px;
+      font-size: 34px;
       font-weight: 900;
       letter-spacing: -0.5px;
-      margin-top: 18px;
+      margin-top: 14px;
       background: var(--gradient-taktak);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -204,10 +205,10 @@
     }
 
     .cover-subtitle {
-      font-size: 14.5px;
+      font-size: 14px;
       color: var(--color-text-muted);
-      margin-top: 8px;
-      line-height: 1.45;
+      margin-top: 6px;
+      line-height: 1.4;
       max-width: 320px;
       font-weight: 500;
     }
@@ -217,20 +218,20 @@
       display: flex;
       flex-direction: column;
       gap: 13px;
-      margin-top: 24px;
+      margin-top: 20px;
     }
 
     .auth-provider-btn {
       width: 100%;
-      padding: 14px 18px;
+      padding: 15px 18px;
       border-radius: var(--radius-md);
-      font-size: 15px;
+      font-size: 15.5px;
       font-family: var(--font-heading);
       font-weight: 800;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: 12px;
       cursor: pointer;
       border: none;
       transition: transform var(--transition-fast), filter var(--transition-fast), box-shadow var(--transition-fast);
@@ -248,7 +249,7 @@
     .btn-google {
       background: #ffffff;
       color: #070710;
-      box-shadow: 0 6px 20px rgba(255, 255, 255, 0.2);
+      box-shadow: 0 6px 20px rgba(255, 255, 255, 0.25);
     }
 
     .btn-phone {
@@ -257,11 +258,36 @@
       box-shadow: 0 6px 20px var(--taktak-cyan-glow);
     }
 
-    .btn-guest {
-      background: rgba(255, 255, 255, 0.08);
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      backdrop-filter: blur(10px);
+    /* Inline Auth Card inside Cover Screen */
+    .cover-auth-box {
+      width: 100%;
+      background: rgba(18, 18, 30, 0.95);
+      border: 1px solid rgba(255, 45, 141, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 20px 18px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 25px rgba(255, 45, 141, 0.2);
+      animation: fadeIn 0.25s ease;
+      text-align: left;
+      margin-top: 15px;
+    }
+
+    .cover-auth-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 10px;
+    }
+
+    .cover-auth-title {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     /* Feed Container */
@@ -982,7 +1008,7 @@
       font-family: var(--font-heading);
       font-size: 13.5px;
       font-weight: 700;
-      z-index: 100;
+      z-index: 600;
       box-shadow: 0 6px 25px rgba(0,0,0,0.9), 0 0 15px var(--taktak-cyan-glow);
       display: flex;
       align-items: center;
@@ -1179,27 +1205,40 @@
       const [currentUser, setCurrentUser] = useState(() => {
         try {
           const saved = localStorage.getItem('taktak_user');
-          if (saved) return JSON.parse(saved);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.isLoggedIn) return parsed;
+          }
         } catch (e) {}
         return {
           id: 'user_local',
-          username: 'creador_taktak',
+          username: 'usuario_taktak',
           name: 'Mi Perfil TakTak',
           avatar: 'copilot_image_1758359058839.jpeg',
           bio: 'Creando contenido y jugando en TakTak 🚀✨',
-          followers: 1240,
-          following: 180,
-          likesCount: 5400,
+          followers: 0,
+          following: 0,
+          likesCount: 0,
           provider: 'local',
           isLoggedIn: false
         };
       });
 
+      // Cover Screen is shown when user is NOT logged in or requests to log out
       const [showCoverScreen, setShowCoverScreen] = useState(() => {
-        return !localStorage.getItem('taktak_cover_seen');
+        try {
+          const saved = localStorage.getItem('taktak_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.isLoggedIn) return false;
+          }
+        } catch (e) {}
+        return true;
       });
 
-      // Opening Cinematic Splash state (like TikTok logo animation)
+      // Cover Auth View: 'buttons' (main), 'google', 'phone'
+      const [coverAuthView, setCoverAuthView] = useState('buttons');
+
       const [isOpeningAnimation, setIsOpeningAnimation] = useState(false);
 
       const [videos, setVideos] = useState(INITIAL_VIDEOS);
@@ -1217,8 +1256,6 @@
       const [aiStudioModal, setAiStudioModal] = useState(false);
       const [profileModal, setProfileModal] = useState(false);
       const [editProfileModal, setEditProfileModal] = useState(false);
-      const [authModal, setAuthModal] = useState(false);
-      const [authMode, setAuthMode] = useState('select');
       const [toastMsg, setToastMsg] = useState('');
 
       const [editName, setEditName] = useState(currentUser.name);
@@ -1226,8 +1263,12 @@
       const [editBio, setEditBio] = useState(currentUser.bio);
       const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser.avatar);
 
-      const [googleNameInput, setGoogleNameInput] = useState('');
+      // Google Form State
       const [googleEmailInput, setGoogleEmailInput] = useState('');
+      const [googlePassInput, setGooglePassInput] = useState('');
+      const [googleNameInput, setGoogleNameInput] = useState('');
+
+      // Phone Form State
       const [phoneInput, setPhoneInput] = useState('');
       const [phoneCodeInput, setPhoneCodeInput] = useState('');
       const [phoneNameInput, setPhoneNameInput] = useState('');
@@ -1240,8 +1281,7 @@
 
       const avatarFileInputRef = useRef(null);
       const editAvatarFileInputRef = useRef(null);
-      const googleAvatarFileInputRef = useRef(null);
-      const phoneAvatarFileInputRef = useRef(null);
+      const coverAvatarFileInputRef = useRef(null);
 
       const [newComment, setNewComment] = useState('');
       const [hearts, setHearts] = useState([]);
@@ -1256,21 +1296,32 @@
         }, 1300);
       };
 
-      const updateUserProfile = (updated) => {
-        const fullUser = { ...currentUser, ...updated, isLoggedIn: true };
+      const completeLogin = (userData) => {
+        const fullUser = { ...currentUser, ...userData, isLoggedIn: true };
         setCurrentUser(fullUser);
         try {
           localStorage.setItem('taktak_user', JSON.stringify(fullUser));
-          localStorage.setItem('taktak_cover_seen', 'true');
         } catch (e) {}
-      };
-
-      const dismissCover = () => {
         triggerOpeningAnimation(() => {
           setShowCoverScreen(false);
-          try {
-            localStorage.setItem('taktak_cover_seen', 'true');
-          } catch (e) {}
+          setCoverAuthView('buttons');
+          showToast(`¡Bienvenido a TakTak, ${fullUser.name}! 🚀`);
+        });
+      };
+
+      const handleQuickGoogleConnect = () => {
+        // Auto-connect with Google simulation / profile
+        const sampleEmail = googleEmailInput.trim() || 'usuario.google@gmail.com';
+        const sampleName = googleNameInput.trim() || 'Usuario Google';
+        const sampleUsername = (sampleEmail.split('@')[0] || sampleName).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        
+        completeLogin({
+          name: sampleName,
+          username: sampleUsername,
+          email: sampleEmail,
+          avatar: editAvatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          bio: `Cuenta conectada con Google (${sampleEmail}) ✨`,
+          provider: 'google'
         });
       };
 
@@ -1382,8 +1433,8 @@
             if (callback) {
               callback(base64Url);
             } else {
-              updateUserProfile({ avatar: base64Url });
-              showToast('¡Foto de perfil actualizada! 📸');
+              setEditAvatarUrl(base64Url);
+              showToast('¡Foto de perfil seleccionada! 📸');
             }
           };
           reader.readAsDataURL(file);
@@ -1462,7 +1513,7 @@
             </div>
           )}
 
-          {/* ================= COVER / PORTADA SPLASH SCREEN ================= */}
+          {/* ================= COVER / PORTADA SPLASH & AUTH SCREEN ================= */}
           {showCoverScreen && (
             <div className="cover-landing-screen">
               <div>
@@ -1478,42 +1529,235 @@
                 <p className="cover-subtitle">Vídeos cortos en vertical, minijuegos y creación con IA.</p>
               </div>
 
-              <div className="cover-actions">
-                <button
-                  className="auth-provider-btn btn-google"
-                  onClick={() => {
-                    setAuthMode('google');
-                    setAuthModal(true);
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                  </svg>
-                  Crear cuenta con Google
-                </button>
+              {/* MAIN SELECTION VIEW */}
+              {coverAuthView === 'buttons' && (
+                <div className="cover-actions">
+                  <button
+                    className="auth-provider-btn btn-google"
+                    onClick={() => setCoverAuthView('google')}
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    Iniciar sesión con Google
+                  </button>
 
-                <button
-                  className="auth-provider-btn btn-phone"
-                  onClick={() => {
-                    setPhoneStep(1);
-                    setAuthMode('phone');
-                    setAuthModal(true);
-                  }}
-                >
-                  <span>📱</span>
-                  Iniciar sesión con Teléfono
-                </button>
+                  <button
+                    className="auth-provider-btn btn-phone"
+                    onClick={() => {
+                      setPhoneStep(1);
+                      setCoverAuthView('phone');
+                    }}
+                  >
+                    <span>📱</span>
+                    Iniciar sesión con Teléfono
+                  </button>
+                </div>
+              )}
 
-                <button
-                  className="auth-provider-btn btn-guest"
-                  onClick={dismissCover}
-                >
-                  🚀 Entrar al Feed directamente
-                </button>
-              </div>
+              {/* GOOGLE AUTH VIEW */}
+              {coverAuthView === 'google' && (
+                <div className="cover-auth-box">
+                  <div className="cover-auth-header">
+                    <div className="cover-auth-title">
+                      <svg width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                      </svg>
+                      Conectar con Google
+                    </div>
+                    <button className="close-btn" onClick={() => setCoverAuthView('buttons')}>&larr; Volver</button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+                    <button
+                      className="auth-provider-btn btn-google"
+                      style={{ padding: '12px', fontSize: '14px' }}
+                      onClick={handleQuickGoogleConnect}
+                    >
+                      ⚡ Conectar Cuenta de Google Automático
+                    </button>
+
+                    <div style={{ textAlign: 'center', fontSize: '11.5px', color: '#888', margin: '2px 0' }}>— o ingresa tus datos —</div>
+
+                    <div className="form-group">
+                      <label className="form-label">Correo de Gmail</label>
+                      <input
+                        type="email"
+                        className="form-input"
+                        placeholder="tu.cuenta@gmail.com"
+                        value={googleEmailInput}
+                        onChange={e => setGoogleEmailInput(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Contraseña</label>
+                      <input
+                        type="password"
+                        className="form-input"
+                        placeholder="••••••••"
+                        value={googlePassInput}
+                        onChange={e => setGooglePassInput(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Nombre para mostrar (Opcional)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Ej. Juan Gómez"
+                        value={googleNameInput}
+                        onChange={e => setGoogleNameInput(e.target.value)}
+                      />
+                    </div>
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={coverAvatarFileInputRef}
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
+                    />
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px' }}>
+                      <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-cyan)' }} />
+                      <button
+                        type="button"
+                        className="badge-btn"
+                        onClick={() => coverAvatarFileInputRef.current?.click()}
+                      >
+                        📷 Subir Foto de Perfil
+                      </button>
+                    </div>
+
+                    <button
+                      className="primary-btn"
+                      style={{ marginTop: '6px' }}
+                      onClick={handleQuickGoogleConnect}
+                    >
+                      🚀 Iniciar Sesión con Google
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* PHONE AUTH VIEW */}
+              {coverAuthView === 'phone' && (
+                <div className="cover-auth-box">
+                  <div className="cover-auth-header">
+                    <div className="cover-auth-title">
+                      <span>📱</span> Iniciar con Teléfono
+                    </div>
+                    <button className="close-btn" onClick={() => setCoverAuthView('buttons')}>&larr; Volver</button>
+                  </div>
+
+                  {phoneStep === 1 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tu número móvil para recibir el código de verificación SMS:</p>
+                      
+                      <div className="form-group">
+                        <label className="form-label">Número de Teléfono</label>
+                        <input
+                          type="tel"
+                          className="form-input"
+                          placeholder="+34 600 000 000"
+                          value={phoneInput}
+                          onChange={e => setPhoneInput(e.target.value)}
+                        />
+                      </div>
+
+                      <button
+                        className="primary-btn"
+                        style={{ background: 'var(--gradient-btn-cyan)', color: '#051412', marginTop: '4px' }}
+                        onClick={() => {
+                          if (!phoneInput.trim()) {
+                            alert('Por favor introduce tu número de teléfono');
+                            return;
+                          }
+                          setPhoneStep(2);
+                          showToast('Código SMS enviado: 123456 📲');
+                        }}
+                      >
+                        Enviar Código SMS 📲
+                      </button>
+                    </div>
+                  )}
+
+                  {phoneStep === 2 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+                      <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa el código enviado a <strong>{phoneInput}</strong>:</p>
+                      
+                      <div className="form-group">
+                        <label className="form-label">Código SMS (6 dígitos)</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="123456"
+                          maxLength="6"
+                          value={phoneCodeInput}
+                          onChange={e => setPhoneCodeInput(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Tu Nombre</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Nombre para mostrar"
+                          value={phoneNameInput}
+                          onChange={e => setPhoneNameInput(e.target.value)}
+                        />
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={coverAvatarFileInputRef}
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
+                      />
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
+                        <button
+                          type="button"
+                          className="badge-btn"
+                          onClick={() => coverAvatarFileInputRef.current?.click()}
+                        >
+                          📷 Subir Foto
+                        </button>
+                      </div>
+
+                      <button
+                        className="primary-btn"
+                        style={{ background: 'var(--gradient-btn-cyan)', color: '#051412', marginTop: '6px' }}
+                        onClick={() => {
+                          const name = phoneNameInput.trim() || `Usuario ${phoneInput.slice(-4)}`;
+                          const username = `user_${phoneInput.slice(-4)}`;
+                          completeLogin({
+                            name: name,
+                            username: username,
+                            phone: phoneInput,
+                            avatar: editAvatarUrl || 'copilot_image_1758359058839.jpeg',
+                            bio: `Verificado con teléfono (${phoneInput}) 📱`,
+                            provider: 'phone'
+                          });
+                        }}
+                      >
+                        Verificar y Entrar ✅
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1877,13 +2121,14 @@
                     </button>
                     <button
                       className="badge-btn"
-                      style={{ padding: '8px 14px', fontSize: '13px' }}
+                      style={{ padding: '8px 14px', fontSize: '13px', color: 'var(--taktak-pink)', borderColor: 'var(--taktak-pink)' }}
                       onClick={() => {
                         setShowCoverScreen(true);
+                        setCoverAuthView('buttons');
                         setProfileModal(false);
                       }}
                     >
-                      🚪 Portada / Cambiar Cuenta
+                      🚪 Cerrar Sesión / Cambiar Cuenta
                     </button>
                   </div>
 
@@ -1996,249 +2241,21 @@
                         alert('Por favor ingresa nombre y nombre de usuario');
                         return;
                       }
-                      updateUserProfile({
+                      const updated = {
+                        ...currentUser,
                         name: editName.trim(),
                         username: editUsername.trim(),
                         bio: editBio.trim(),
                         avatar: editAvatarUrl
-                      });
+                      };
+                      setCurrentUser(updated);
+                      try { localStorage.setItem('taktak_user', JSON.stringify(updated)); } catch(e){}
                       setEditProfileModal(false);
                       showToast('¡Perfil guardado correctamente! ✅');
                     }}
                   >
                     💾 Guardar Cambios
                   </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* AUTH MODAL (Google & Phone Registration) */}
-          {authModal && (
-            <div className="drawer-backdrop" onClick={() => setAuthModal(false)}>
-              <div className="drawer-content" style={{ minHeight: '65%' }} onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>
-                    {authMode === 'select' && 'Crear Cuenta o Iniciar Sesión'}
-                    {authMode === 'google' && 'Crear cuenta con Google 🌐'}
-                    {authMode === 'phone' && 'Iniciar con Teléfono 📱'}
-                  </div>
-                  <button className="close-btn" onClick={() => setAuthModal(false)}>&times;</button>
-                </div>
-                
-                <div className="modal-body">
-                  {authMode === 'select' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <button
-                        className="auth-provider-btn btn-google"
-                        onClick={() => {
-                          setGoogleNameInput(currentUser.name !== 'Mi Perfil TakTak' ? currentUser.name : '');
-                          setAuthMode('google');
-                        }}
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24">
-                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                        </svg>
-                        Continuar con Google
-                      </button>
-
-                      <button
-                        className="auth-provider-btn btn-phone"
-                        onClick={() => {
-                          setPhoneStep(1);
-                          setAuthMode('phone');
-                        }}
-                      >
-                        <span>📱</span>
-                        Continuar con Teléfono
-                      </button>
-                    </div>
-                  )}
-
-                  {authMode === 'google' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tus datos reales de Google para sincronizar tu cuenta:</p>
-                      
-                      <div className="form-group">
-                        <label className="form-label">Nombre de tu cuenta de Google</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Ej. Juan Pérez"
-                          value={googleNameInput}
-                          onChange={e => setGoogleNameInput(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Correo Electrónico (Gmail)</label>
-                        <input
-                          type="email"
-                          className="form-input"
-                          placeholder="tu.correo@gmail.com"
-                          value={googleEmailInput}
-                          onChange={e => setGoogleEmailInput(e.target.value)}
-                        />
-                      </div>
-
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={googleAvatarFileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
-                      />
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-cyan)' }} />
-                        <button
-                          type="button"
-                          className="badge-btn"
-                          onClick={() => googleAvatarFileInputRef.current?.click()}
-                        >
-                          📷 Subir Foto de Perfil
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                        <button className="badge-btn" onClick={() => setAuthMode('select')}>Atrás</button>
-                        <button
-                          className="primary-btn"
-                          style={{ flex: 1 }}
-                          onClick={() => {
-                            const name = googleNameInput.trim() || 'Usuario Google';
-                            const username = (googleEmailInput.split('@')[0] || name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
-                            updateUserProfile({
-                              name: name,
-                              username: username,
-                              email: googleEmailInput,
-                              avatar: editAvatarUrl,
-                              bio: `Conectado con Google (${googleEmailInput || 'Gmail'}) ✨`,
-                              provider: 'google'
-                            });
-                            setAuthModal(false);
-                            dismissCover();
-                            showToast(`¡Bienvenido ${name}! Conectado con Google.`);
-                          }}
-                        >
-                          Conectar y Entrar 🚀
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {authMode === 'phone' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {phoneStep === 1 && (
-                        <>
-                          <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tu número de teléfono para recibir un código de acceso:</p>
-                          <div className="form-group">
-                            <label className="form-label">Número de Teléfono</label>
-                            <input
-                              type="tel"
-                              className="form-input"
-                              placeholder="+34 600 000 000"
-                              value={phoneInput}
-                              onChange={e => setPhoneInput(e.target.value)}
-                            />
-                          </div>
-
-                          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                            <button className="badge-btn" onClick={() => setAuthMode('select')}>Atrás</button>
-                            <button
-                              className="primary-btn"
-                              style={{ flex: 1, background: 'var(--gradient-btn-cyan)', color: '#000' }}
-                              onClick={() => {
-                                if (!phoneInput.trim()) {
-                                  alert('Por favor ingresa tu número de teléfono');
-                                  return;
-                                }
-                                setPhoneStep(2);
-                                showToast('Código SMS enviado: 123456');
-                              }}
-                            >
-                              Enviar Código SMS 📲
-                            </button>
-                          </div>
-                        </>
-                      )}
-
-                      {phoneStep === 2 && (
-                        <>
-                          <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa el código de 6 dígitos enviado a {phoneInput}:</p>
-                          <div className="form-group">
-                            <label className="form-label">Código de Verificación (SMS)</label>
-                            <input
-                              type="text"
-                              className="form-input"
-                              placeholder="123456"
-                              maxLength="6"
-                              value={phoneCodeInput}
-                              onChange={e => setPhoneCodeInput(e.target.value)}
-                            />
-                          </div>
-
-                          <div className="form-group">
-                            <label className="form-label">Tu Nombre</label>
-                            <input
-                              type="text"
-                              className="form-input"
-                              placeholder="Nombre para mostrar"
-                              value={phoneNameInput}
-                              onChange={e => setPhoneNameInput(e.target.value)}
-                            />
-                          </div>
-
-                          <input
-                            type="file"
-                            accept="image/*"
-                            ref={phoneAvatarFileInputRef}
-                            style={{ display: 'none' }}
-                            onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
-                          />
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
-                            <button
-                              type="button"
-                              className="badge-btn"
-                              onClick={() => phoneAvatarFileInputRef.current?.click()}
-                            >
-                              📷 Subir Foto
-                            </button>
-                          </div>
-
-                          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                            <button className="badge-btn" onClick={() => setPhoneStep(1)}>Atrás</button>
-                            <button
-                              className="primary-btn"
-                              style={{ flex: 1, background: 'var(--gradient-btn-cyan)', color: '#000' }}
-                              onClick={() => {
-                                const name = phoneNameInput.trim() || `Usuario ${phoneInput.slice(-4)}`;
-                                const username = `user_${phoneInput.slice(-4)}`;
-                                updateUserProfile({
-                                  name: name,
-                                  username: username,
-                                  phone: phoneInput,
-                                  avatar: editAvatarUrl,
-                                  bio: `Verificado con teléfono (${phoneInput}) 📱`,
-                                  provider: 'phone'
-                                });
-                                setAuthModal(false);
-                                dismissCover();
-                                showToast(`¡Sesión iniciada con éxito! Bienvenido ${name}`);
-                              }}
-                            >
-                              Verificar y Entrar ✅
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
