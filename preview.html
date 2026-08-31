@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>TakTak 🎵 — Vídeos Cortos y Juegos (Preview)</title>
+  <title>TakTak 🎵 — Vídeos Cortos y Juegos</title>
   
   <!-- SEO & OpenGraph Meta Tags -->
   <meta name="description" content="TakTak: Plataforma de vídeos cortos, minijuegos y creación con IA con diseño neón fosforescente." />
-  <meta name="keywords" content="taktak, video corto, juegos, reels, neon, react, web video, minijuegos, perfil" />
+  <meta name="keywords" content="taktak, video corto, juegos, reels, neon, web video, minijuegos, perfil" />
+  <meta name="author" content="taktakmessenger" />
+  <meta property="og:title" content="TakTak 🎵 — Vídeos Cortos y Juegos" />
+  <meta property="og:description" content="Descubre vídeos, juega minijuegos y crea con los colores fosforescentes de TakTak." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://taktakmessenger.github.io" />
   <meta name="theme-color" content="#07070d" />
   <link rel="manifest" href="manifest.json" />
 
@@ -16,14 +21,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <!-- React & Babel CDNs -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
   <style>
     :root {
-      /* Palette based on the official TakTak phosphorescent logo */
+      /* Palette based on official TakTak phosphorescent logo */
       --taktak-pink: #ff2d8d;
       --taktak-pink-glow: rgba(255, 45, 141, 0.45);
       --taktak-purple: #b04bfb;
@@ -32,7 +32,6 @@
       --taktak-gold: #ffd600;
       
       --gradient-taktak: linear-gradient(135deg, #ff2d8d 0%, #b04bfb 50%, #00f7d4 100%);
-      --gradient-taktak-reverse: linear-gradient(135deg, #00f7d4 0%, #b04bfb 50%, #ff2d8d 100%);
       --gradient-btn-pink: linear-gradient(135deg, #ff2d8d 0%, #ff529f 100%);
       --gradient-btn-cyan: linear-gradient(135deg, #00f7d4 0%, #00d4b6 100%);
 
@@ -72,7 +71,7 @@
       overflow: hidden;
     }
 
-    #root {
+    #app-root {
       height: 100%;
       width: 100%;
       display: flex;
@@ -102,17 +101,22 @@
       }
     }
 
+    /* ================= CINEMATIC SPLASH OPENING ANIMATION ================= */
     .splash-opening-overlay {
       position: absolute;
       inset: 0;
       z-index: 500;
       background: #000000;
-      display: flex;
+      display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      animation: splashCinematic 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       pointer-events: none;
+    }
+
+    .splash-opening-overlay.active {
+      display: flex;
+      animation: splashCinematic 1.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
     .splash-opening-logo {
@@ -121,7 +125,7 @@
       border-radius: 38px;
       object-fit: cover;
       box-shadow: 0 0 60px var(--taktak-pink-glow), 0 0 35px var(--taktak-cyan-glow);
-      animation: logoPulseGrow 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation: logoPulseGrow 1.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
     @keyframes splashCinematic {
@@ -131,12 +135,13 @@
     }
 
     @keyframes logoPulseGrow {
-      0% { transform: scale(0.8); opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+      0% { transform: scale(0.8); opacity: 0; }
       35% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 30px var(--taktak-cyan)); }
       65% { transform: scale(1); opacity: 1; }
       100% { transform: scale(1.8); opacity: 0; }
     }
 
+    /* ================= COVER / PORTADA SPLASH & AUTH SCREEN ================= */
     .cover-landing-screen {
       position: absolute;
       inset: 0;
@@ -150,6 +155,10 @@
       text-align: center;
       overflow-y: auto;
       animation: fadeIn 0.3s ease;
+    }
+
+    .cover-landing-screen.hidden {
+      display: none !important;
     }
 
     .cover-hero-glow {
@@ -210,7 +219,7 @@
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 13px;
+      gap: 14px;
       margin-top: 20px;
     }
 
@@ -251,9 +260,10 @@
       box-shadow: 0 6px 20px var(--taktak-cyan-glow);
     }
 
+    /* Auth Card View inside Cover */
     .cover-auth-box {
       width: 100%;
-      background: rgba(18, 18, 30, 0.95);
+      background: rgba(18, 18, 30, 0.96);
       border: 1px solid rgba(255, 45, 141, 0.35);
       border-radius: var(--radius-lg);
       padding: 20px 18px;
@@ -282,6 +292,7 @@
       gap: 8px;
     }
 
+    /* Feed Container */
     .feed-container {
       flex: 1;
       height: 100%;
@@ -331,6 +342,7 @@
       z-index: 2;
     }
 
+    /* Top Navigation Header */
     .top-header-bar {
       position: absolute;
       top: 0;
@@ -438,6 +450,7 @@
       background: rgba(0, 247, 212, 0.2);
     }
 
+    /* Right Action Sidebar */
     .action-sidebar {
       position: absolute;
       right: 12px;
@@ -484,7 +497,6 @@
       border-color: rgba(255, 45, 141, 0.6);
       background: rgba(255, 45, 141, 0.25);
       box-shadow: 0 0 18px var(--taktak-pink-glow);
-      animation: heartPulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
     .action-label {
@@ -638,12 +650,6 @@
       100% { transform: translate(-50%, -120px) scale(0.9) rotate(-8deg); opacity: 0; }
     }
 
-    @keyframes heartPulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.35); }
-      100% { transform: scale(1); }
-    }
-
     .bottom-nav-bar {
       position: absolute;
       bottom: 0;
@@ -707,10 +713,14 @@
       background: rgba(0, 0, 0, 0.82);
       backdrop-filter: blur(14px);
       z-index: 50;
-      display: flex;
+      display: none;
       flex-direction: column;
       justify-content: flex-end;
       animation: fadeIn 0.2s ease-out;
+    }
+
+    .drawer-backdrop.active {
+      display: flex;
     }
 
     .drawer-content {
@@ -845,75 +855,6 @@
       box-shadow: 0 4px 20px var(--taktak-cyan-glow);
     }
 
-    .comments-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .comment-item {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
-
-    .comment-avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 1px solid rgba(0, 247, 212, 0.4);
-    }
-
-    .comment-user {
-      font-size: 12.5px;
-      font-family: var(--font-heading);
-      font-weight: 800;
-      color: var(--taktak-cyan);
-    }
-
-    .comment-text {
-      font-size: 13.5px;
-      color: #fff;
-      margin-top: 2px;
-    }
-
-    .comment-input-area {
-      padding: 10px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      gap: 8px;
-    }
-
-    .comment-input {
-      flex: 1;
-      background: #181829;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: var(--radius-full);
-      padding: 10px 16px;
-      color: #fff;
-      font-size: 13.5px;
-      outline: none;
-    }
-
-    .comment-send-btn {
-      background: var(--gradient-btn-pink);
-      border: none;
-      border-radius: 50%;
-      width: 38px;
-      height: 38px;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 0 12px var(--taktak-pink-glow);
-    }
-
     .profile-avatar-wrapper {
       position: relative;
       width: 92px;
@@ -948,34 +889,6 @@
       box-shadow: 0 2px 8px var(--taktak-cyan-glow);
     }
 
-    .game-viewport-card {
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(circle at center, #1e0d30 0%, #080512 100%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      position: relative;
-    }
-
-    .game-canvas-container {
-      width: 100%;
-      max-width: 360px;
-      height: 480px;
-      background: #0b0716;
-      border: 2px solid var(--taktak-cyan);
-      border-radius: 20px;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 0 35px var(--taktak-cyan-glow);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
     .toast-popup {
       position: absolute;
       top: 60px;
@@ -991,19 +904,14 @@
       font-weight: 700;
       z-index: 600;
       box-shadow: 0 6px 25px rgba(0,0,0,0.9), 0 0 15px var(--taktak-cyan-glow);
-      display: flex;
+      display: none;
       align-items: center;
       gap: 8px;
       animation: fadeIn 0.2s ease;
     }
 
-    .camera-preview-video {
-      width: 100%;
-      height: 280px;
-      background: #000;
-      border-radius: 16px;
-      object-fit: cover;
-      border: 2px solid var(--taktak-pink);
+    .toast-popup.active {
+      display: flex;
     }
 
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1011,1218 +919,778 @@
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="app-root">
+    <div class="app-viewport">
+      
+      <!-- Toast Notification -->
+      <div id="toastPopup" class="toast-popup">✨ <span id="toastMsg">Notificación</span></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+      <!-- Hidden Global Image Uploaders -->
+      <input type="file" id="globalAvatarFile" accept="image/*" style="display: none;" />
 
-    const INITIAL_VIDEOS = [
+      <!-- ================= CINEMATIC OPENING OVERLAY ================= -->
+      <div id="splashOpeningOverlay" class="splash-opening-overlay">
+        <img src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" class="splash-opening-logo" alt="TakTak" />
+      </div>
+
+      <!-- ================= COVER / PORTADA SPLASH & AUTH SCREEN ================= -->
+      <div id="coverLandingScreen" class="cover-landing-screen">
+        <div>
+          <div class="cover-hero-glow">
+            <img src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" class="cover-logo-img" alt="TakTak Logo" />
+          </div>
+          <h1 class="cover-title">TakTak</h1>
+          <p class="cover-subtitle">Vídeos cortos en vertical, minijuegos y creación con IA.</p>
+        </div>
+
+        <!-- VIEW 1: Main Auth Buttons -->
+        <div id="coverMainButtons" class="cover-actions">
+          <button id="btnOpenGoogle" class="auth-provider-btn btn-google">
+            <svg width="22" height="22" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            Iniciar sesión con Google
+          </button>
+
+          <button id="btnOpenPhone" class="auth-provider-btn btn-phone">
+            <span>📱</span>
+            Iniciar sesión con Teléfono
+          </button>
+        </div>
+
+        <!-- VIEW 2: Google Auth Box -->
+        <div id="coverGoogleBox" class="cover-auth-box" style="display: none;">
+          <div class="cover-auth-header">
+            <div class="cover-auth-title">
+              <svg width="20" height="20" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              Conectar con Google
+            </div>
+            <button id="btnBackGoogle" class="close-btn" style="font-size: 14px; font-weight: 700; color: #fff;">&larr; Volver</button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 11px;">
+            <button id="btnGoogleInstant" class="auth-provider-btn btn-google" style="padding: 12px; font-size: 14px;">
+              ⚡ Conectar Cuenta de Google Automático
+            </button>
+
+            <div style="text-align: center; font-size: 11.5px; color: #888; margin: 2px 0;">— o ingresa tus datos —</div>
+
+            <div class="form-group">
+              <label class="form-label">Correo de Gmail</label>
+              <input type="email" id="inputGoogleEmail" class="form-input" placeholder="tu.cuenta@gmail.com" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Contraseña</label>
+              <input type="password" id="inputGooglePass" class="form-input" placeholder="••••••••" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Tu Nombre</label>
+              <input type="text" id="inputGoogleName" class="form-input" placeholder="Ej. Juan Gómez" />
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 2px;">
+              <img id="coverGoogleAvatarPreview" src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1px solid var(--taktak-cyan);" />
+              <button type="button" id="btnPickGooglePhoto" class="badge-btn">
+                📷 Subir Foto de Perfil
+              </button>
+            </div>
+
+            <button id="btnSubmitGoogle" class="primary-btn" style="margin-top: 6px;">
+              🚀 Iniciar Sesión con Google
+            </button>
+          </div>
+        </div>
+
+        <!-- VIEW 3: Phone Auth Box -->
+        <div id="coverPhoneBox" class="cover-auth-box" style="display: none;">
+          <div class="cover-auth-header">
+            <div class="cover-auth-title">
+              <span>📱</span> Iniciar con Teléfono
+            </div>
+            <button id="btnBackPhone" class="close-btn" style="font-size: 14px; font-weight: 700; color: #fff;">&larr; Volver</button>
+          </div>
+
+          <!-- Step 1: Input Number -->
+          <div id="phoneStep1" style="display: flex; flex-direction: column; gap: 12px;">
+            <p style="font-size: 13px; color: #bbb;">Ingresa tu número móvil para recibir el código de verificación SMS:</p>
+            <div class="form-group">
+              <label class="form-label">Número de Teléfono</label>
+              <input type="tel" id="inputPhoneNum" class="form-input" placeholder="+34 600 000 000" />
+            </div>
+            <button id="btnSendPhoneCode" class="primary-btn" style="background: var(--gradient-btn-cyan); color: #051412; margin-top: 4px;">
+              Enviar Código SMS 📲
+            </button>
+          </div>
+
+          <!-- Step 2: Verification -->
+          <div id="phoneStep2" style="display: none; flex-direction: column; gap: 11px;">
+            <p style="font-size: 13px; color: #bbb;">Ingresa el código enviado a <strong id="lblPhoneTarget">+34...</strong>:</p>
+            <div class="form-group">
+              <label class="form-label">Código SMS (6 dígitos)</label>
+              <input type="text" id="inputPhoneCode" class="form-input" placeholder="123456" maxlength="6" value="123456" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tu Nombre</label>
+              <input type="text" id="inputPhoneName" class="form-input" placeholder="Nombre para mostrar" />
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <img id="coverPhoneAvatarPreview" src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1px solid var(--taktak-pink);" />
+              <button type="button" id="btnPickPhonePhoto" class="badge-btn">
+                📷 Subir Foto
+              </button>
+            </div>
+            <button id="btnSubmitPhone" class="primary-btn" style="background: var(--gradient-btn-cyan); color: #051412; margin-top: 6px;">
+              Verificar y Entrar ✅
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= HEADER BAR ================= -->
+      <header class="top-header-bar">
+        <div class="brand-logo" id="btnLogoHome">
+          <img src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" class="brand-logo-icon" />
+          TakTak
+        </div>
+        
+        <div class="header-tabs">
+          <button id="tabFollowing" class="header-tab-btn">Siguiendo</button>
+          <button id="tabForYou" class="header-tab-btn active">Para ti</button>
+          <button id="tabGames" class="header-tab-btn game-tab">🎮 Juegos</button>
+        </div>
+
+        <div class="header-right-actions">
+          <button id="btnOpenCam" class="badge-btn">🎥 Grabar</button>
+        </div>
+      </header>
+
+      <!-- ================= FEED CONTAINER ================= -->
+      <div id="feedContainer" class="feed-container">
+        <!-- Video slides dynamically injected by JS -->
+      </div>
+
+      <!-- ================= GAMES CONTAINER ================= -->
+      <div id="gamesContainer" style="display: none; height: 100%; width: 100%; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e0d30 0%, #080512 100%);">
+        <div style="width: 90%; max-width: 360px; height: 480px; background: #0b0716; border: 2px solid var(--taktak-cyan); border-radius: 20px; box-shadow: 0 0 35px var(--taktak-cyan-glow); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 20px; text-align: center;">
+          <div style="font-size: 50px; margin-bottom: 10px;">🎮</div>
+          <h2 style="font-family: var(--font-heading); color: #fff; font-size: 22px; margin-bottom: 8px; background: var(--gradient-taktak); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">TakTak Beat Runner</h2>
+          <p style="color: #aaa; font-size: 13.5px; margin-bottom: 24px;">¡Esquiva las notas musicales neón y alcanza la máxima puntuación!</p>
+          <button id="btnPlayBeatGame" class="gold-btn">⚡ Jugar Ahora</button>
+        </div>
+      </div>
+
+      <!-- ================= BOTTOM NAVIGATION ================= -->
+      <nav class="bottom-nav-bar">
+        <button id="navHome" class="nav-item-btn active">
+          <span>🏠</span><span>Inicio</span>
+        </button>
+        <button id="navGames" class="nav-item-btn">
+          <span>🎮</span><span>Juegos</span>
+        </button>
+        <button id="navCreate" class="nav-create-btn" title="Crear / Subir">+</button>
+        <button id="navAI" class="nav-item-btn">
+          <span>✨</span><span>AI Studio</span>
+        </button>
+        <button id="navProfile" class="nav-item-btn">
+          <img id="navAvatarImg" src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--taktak-pink);" />
+          <span>Perfil</span>
+        </button>
+      </nav>
+
+      <!-- ================= PROFILE MODAL ================= -->
+      <div id="profileModal" class="drawer-backdrop">
+        <div class="drawer-content" style="min-height: 72%;">
+          <div class="drawer-header">
+            <div>Perfil de Usuario</div>
+            <button class="close-btn" id="btnCloseProfile">&times;</button>
+          </div>
+          <div class="modal-body" style="text-align: center;">
+            <div class="profile-avatar-wrapper" id="profileAvatarTrigger">
+              <img id="profAvatarDisplay" src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" class="profile-avatar-img" />
+              <div class="avatar-camera-badge">📷</div>
+            </div>
+            <h3 id="profNameDisplay" style="margin-top: 10px; font-size: 20px; font-family: var(--font-heading); font-weight: 800;">Mi Perfil</h3>
+            <div id="profUsernameDisplay" style="color: var(--taktak-cyan); font-size: 14px; font-weight: 700;">@usuario_taktak</div>
+            <p id="profBioDisplay" style="color: #eee; font-size: 13.5px; margin-top: 6px; padding: 0 10px;">Creando contenido en TakTak 🚀✨</p>
+
+            <div style="display: flex; gap: 10px; justify-content: center; margin: 16px 0;">
+              <button id="btnOpenEditProfile" class="primary-btn" style="padding: 8px 16px; font-size: 13px;">✏️ Editar Perfil</button>
+              <button id="btnLogout" class="badge-btn" style="padding: 8px 14px; font-size: 13px; color: var(--taktak-pink); border-color: var(--taktak-pink);">🚪 Cerrar Sesión</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= EDIT PROFILE MODAL ================= -->
+      <div id="editProfileModal" class="drawer-backdrop">
+        <div class="drawer-content" style="min-height: 78%;">
+          <div class="drawer-header">
+            <div>Editar Perfil</div>
+            <button class="close-btn" id="btnCloseEditProfile">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Nombre Completo</label>
+              <input type="text" id="editProfName" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nombre de Usuario (@)</label>
+              <input type="text" id="editProfUsername" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Biografía</label>
+              <textarea id="editProfBio" class="form-textarea" rows="2"></textarea>
+            </div>
+            <button id="btnSaveProfileChanges" class="primary-btn">💾 Guardar Cambios</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= UPLOAD MODAL ================= -->
+      <div id="uploadModal" class="drawer-backdrop">
+        <div class="drawer-content">
+          <div class="drawer-header">
+            <div>Subir Vídeo 📤</div>
+            <button class="close-btn" id="btnCloseUpload">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Seleccionar archivo de vídeo (.mp4, .webm)</label>
+              <input type="file" id="videoFileInput" accept="video/*" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Título del vídeo</label>
+              <input type="text" id="uploadTitleInput" class="form-input" value="Mi nuevo vídeo en TakTak ✨" />
+            </div>
+            <button id="btnSubmitUpload" class="primary-btn">Publicar ahora 🚀</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= AI STUDIO MODAL ================= -->
+      <div id="aiStudioModal" class="drawer-backdrop">
+        <div class="drawer-content">
+          <div class="drawer-header">
+            <div>✨ TakTak AI Studio</div>
+            <button class="close-btn" id="btnCloseAI">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Idea o tema para el vídeo</label>
+              <textarea id="aiPromptInput" class="form-textarea" rows="2">5 Curiosidades fascinantes de la tecnología y el universo 🚀⚡</textarea>
+            </div>
+            <button id="btnGenerateAIVideo" class="ai-gradient-btn">⚡ Generar y Publicar con IA</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ================= DATA & STATE =================
+    const VIDEOS_DATA = [
       {
         id: 1,
-        userId: 'elena_creadora',
-        user: { username: 'elena_creadora', name: 'Elena Gómez', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+        username: 'elena_creadora',
+        name: 'Elena Gómez',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
         title: '¡Descubriendo nuevas vistas en la ciudad! 🌆✨ ¿Cuál es tu rincón favorito?',
         tags: ['#lifestyle', '#cityvibes', '#taktak', '#trend'],
         soundTitle: 'Elena Gómez — Original Urban Mix',
-        soundAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-skater-performing-a-trick-41129-large.mp4',
         likes: 1420,
         liked: true,
         shares: 88,
-        category: 'foryou',
-        comments: [
-          { id: 1, username: 'carlos_dev', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', text: '¡Increíble toma y fluidez! 🛹' },
-          { id: 2, username: 'ana_dance', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', text: '¡Ese truco fue genial! 🔥' }
-        ]
+        comments: 24
       },
       {
         id: 2,
-        userId: 'carlos_dev',
-        user: { username: 'carlos_dev', name: 'Carlos Tech', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
+        username: 'carlos_dev',
+        name: 'Carlos Tech',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
         title: 'Animaciones fluidas en la nueva UI de TakTak 🚀 ¡Full responsive y 60 FPS!',
         tags: ['#coding', '#webdev', '#react', '#javascript'],
         soundTitle: 'Carlos Tech — Synthwave Coding Beats',
-        soundAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-working-on-his-laptop-308-large.mp4',
         likes: 3840,
         liked: false,
         shares: 312,
-        category: 'following',
-        comments: [
-          { id: 3, username: 'elena_creadora', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', text: '¡Qué buena interfaz oscura!' }
-        ]
+        comments: 56
       },
       {
         id: 3,
-        userId: 'ai_studio',
-        user: { username: 'ai_studio', name: 'TakTak AI Studio', avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150' },
+        username: 'ai_studio',
+        name: 'TakTak AI Studio',
+        avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
         title: '🤖 Vídeo generado automáticamente con IA mediante el adaptador MoneyPrinterTurbo',
         tags: ['#aivideo', '#moneyprinterturbo', '#generativeai'],
         soundTitle: 'Cybernetic Pulse — AI Soundscape V1',
-        soundAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-futuristic-robot-with-artificial-intelligence-50796-large.mp4',
         likes: 8910,
         liked: false,
         shares: 1240,
-        category: 'foryou',
-        comments: [
-          { id: 4, username: 'carlos_dev', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', text: '¡La síntesis de voz y el corte son instantáneos!' }
-        ]
+        comments: 118
       }
     ];
 
-    function BeatRunnerGame({ onFinishScore }) {
-      const [score, setScore] = useState(0);
-      const [gameOver, setGameOver] = useState(false);
-      const [playerPos, setPlayerPos] = useState(50);
-      const [obstacle, setObstacle] = useState({ x: 50, y: 0 });
-      const [isPlaying, setIsPlaying] = useState(false);
+    let currentUser = {
+      name: 'Usuario TakTak',
+      username: 'usuario_taktak',
+      avatar: 'copilot_image_1758359058839.jpeg',
+      bio: 'Creando contenido y jugando en TakTak 🚀✨',
+      isLoggedIn: false
+    };
 
-      useEffect(() => {
-        if (!isPlaying || gameOver) return;
-        const interval = setInterval(() => {
-          setObstacle(obs => {
-            if (obs.y >= 90) {
-              if (Math.abs(obs.x - playerPos) < 25) {
-                setGameOver(true);
-                return obs;
-              }
-              setScore(s => s + 10);
-              return { x: Math.floor(Math.random() * 80) + 10, y: 0 };
-            }
-            return { ...obs, y: obs.y + 4 };
-          });
-        }, 50);
-        return () => clearInterval(interval);
-      }, [isPlaying, gameOver, playerPos]);
+    let selectedAvatarBase64 = null;
+    let isMuted = true;
 
-      const startGame = () => {
-        setScore(0);
-        setGameOver(false);
-        setObstacle({ x: 50, y: 0 });
-        setIsPlaying(true);
-      };
+    // Load saved user
+    try {
+      const saved = localStorage.getItem('taktak_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.isLoggedIn) {
+          currentUser = parsed;
+        }
+      }
+    } catch(e) {}
 
-      return (
-        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 15, left: 20, fontSize: '18px', fontWeight: '900', color: 'var(--taktak-gold)' }}>
-            🏆 Puntos: {score}
-          </div>
-
-          {!isPlaying && !gameOver && (
-            <div style={{ textAlign: 'center', padding: 20 }}>
-              <div style={{ fontSize: '46px', marginBottom: 10 }}>🎮</div>
-              <h2 style={{ color: '#fff', fontFamily: 'var(--font-heading)', fontSize: '22px', marginBottom: 8, background: 'var(--gradient-taktak)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>TakTak Beat Runner</h2>
-              <p style={{ color: '#aaa', fontSize: '13.5px', marginBottom: 20 }}>Desliza o toca izquierda/derecha para esquivar las notas musicales neón.</p>
-              <button className="gold-btn" onClick={startGame}>⚡ Iniciar Juego</button>
-            </div>
-          )}
-
-          {isPlaying && !gameOver && (
-            <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
-              <div style={{
-                position: 'absolute',
-                top: `${obstacle.y}%`,
-                left: `${obstacle.x}%`,
-                transform: 'translate(-50%, -50%)',
-                fontSize: '30px',
-                filter: 'drop-shadow(0 0 10px var(--taktak-pink))'
-              }}>
-                🎵
-              </div>
-
-              <div style={{
-                position: 'absolute',
-                bottom: '15%',
-                left: `${playerPos}%`,
-                transform: 'translate(-50%, 0)',
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                background: 'var(--gradient-taktak)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-                boxShadow: '0 0 20px var(--taktak-cyan)',
-                transition: 'left 0.1s ease'
-              }}>
-                🚀
-              </div>
-
-              <div style={{ position: 'absolute', bottom: 10, width: '100%', display: 'flex', justifyContent: 'space-between', padding: '0 20px' }}>
-                <button
-                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid var(--taktak-cyan)', color: '#fff', padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: 'bold' }}
-                  onClick={() => setPlayerPos(p => Math.max(15, p - 20))}
-                >
-                  ◀ Izq
-                </button>
-                <button
-                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid var(--taktak-pink)', color: '#fff', padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: 'bold' }}
-                  onClick={() => setPlayerPos(p => Math.min(85, p + 20))}
-                >
-                  Der ▶
-                </button>
-              </div>
-            </div>
-          )}
-
-          {gameOver && (
-            <div style={{ textAlign: 'center', padding: 20 }}>
-              <div style={{ fontSize: '46px', marginBottom: 8 }}>💥</div>
-              <h2 style={{ color: 'var(--taktak-pink)', fontSize: '24px', fontFamily: 'var(--font-heading)', fontWeight: '900', marginBottom: 6 }}>¡Juego Terminado!</h2>
-              <p style={{ color: '#fff', fontSize: '16px', marginBottom: 18 }}>Puntuación Final: <strong style={{ color: 'var(--taktak-cyan)' }}>{score}</strong></p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                <button className="gold-btn" onClick={startGame}>Reintentar 🔄</button>
-                <button className="primary-btn" onClick={() => onFinishScore && onFinishScore(score)}>Compartir Récord 📢</button>
-              </div>
-            </div>
-          )}
-        </div>
-      );
+    // ================= TOAST NOTIFIER =================
+    function showToast(msg) {
+      const toast = document.getElementById('toastPopup');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.innerText = msg;
+      toast.classList.add('active');
+      setTimeout(() => {
+        toast.classList.remove('active');
+      }, 2600);
     }
 
-    function App() {
-      const [currentUser, setCurrentUser] = useState(() => {
-        try {
-          const saved = localStorage.getItem('taktak_user');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.isLoggedIn) return parsed;
-          }
-        } catch (e) {}
-        return {
-          id: 'user_local',
-          username: 'usuario_taktak',
-          name: 'Mi Perfil TakTak',
-          avatar: 'copilot_image_1758359058839.jpeg',
-          bio: 'Creando contenido y jugando en TakTak 🚀✨',
-          followers: 0,
-          following: 0,
-          likesCount: 0,
-          provider: 'local',
-          isLoggedIn: false
-        };
-      });
+    // ================= CINEMATIC OPENING =================
+    function triggerOpeningAnimation(onComplete) {
+      const overlay = document.getElementById('splashOpeningOverlay');
+      overlay.classList.add('active');
+      setTimeout(() => {
+        overlay.classList.remove('active');
+        if (onComplete) onComplete();
+      }, 1250);
+    }
 
-      const [showCoverScreen, setShowCoverScreen] = useState(() => {
-        try {
-          const saved = localStorage.getItem('taktak_user');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.isLoggedIn) return false;
-          }
-        } catch (e) {}
-        return true;
-      });
-
-      const [coverAuthView, setCoverAuthView] = useState('buttons');
-
-      const [isOpeningAnimation, setIsOpeningAnimation] = useState(false);
-
-      const [videos, setVideos] = useState(INITIAL_VIDEOS);
-      const [activeIndex, setActiveIndex] = useState(0);
-      const [isMuted, setIsMuted] = useState(true);
-      const [activeTab, setActiveTab] = useState('foryou');
-      const [activeNav, setActiveNav] = useState('home');
-      const [searchQuery, setSearchQuery] = useState('');
-      const [profileSubTab, setProfileSubTab] = useState('videos');
+    // ================= AUTH & LOGIN HANDLERS =================
+    function performLogin(userData) {
+      currentUser = { ...currentUser, ...userData, isLoggedIn: true };
+      try {
+        localStorage.setItem('taktak_user', JSON.stringify(currentUser));
+      } catch(e) {}
       
-      const [commentsModal, setCommentsModal] = useState(null);
-      const [shareModal, setShareModal] = useState(null);
-      const [uploadModal, setUploadModal] = useState(false);
-      const [cameraModal, setCameraModal] = useState(false);
-      const [aiStudioModal, setAiStudioModal] = useState(false);
-      const [profileModal, setProfileModal] = useState(false);
-      const [editProfileModal, setEditProfileModal] = useState(false);
-      const [toastMsg, setToastMsg] = useState('');
+      updateProfileUI();
 
-      const [editName, setEditName] = useState(currentUser.name);
-      const [editUsername, setEditUsername] = useState(currentUser.username);
-      const [editBio, setEditBio] = useState(currentUser.bio);
-      const [editAvatarUrl, setEditAvatarUrl] = useState(currentUser.avatar);
+      triggerOpeningAnimation(() => {
+        document.getElementById('coverLandingScreen').classList.add('hidden');
+        showToast(`¡Bienvenido a TakTak, ${currentUser.name}! 🚀`);
+      });
+    }
 
-      const [googleEmailInput, setGoogleEmailInput] = useState('');
-      const [googlePassInput, setGooglePassInput] = useState('');
-      const [googleNameInput, setGoogleNameInput] = useState('');
+    function updateProfileUI() {
+      const avatarSrc = currentUser.avatar || 'copilot_image_1758359058839.jpeg';
+      document.getElementById('navAvatarImg').src = avatarSrc;
+      document.getElementById('profAvatarDisplay').src = avatarSrc;
+      document.getElementById('profNameDisplay').innerText = currentUser.name;
+      document.getElementById('profUsernameDisplay').innerText = '@' + currentUser.username;
+      document.getElementById('profBioDisplay').innerText = currentUser.bio;
+      
+      document.getElementById('editProfName').value = currentUser.name;
+      document.getElementById('editProfUsername').value = currentUser.username;
+      document.getElementById('editProfBio').value = currentUser.bio;
+    }
 
-      const [phoneInput, setPhoneInput] = useState('');
-      const [phoneCodeInput, setPhoneCodeInput] = useState('');
-      const [phoneNameInput, setPhoneNameInput] = useState('');
-      const [phoneStep, setPhoneStep] = useState(1);
+    // ================= RENDER VIDEO FEED =================
+    function renderVideos() {
+      const container = document.getElementById('feedContainer');
+      container.innerHTML = '';
 
-      const [cameraStream, setCameraStream] = useState(null);
-      const [isRecording, setIsRecording] = useState(false);
-      const videoCamRef = useRef(null);
-      const mediaRecorderRef = useRef(null);
+      VIDEOS_DATA.forEach((video, idx) => {
+        const slide = document.createElement('div');
+        slide.className = 'video-slide';
+        slide.innerHTML = `
+          <video src="${video.videoUrl}" class="video-player-element" playsinline loop ${isMuted ? 'muted' : ''} ${idx === 0 ? 'autoplay' : ''}></video>
+          <div class="video-overlay-gradient"></div>
+          
+          <button class="btnToggleMute" style="position: absolute; top: 62px; right: 14px; background: rgba(5,5,10,0.65); border: 1px solid var(--taktak-cyan); color: #fff; borderRadius: 50%; width: 38px; height: 38px; cursor: pointer; z-index: 15; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--taktak-cyan-glow); border-radius: 50%;">
+            ${isMuted ? '🔇' : '🔊'}
+          </button>
 
-      const avatarFileInputRef = useRef(null);
-      const editAvatarFileInputRef = useRef(null);
-      const coverAvatarFileInputRef = useRef(null);
+          <aside class="action-sidebar">
+            <div class="creator-avatar-container">
+              <img src="${video.avatar}" class="creator-avatar" alt="avatar" />
+              <div class="follow-badge-plus">+</div>
+            </div>
 
-      const [newComment, setNewComment] = useState('');
-      const [hearts, setHearts] = useState([]);
-      const containerRef = useRef(null);
-      const lastTapRef = useRef(0);
+            <button class="action-btn-item btnLike" data-id="${video.id}">
+              <div class="action-icon-circle ${video.liked ? 'liked' : ''}">
+                ${video.liked ? '❤️' : '🤍'}
+              </div>
+              <span class="action-label">${video.likes}</span>
+            </button>
 
-      const triggerOpeningAnimation = (callback) => {
-        setIsOpeningAnimation(true);
-        setTimeout(() => {
-          setIsOpeningAnimation(false);
-          if (callback) callback();
-        }, 1300);
-      };
+            <button class="action-btn-item btnComment">
+              <div class="action-icon-circle">💬</div>
+              <span class="action-label">${video.comments}</span>
+            </button>
 
-      const completeLogin = (userData) => {
-        const fullUser = { ...currentUser, ...userData, isLoggedIn: true };
-        setCurrentUser(fullUser);
-        try {
-          localStorage.setItem('taktak_user', JSON.stringify(fullUser));
-        } catch (e) {}
-        triggerOpeningAnimation(() => {
-          setShowCoverScreen(false);
-          setCoverAuthView('buttons');
-          showToast(`¡Bienvenido a TakTak, ${fullUser.name}! 🚀`);
+            <button class="action-btn-item btnShare">
+              <div class="action-icon-circle">↗️</div>
+              <span class="action-label">${video.shares}</span>
+            </button>
+
+            <div class="vinyl-sound-disc">
+              <img src="${video.avatar}" alt="sound" />
+            </div>
+          </aside>
+
+          <div class="video-meta-info">
+            <div class="creator-username">@${video.username} <span class="verified-check">✓</span></div>
+            <div class="video-description">${video.title}</div>
+            <div class="video-tags-container">
+              ${video.tags.map(t => `<span class="tag-badge">${t}</span>`).join('')}
+            </div>
+            <div class="sound-marquee-container">
+              <span>🎵</span> <span>${video.soundTitle}</span>
+            </div>
+          </div>
+        `;
+
+        // Like button interaction
+        const likeBtn = slide.querySelector('.btnLike');
+        likeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          video.liked = !video.liked;
+          video.likes += video.liked ? 1 : -1;
+          const circle = likeBtn.querySelector('.action-icon-circle');
+          const lbl = likeBtn.querySelector('.action-label');
+          circle.innerHTML = video.liked ? '❤️' : '🤍';
+          if (video.liked) circle.classList.add('liked');
+          else circle.classList.remove('liked');
+          lbl.innerText = video.likes;
         });
-      };
 
-      const handleQuickGoogleConnect = () => {
-        const sampleEmail = googleEmailInput.trim() || 'usuario.google@gmail.com';
-        const sampleName = googleNameInput.trim() || 'Usuario Google';
-        const sampleUsername = (sampleEmail.split('@')[0] || sampleName).toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        
-        completeLogin({
-          name: sampleName,
-          username: sampleUsername,
-          email: sampleEmail,
-          avatar: editAvatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-          bio: `Cuenta conectada con Google (${sampleEmail}) ✨`,
-          provider: 'google'
+        // Double click heart burst
+        slide.addEventListener('dblclick', (e) => {
+          const heart = document.createElement('div');
+          heart.className = 'floating-heart';
+          heart.innerText = '❤️';
+          heart.style.left = e.clientX + 'px';
+          heart.style.top = e.clientY + 'px';
+          slide.appendChild(heart);
+          setTimeout(() => heart.remove(), 850);
+          if (!video.liked) {
+            video.liked = true;
+            video.likes += 1;
+            likeBtn.querySelector('.action-icon-circle').innerHTML = '❤️';
+            likeBtn.querySelector('.action-icon-circle').classList.add('liked');
+            likeBtn.querySelector('.action-label').innerText = video.likes;
+          }
         });
-      };
 
-      const showToast = (msg) => {
-        setToastMsg(msg);
-        setTimeout(() => setToastMsg(''), 2600);
-      };
+        // Mute button interaction
+        const muteBtn = slide.querySelector('.btnToggleMute');
+        muteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          isMuted = !isMuted;
+          document.querySelectorAll('.video-player-element').forEach(v => v.muted = isMuted);
+          document.querySelectorAll('.btnToggleMute').forEach(b => b.innerText = isMuted ? '🔇' : '🔊');
+          showToast(isMuted ? 'Silenciado 🔇' : 'Sonido activado 🔊');
+        });
 
-      const displayedVideos = videos.filter(v => {
-        if (searchQuery) {
-          return v.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                 v.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-        }
-        if (activeTab === 'following') return v.category === 'following';
-        return true;
+        // Share button interaction
+        const shareBtn = slide.querySelector('.btnShare');
+        shareBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(window.location.href);
+            showToast('¡Enlace de TakTak copiado! 📋');
+          }
+        });
+
+        container.appendChild(slide);
+      });
+    }
+
+    // ================= INITIALIZE EVENTS ON DOM LOAD =================
+    document.addEventListener('DOMContentLoaded', () => {
+      // Elements
+      const coverScreen = document.getElementById('coverLandingScreen');
+      const mainBtns = document.getElementById('coverMainButtons');
+      const googleBox = document.getElementById('coverGoogleBox');
+      const phoneBox = document.getElementById('coverPhoneBox');
+      const phoneStep1 = document.getElementById('phoneStep1');
+      const phoneStep2 = document.getElementById('phoneStep2');
+      const globalAvatarFile = document.getElementById('globalAvatarFile');
+
+      // Check if user is already logged in
+      if (currentUser.isLoggedIn) {
+        coverScreen.classList.add('hidden');
+      }
+      updateProfileUI();
+      renderVideos();
+
+      // Cover Screen Actions
+      document.getElementById('btnOpenGoogle').addEventListener('click', () => {
+        mainBtns.style.display = 'none';
+        phoneBox.style.display = 'none';
+        googleBox.style.display = 'block';
       });
 
-      useEffect(() => {
-        const c = containerRef.current;
-        if (!c) return;
-        const onScroll = () => {
-          const idx = Math.round(c.scrollTop / c.clientHeight);
-          if (idx !== activeIndex && idx >= 0 && idx < displayedVideos.length) {
-            setActiveIndex(idx);
-          }
-        };
-        c.addEventListener('scroll', onScroll, { passive: true });
-        return () => c.removeEventListener('scroll', onScroll);
-      }, [activeIndex, displayedVideos.length]);
+      document.getElementById('btnOpenPhone').addEventListener('click', () => {
+        mainBtns.style.display = 'none';
+        googleBox.style.display = 'none';
+        phoneBox.style.display = 'block';
+        phoneStep1.style.display = 'flex';
+        phoneStep2.style.display = 'none';
+      });
 
-      const handleLike = (id) => {
-        setVideos(prev => prev.map(v => {
-          if (v.id === id) {
-            const nextLiked = !v.liked;
-            return {
-              ...v,
-              liked: nextLiked,
-              likes: nextLiked ? v.likes + 1 : Math.max(0, v.likes - 1)
-            };
-          }
-          return v;
-        }));
-      };
+      document.getElementById('btnBackGoogle').addEventListener('click', () => {
+        googleBox.style.display = 'none';
+        mainBtns.style.display = 'flex';
+      });
 
-      const handleDoubleTap = (e, id) => {
-        const now = Date.now();
-        if (now - lastTapRef.current < 300) {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const heart = { id: Date.now(), x: e.clientX - rect.left, y: e.clientY - rect.top };
-          setHearts(h => [...h, heart]);
-          setTimeout(() => setHearts(h => h.filter(x => x.id !== heart.id)), 850);
-          handleLike(id);
-          lastTapRef.current = 0;
-        } else {
-          lastTapRef.current = now;
+      document.getElementById('btnBackPhone').addEventListener('click', () => {
+        phoneBox.style.display = 'none';
+        mainBtns.style.display = 'flex';
+      });
+
+      // Quick Google Connect
+      document.getElementById('btnGoogleInstant').addEventListener('click', () => {
+        const email = document.getElementById('inputGoogleEmail').value.trim() || 'usuario.google@gmail.com';
+        const name = document.getElementById('inputGoogleName').value.trim() || 'Usuario Google';
+        const username = (email.split('@')[0] || 'usuario_google').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        performLogin({
+          name: name,
+          username: username,
+          email: email,
+          avatar: selectedAvatarBase64 || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          bio: `Cuenta conectada con Google (${email}) ✨`
+        });
+      });
+
+      // Google Form Submit
+      document.getElementById('btnSubmitGoogle').addEventListener('click', () => {
+        const email = document.getElementById('inputGoogleEmail').value.trim() || 'usuario.google@gmail.com';
+        const name = document.getElementById('inputGoogleName').value.trim() || 'Usuario Google';
+        const username = (email.split('@')[0] || 'usuario_google').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        performLogin({
+          name: name,
+          username: username,
+          email: email,
+          avatar: selectedAvatarBase64 || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          bio: `Cuenta conectada con Google (${email}) ✨`
+        });
+      });
+
+      // Phone SMS flow
+      document.getElementById('btnSendPhoneCode').addEventListener('click', () => {
+        const phone = document.getElementById('inputPhoneNum').value.trim();
+        if (!phone) {
+          alert('Por favor ingresa tu número de teléfono');
+          return;
         }
-      };
+        document.getElementById('lblPhoneTarget').innerText = phone;
+        phoneStep1.style.display = 'none';
+        phoneStep2.style.display = 'flex';
+        showToast('Código SMS enviado: 123456 📲');
+      });
 
-      const handleAddComment = (e) => {
-        e.preventDefault();
-        if (!newComment.trim() || !commentsModal) return;
-        const c = {
-          id: Date.now(),
-          username: currentUser.username,
-          avatar: currentUser.avatar,
-          text: newComment.trim()
-        };
-        setVideos(prev => prev.map(v => v.id === commentsModal.id ? { ...v, comments: [c, ...v.comments] } : v));
-        setCommentsModal(prev => ({ ...prev, comments: [c, ...prev.comments] }));
-        setNewComment('');
-        showToast('¡Comentario publicado!');
-      };
+      document.getElementById('btnSubmitPhone').addEventListener('click', () => {
+        const phone = document.getElementById('inputPhoneNum').value.trim() || '+34 600 000 000';
+        const name = document.getElementById('inputPhoneName').value.trim() || `Usuario ${phone.slice(-4)}`;
+        const username = `user_${phone.slice(-4)}`;
+        performLogin({
+          name: name,
+          username: username,
+          phone: phone,
+          avatar: selectedAvatarBase64 || 'copilot_image_1758359058839.jpeg',
+          bio: `Verificado con teléfono (${phone}) 📱`
+        });
+      });
 
-      const handleUpload = (title, tags, customVideoUrl) => {
-        const sampleVideos = [
-          'https://assets.mixkit.co/videos/preview/mixkit-young-woman-skater-performing-a-trick-41129-large.mp4',
-          'https://assets.mixkit.co/videos/preview/mixkit-man-working-on-his-laptop-308-large.mp4',
-          'https://assets.mixkit.co/videos/preview/mixkit-futuristic-robot-with-artificial-intelligence-50796-large.mp4'
-        ];
-        const newV = {
-          id: Date.now(),
-          userId: currentUser.username,
-          user: currentUser,
-          title: title || 'Nuevo clip publicado en TakTak 🚀',
-          tags: tags ? (Array.isArray(tags) ? tags : tags.split(' ')) : ['#taktak', '#viral'],
-          soundTitle: `${currentUser.name} — Sonido original`,
-          soundAvatar: currentUser.avatar,
-          videoUrl: customVideoUrl || sampleVideos[Math.floor(Math.random() * sampleVideos.length)],
-          likes: 1,
-          liked: true,
-          shares: 0,
-          category: 'foryou',
-          comments: []
-        };
-        setVideos([newV, ...videos]);
-        setUploadModal(false);
-        setCameraModal(false);
-        setActiveTab('foryou');
-        setActiveIndex(0);
-        showToast('¡Vídeo publicado con éxito! 🎉');
-      };
+      // Photo pickers in Auth
+      let avatarTargetImg = null;
+      document.getElementById('btnPickGooglePhoto').addEventListener('click', () => {
+        avatarTargetImg = document.getElementById('coverGoogleAvatarPreview');
+        globalAvatarFile.click();
+      });
 
-      const handleAvatarFilePicked = (e, callback) => {
+      document.getElementById('btnPickPhonePhoto').addEventListener('click', () => {
+        avatarTargetImg = document.getElementById('coverPhoneAvatarPreview');
+        globalAvatarFile.click();
+      });
+
+      document.getElementById('profileAvatarTrigger').addEventListener('click', () => {
+        avatarTargetImg = document.getElementById('profAvatarDisplay');
+        globalAvatarFile.click();
+      });
+
+      globalAvatarFile.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
           const reader = new FileReader();
-          reader.onload = (event) => {
-            const base64Url = event.target.result;
-            if (callback) {
-              callback(base64Url);
-            } else {
-              setEditAvatarUrl(base64Url);
-              showToast('¡Foto de perfil seleccionada! 📸');
-            }
+          reader.onload = (evt) => {
+            selectedAvatarBase64 = evt.target.result;
+            if (avatarTargetImg) avatarTargetImg.src = selectedAvatarBase64;
+            currentUser.avatar = selectedAvatarBase64;
+            updateProfileUI();
+            try { localStorage.setItem('taktak_user', JSON.stringify(currentUser)); } catch(e){}
+            showToast('¡Foto seleccionada correctamente! 📸');
           };
           reader.readAsDataURL(file);
         }
-      };
+      });
 
-      const startCamera = async () => {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          setCameraStream(stream);
-          if (videoCamRef.current) {
-            videoCamRef.current.srcObject = stream;
-          }
-        } catch (err) {
-          console.warn(err);
-          showToast('Cámara iniciada');
-        }
-      };
+      // Navigation & Tabs
+      const tabForYou = document.getElementById('tabForYou');
+      const tabGames = document.getElementById('tabGames');
+      const feedContainer = document.getElementById('feedContainer');
+      const gamesContainer = document.getElementById('gamesContainer');
 
-      const stopCamera = () => {
-        if (cameraStream) {
-          cameraStream.getTracks().forEach(t => t.stop());
-          setCameraStream(null);
-        }
-      };
+      tabForYou.addEventListener('click', () => {
+        tabForYou.classList.add('active');
+        tabGames.classList.remove('active');
+        feedContainer.style.display = 'block';
+        gamesContainer.style.display = 'none';
+      });
 
-      const startRecording = () => {
-        setIsRecording(true);
-        if (cameraStream) {
-          const chunks = [];
-          const recorder = new MediaRecorder(cameraStream);
-          recorder.ondataavailable = e => chunks.push(e.data);
-          recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/mp4' });
-            const videoBlobUrl = URL.createObjectURL(blob);
-            handleUpload(`🎥 Clip grabado con cámara (${new Date().toLocaleTimeString()})`, '#camara #taktak #live', videoBlobUrl);
-            stopCamera();
-          };
-          recorder.start();
-          mediaRecorderRef.current = recorder;
-        }
-      };
+      tabGames.addEventListener('click', () => {
+        tabGames.classList.add('active');
+        tabForYou.classList.remove('active');
+        feedContainer.style.display = 'none';
+        gamesContainer.style.display = 'flex';
+      });
 
-      const stopRecording = () => {
-        setIsRecording(false);
-        if (mediaRecorderRef.current) {
-          mediaRecorderRef.current.stop();
-        }
-      };
+      document.getElementById('navHome').addEventListener('click', () => {
+        tabForYou.click();
+      });
 
-      const myUploadedVideos = videos.filter(v => v.userId === currentUser.username || v.user?.username === currentUser.username);
-      const myLikedVideos = videos.filter(v => v.liked);
+      document.getElementById('navGames').addEventListener('click', () => {
+        tabGames.click();
+      });
 
-      return (
-        <div className="app-viewport">
-          {toastMsg && <div className="toast-popup">✨ {toastMsg}</div>}
+      // Profile Modal
+      const profileModal = document.getElementById('profileModal');
+      document.getElementById('navProfile').addEventListener('click', () => {
+        profileModal.classList.add('active');
+      });
+      document.getElementById('btnCloseProfile').addEventListener('click', () => {
+        profileModal.classList.remove('active');
+      });
 
-          <input
-            type="file"
-            accept="image/*"
-            ref={avatarFileInputRef}
-            style={{ display: 'none' }}
-            onChange={(e) => handleAvatarFilePicked(e)}
-          />
+      // Edit Profile Modal
+      const editModal = document.getElementById('editProfileModal');
+      document.getElementById('btnOpenEditProfile').addEventListener('click', () => {
+        profileModal.classList.remove('active');
+        editModal.classList.add('active');
+      });
+      document.getElementById('btnCloseEditProfile').addEventListener('click', () => {
+        editModal.classList.remove('active');
+      });
 
-          {isOpeningAnimation && (
-            <div className="splash-opening-overlay">
-              <img
-                src="copilot_image_1758359058839.jpeg"
-                onError={e => e.target.src='taktak_cover.jpeg'}
-                className="splash-opening-logo"
-                alt="TakTak"
-              />
-            </div>
-          )}
+      document.getElementById('btnSaveProfileChanges').addEventListener('click', () => {
+        currentUser.name = document.getElementById('editProfName').value.trim() || currentUser.name;
+        currentUser.username = document.getElementById('editProfUsername').value.trim() || currentUser.username;
+        currentUser.bio = document.getElementById('editProfBio').value.trim() || currentUser.bio;
+        try { localStorage.setItem('taktak_user', JSON.stringify(currentUser)); } catch(e){}
+        updateProfileUI();
+        editModal.classList.remove('active');
+        showToast('¡Perfil guardado con éxito! ✅');
+      });
 
-          {showCoverScreen && (
-            <div className="cover-landing-screen">
-              <div>
-                <div className="cover-hero-glow">
-                  <img
-                    src="copilot_image_1758359058839.jpeg"
-                    onError={(e) => { e.target.src = 'taktak_cover.jpeg'; }}
-                    className="cover-logo-img"
-                    alt="TakTak Logo"
-                  />
-                </div>
-                <h1 className="cover-title">TakTak</h1>
-                <p className="cover-subtitle">Vídeos cortos en vertical, minijuegos y creación con IA.</p>
-              </div>
+      // Logout
+      document.getElementById('btnLogout').addEventListener('click', () => {
+        currentUser.isLoggedIn = false;
+        try { localStorage.removeItem('taktak_user'); } catch(e){}
+        profileModal.classList.remove('active');
+        googleBox.style.display = 'none';
+        phoneBox.style.display = 'none';
+        mainBtns.style.display = 'flex';
+        coverScreen.classList.remove('hidden');
+        showToast('Sesión cerrada');
+      });
 
-              {coverAuthView === 'buttons' && (
-                <div className="cover-actions">
-                  <button
-                    className="auth-provider-btn btn-google"
-                    onClick={() => setCoverAuthView('google')}
-                  >
-                    <svg width="22" height="22" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                    </svg>
-                    Iniciar sesión con Google
-                  </button>
+      // Upload Modal
+      const uploadModal = document.getElementById('uploadModal');
+      document.getElementById('navCreate').addEventListener('click', () => {
+        uploadModal.classList.add('active');
+      });
+      document.getElementById('btnCloseUpload').addEventListener('click', () => {
+        uploadModal.classList.remove('active');
+      });
+      document.getElementById('btnSubmitUpload').addEventListener('click', () => {
+        const title = document.getElementById('uploadTitleInput').value.trim() || 'Nuevo vídeo';
+        VIDEOS_DATA.unshift({
+          id: Date.now(),
+          username: currentUser.username,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          title: title,
+          tags: ['#taktak', '#viral'],
+          soundTitle: `${currentUser.name} — Sonido Original`,
+          videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-skater-performing-a-trick-41129-large.mp4',
+          likes: 1,
+          liked: true,
+          shares: 0,
+          comments: 0
+        });
+        renderVideos();
+        uploadModal.classList.remove('active');
+        showToast('¡Vídeo publicado con éxito! 🚀');
+        tabForYou.click();
+      });
 
-                  <button
-                    className="auth-provider-btn btn-phone"
-                    onClick={() => {
-                      setPhoneStep(1);
-                      setCoverAuthView('phone');
-                    }}
-                  >
-                    <span>📱</span>
-                    Iniciar sesión con Teléfono
-                  </button>
-                </div>
-              )}
+      // AI Studio Modal
+      const aiModal = document.getElementById('aiStudioModal');
+      document.getElementById('navAI').addEventListener('click', () => {
+        aiModal.classList.add('active');
+      });
+      document.getElementById('btnCloseAI').addEventListener('click', () => {
+        aiModal.classList.remove('active');
+      });
+      document.getElementById('btnGenerateAIVideo').addEventListener('click', () => {
+        const prompt = document.getElementById('aiPromptInput').value.trim();
+        VIDEOS_DATA.unshift({
+          id: Date.now(),
+          username: 'ai_studio',
+          name: 'TakTak AI Studio',
+          avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+          title: `🤖 AI: "${prompt}"`,
+          tags: ['#aivideo', '#moneyprinterturbo'],
+          soundTitle: 'AI Synth Pulse V1',
+          videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-futuristic-robot-with-artificial-intelligence-50796-large.mp4',
+          likes: 10,
+          liked: true,
+          shares: 5,
+          comments: 2
+        });
+        renderVideos();
+        aiModal.classList.remove('active');
+        showToast('¡Vídeo AI generado y publicado! ✨');
+        tabForYou.click();
+      });
 
-              {coverAuthView === 'google' && (
-                <div className="cover-auth-box">
-                  <div className="cover-auth-header">
-                    <div className="cover-auth-title">
-                      <svg width="20" height="20" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                      </svg>
-                      Conectar con Google
-                    </div>
-                    <button className="close-btn" onClick={() => setCoverAuthView('buttons')}>&larr; Volver</button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
-                    <button
-                      className="auth-provider-btn btn-google"
-                      style={{ padding: '12px', fontSize: '14px' }}
-                      onClick={handleQuickGoogleConnect}
-                    >
-                      ⚡ Conectar Cuenta de Google Automático
-                    </button>
-
-                    <div style={{ textAlign: 'center', fontSize: '11.5px', color: '#888', margin: '2px 0' }}>— o ingresa tus datos —</div>
-
-                    <div className="form-group">
-                      <label className="form-label">Correo de Gmail</label>
-                      <input
-                        type="email"
-                        className="form-input"
-                        placeholder="tu.cuenta@gmail.com"
-                        value={googleEmailInput}
-                        onChange={e => setGoogleEmailInput(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Contraseña</label>
-                      <input
-                        type="password"
-                        className="form-input"
-                        placeholder="••••••••"
-                        value={googlePassInput}
-                        onChange={e => setGooglePassInput(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Nombre para mostrar (Opcional)</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Ej. Juan Gómez"
-                        value={googleNameInput}
-                        onChange={e => setGoogleNameInput(e.target.value)}
-                      />
-                    </div>
-
-                    <input
-                      type="file"
-                      accept="image/*"
-                      ref={coverAvatarFileInputRef}
-                      style={{ display: 'none' }}
-                      onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
-                    />
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px' }}>
-                      <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-cyan)' }} />
-                      <button
-                        type="button"
-                        className="badge-btn"
-                        onClick={() => coverAvatarFileInputRef.current?.click()}
-                      >
-                        📷 Subir Foto de Perfil
-                      </button>
-                    </div>
-
-                    <button
-                      className="primary-btn"
-                      style={{ marginTop: '6px' }}
-                      onClick={handleQuickGoogleConnect}
-                    >
-                      🚀 Iniciar Sesión con Google
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {coverAuthView === 'phone' && (
-                <div className="cover-auth-box">
-                  <div className="cover-auth-header">
-                    <div className="cover-auth-title">
-                      <span>📱</span> Iniciar con Teléfono
-                    </div>
-                    <button className="close-btn" onClick={() => setCoverAuthView('buttons')}>&larr; Volver</button>
-                  </div>
-
-                  {phoneStep === 1 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa tu número móvil para recibir el código de verificación SMS:</p>
-                      
-                      <div className="form-group">
-                        <label className="form-label">Número de Teléfono</label>
-                        <input
-                          type="tel"
-                          className="form-input"
-                          placeholder="+34 600 000 000"
-                          value={phoneInput}
-                          onChange={e => setPhoneInput(e.target.value)}
-                        />
-                      </div>
-
-                      <button
-                        className="primary-btn"
-                        style={{ background: 'var(--gradient-btn-cyan)', color: '#051412', marginTop: '4px' }}
-                        onClick={() => {
-                          if (!phoneInput.trim()) {
-                            alert('Por favor introduce tu número de teléfono');
-                            return;
-                          }
-                          setPhoneStep(2);
-                          showToast('Código SMS enviado: 123456 📲');
-                        }}
-                      >
-                        Enviar Código SMS 📲
-                      </button>
-                    </div>
-                  )}
-
-                  {phoneStep === 2 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
-                      <p style={{ fontSize: '13px', color: '#bbb' }}>Ingresa el código enviado a <strong>{phoneInput}</strong>:</p>
-                      
-                      <div className="form-group">
-                        <label className="form-label">Código SMS (6 dígitos)</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="123456"
-                          maxLength="6"
-                          value={phoneCodeInput}
-                          onChange={e => setPhoneCodeInput(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Tu Nombre</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Nombre para mostrar"
-                          value={phoneNameInput}
-                          onChange={e => setPhoneNameInput(e.target.value)}
-                        />
-                      </div>
-
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={coverAvatarFileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
-                      />
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
-                        <button
-                          type="button"
-                          className="badge-btn"
-                          onClick={() => coverAvatarFileInputRef.current?.click()}
-                        >
-                          📷 Subir Foto
-                        </button>
-                      </div>
-
-                      <button
-                        className="primary-btn"
-                        style={{ background: 'var(--gradient-btn-cyan)', color: '#051412', marginTop: '6px' }}
-                        onClick={() => {
-                          const name = phoneNameInput.trim() || `Usuario ${phoneInput.slice(-4)}`;
-                          const username = `user_${phoneInput.slice(-4)}`;
-                          completeLogin({
-                            name: name,
-                            username: username,
-                            phone: phoneInput,
-                            avatar: editAvatarUrl || 'copilot_image_1758359058839.jpeg',
-                            bio: `Verificado con teléfono (${phoneInput}) 📱`,
-                            provider: 'phone'
-                          });
-                        }}
-                      >
-                        Verificar y Entrar ✅
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          <header className="top-header-bar">
-            <div className="brand-logo" onClick={() => { setActiveTab('foryou'); setSearchQuery(''); }}>
-              <img src="copilot_image_1758359058839.jpeg" onError={e => e.target.src='taktak_cover.jpeg'} className="brand-logo-icon" />
-              TakTak
-            </div>
-            
-            <div className="header-tabs">
-              <button className={`header-tab-btn ${activeTab === 'following' ? 'active' : ''}`} onClick={() => setActiveTab('following')}>
-                Siguiendo
-              </button>
-              <button className={`header-tab-btn ${activeTab === 'foryou' ? 'active' : ''}`} onClick={() => setActiveTab('foryou')}>
-                Para ti
-              </button>
-              <button className={`header-tab-btn game-tab ${activeTab === 'games' ? 'active' : ''}`} onClick={() => setActiveTab('games')}>
-                🎮 Juegos
-              </button>
-            </div>
-
-            <div className="header-right-actions">
-              <button className="badge-btn" onClick={() => setCameraModal(true)}>
-                🎥 Grabar
-              </button>
-            </div>
-          </header>
-
-          {activeTab === 'games' ? (
-            <div className="game-viewport-card">
-              <div className="game-canvas-container">
-                <BeatRunnerGame onFinishScore={(pts) => {
-                  handleUpload(`🎮 ¡Nuevo Récord en TakTak Beat Runner: ${pts} pts! 🏆`, '#gaming #taktakrunner #record');
-                }} />
-              </div>
-            </div>
-          ) : (
-            <div ref={containerRef} className="feed-container">
-              {displayedVideos.map((video, idx) => (
-                <div key={video.id} className="video-slide" onClick={(e) => handleDoubleTap(e, video.id)}>
-                  <video
-                    src={video.videoUrl}
-                    className="video-player-element"
-                    autoPlay={idx === activeIndex}
-                    loop
-                    muted={isMuted}
-                    playsInline
-                    ref={el => {
-                      if (el) {
-                        if (idx === activeIndex) { el.play().catch(()=>{}); }
-                        else { el.pause(); }
-                      }
-                    }}
-                  />
-                  <div className="video-overlay-gradient"></div>
-
-                  {hearts.map(h => (
-                    <div key={h.id} className="floating-heart" style={{ left: h.x, top: h.y }}>❤️</div>
-                  ))}
-
-                  <button
-                    style={{ position: 'absolute', top: '62px', right: '14px', background: 'rgba(5,5,10,0.65)', border: '1px solid var(--taktak-cyan)', color: '#fff', borderRadius: '50%', width: '38px', height: '38px', cursor: 'pointer', zIndex: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px var(--taktak-cyan-glow)' }}
-                    onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); showToast(isMuted ? 'Sonido activado 🔊' : 'Silenciado 🔇'); }}
-                  >
-                    {isMuted ? '🔇' : '🔊'}
-                  </button>
-
-                  <aside className="action-sidebar" onClick={e => e.stopPropagation()}>
-                    <div className="creator-avatar-container" onClick={() => setProfileModal(true)}>
-                      <img src={video.user.avatar} className="creator-avatar" alt="avatar" />
-                      <div className="follow-badge-plus">+</div>
-                    </div>
-
-                    <button className="action-btn-item" onClick={() => handleLike(video.id)}>
-                      <div className={`action-icon-circle ${video.liked ? 'liked' : ''}`}>
-                        {video.liked ? '❤️' : '🤍'}
-                      </div>
-                      <span className="action-label">{video.likes}</span>
-                    </button>
-
-                    <button className="action-btn-item" onClick={() => setCommentsModal(video)}>
-                      <div className="action-icon-circle">💬</div>
-                      <span className="action-label">{video.comments.length}</span>
-                    </button>
-
-                    <button className="action-btn-item" onClick={() => setShareModal(video)}>
-                      <div className="action-icon-circle">↗️</div>
-                      <span className="action-label">{video.shares}</span>
-                    </button>
-
-                    <div className="vinyl-sound-disc">
-                      <img src={video.soundAvatar} alt="sound" />
-                    </div>
-                  </aside>
-
-                  <div className="video-meta-info">
-                    <div className="creator-username" onClick={() => setProfileModal(true)} style={{ cursor: 'pointer' }}>
-                      @{video.user.username} <span className="verified-check">✓</span>
-                    </div>
-                    <div className="video-description">{video.title}</div>
-                    <div className="video-tags-container">
-                      {video.tags.map((t, i) => (
-                        <span key={i} className="tag-badge" onClick={() => { setSearchQuery(t); showToast(`Filtrado por ${t}`); }}>
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="sound-marquee-container">
-                      <span>🎵</span> <span>{video.soundTitle}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <nav className="bottom-nav-bar">
-            <button className={`nav-item-btn ${activeNav === 'home' && activeTab !== 'games' ? 'active' : ''}`} onClick={() => { setActiveNav('home'); setActiveTab('foryou'); setSearchQuery(''); }}>
-              <span>🏠</span><span>Inicio</span>
-            </button>
-            <button className={`nav-item-btn ${activeTab === 'games' ? 'active' : ''}`} onClick={() => { setActiveTab('games'); setActiveNav('games'); }}>
-              <span>🎮</span><span>Juegos</span>
-            </button>
-            <button className="nav-create-btn" onClick={() => setUploadModal(true)} title="Crear / Subir">+</button>
-            <button className="nav-item-btn" onClick={() => setAiStudioModal(true)}>
-              <span>✨</span><span>AI Studio</span>
-            </button>
-            <button className="nav-item-btn" onClick={() => { setProfileModal(true); setActiveNav('profile'); }}>
-              <img src={currentUser.avatar} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
-              <span>Perfil</span>
-            </button>
-          </nav>
-
-          {commentsModal && (
-            <div className="drawer-backdrop" onClick={() => setCommentsModal(null)}>
-              <div className="drawer-content" onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>{commentsModal.comments.length} comentarios</div>
-                  <button className="close-btn" onClick={() => setCommentsModal(null)}>&times;</button>
-                </div>
-                <div className="comments-list">
-                  {commentsModal.comments.map(c => (
-                    <div key={c.id} className="comment-item">
-                      <img src={c.avatar || 'copilot_image_1758359058839.jpeg'} className="comment-avatar" />
-                      <div>
-                        <div className="comment-user">@{c.username}</div>
-                        <div className="comment-text">{c.text}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <form className="comment-input-area" onSubmit={handleAddComment}>
-                  <img src={currentUser.avatar} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--taktak-pink)' }} />
-                  <input
-                    type="text"
-                    className="comment-input"
-                    placeholder={`Comentar como @${currentUser.username}...`}
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    autoFocus
-                  />
-                  <button type="submit" className="comment-send-btn">↑</button>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {shareModal && (
-            <div className="drawer-backdrop" onClick={() => setShareModal(null)}>
-              <div className="drawer-content" onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>Compartir vídeo / juego</div>
-                  <button className="close-btn" onClick={() => setShareModal(null)}>&times;</button>
-                </div>
-                <div className="modal-body">
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', textAlign: 'center' }}>
-                    <div style={{ cursor: 'pointer' }} onClick={() => { navigator.clipboard?.writeText(window.location.href); showToast('¡Enlace copiado al portapapeles! 📋'); setShareModal(null); }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--gradient-btn-cyan)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px', boxShadow: '0 0 15px var(--taktak-cyan-glow)' }}>🔗</div>
-                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>Copiar</span>
-                    </div>
-                    <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('¡Mira este vídeo en TakTak! ' + window.location.href)}`); setShareModal(null); }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#25D366', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>💬</div>
-                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>WhatsApp</span>
-                    </div>
-                    <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent('Increíble vídeo en @TakTakApp ' + window.location.href)}`); setShareModal(null); }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#1DA1F2', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>🐦</div>
-                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>Twitter</span>
-                    </div>
-                    <div style={{ cursor: 'pointer' }} onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=TakTak`); setShareModal(null); }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#0088cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '20px' }}>✈️</div>
-                      <span style={{ fontSize: '12px', color: '#ccc', fontWeight: '700' }}>Telegram</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {uploadModal && (
-            <div className="drawer-backdrop" onClick={() => setUploadModal(false)}>
-              <div className="drawer-content" onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>Subir Vídeo o Minijuego 📤</div>
-                  <button className="close-btn" onClick={() => setUploadModal(false)}>&times;</button>
-                </div>
-                <div className="modal-body">
-                  <div className="form-group">
-                    <label className="form-label">Seleccionar archivo de vídeo (.mp4, .webm)</label>
-                    <input
-                      type="file"
-                      accept="video/*"
-                      className="form-input"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          const url = URL.createObjectURL(file);
-                          handleUpload(file.name.replace(/\.[^/.]+$/, ''), '#mivideo #taktak', url);
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Título del vídeo</label>
-                    <input id="up-title-prev" type="text" className="form-input" defaultValue="Mi nuevo contenido en TakTak ✨" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Hashtags</label>
-                    <input id="up-tags-prev" type="text" className="form-input" defaultValue="#taktak #trend #viral #gaming" />
-                  </div>
-                  <button
-                    className="primary-btn"
-                    onClick={() => {
-                      const t = document.getElementById('up-title-prev').value;
-                      const tags = document.getElementById('up-tags-prev').value;
-                      handleUpload(t, tags);
-                    }}
-                  >
-                    Publicar ahora 🚀
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {cameraModal && (
-            <div className="drawer-backdrop" onClick={() => { stopCamera(); setCameraModal(false); }}>
-              <div className="drawer-content" style={{ minHeight: '68%' }} onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>🎥 Grabar con Cámara</div>
-                  <button className="close-btn" onClick={() => { stopCamera(); setCameraModal(false); }}>&times;</button>
-                </div>
-                <div className="modal-body" style={{ alignItems: 'center' }}>
-                  <video ref={videoCamRef} autoPlay playsInline muted className="camera-preview-video"></video>
-                  
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                    {!cameraStream ? (
-                      <button className="primary-btn" onClick={startCamera}>Encender Cámara 📷</button>
-                    ) : (
-                      <>
-                        {!isRecording ? (
-                          <button className="primary-btn" onClick={startRecording}>
-                            🔴 Empezar Grabación
-                          </button>
-                        ) : (
-                          <button className="primary-btn" style={{ background: 'var(--gradient-btn-cyan)', color: '#000' }} onClick={stopRecording}>
-                            ⏹ Detener y Publicar
-                          </button>
-                        )}
-                        <button className="badge-btn" onClick={stopCamera}>Apagar</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {aiStudioModal && (
-            <div className="drawer-backdrop" onClick={() => setAiStudioModal(false)}>
-              <div className="drawer-content" onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>✨ TakTak AI Studio (MoneyPrinterTurbo)</div>
-                  <button className="close-btn" onClick={() => setAiStudioModal(false)}>&times;</button>
-                </div>
-                <div className="modal-body">
-                  <div className="form-group">
-                    <label className="form-label">Idea o guión para el vídeo</label>
-                    <textarea id="ai-prompt-prev" className="form-textarea" rows="2" defaultValue="5 datos asombrosos sobre videojuegos y tecnología 🕹️⚡" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Estilo Visual</label>
-                    <select className="form-select">
-                      <option>Cyberpunk & Neón ⚡</option>
-                      <option>Cinemático 4K 🎬</option>
-                      <option>Anime & Ilustrado 🎨</option>
-                    </select>
-                  </div>
-                  <button
-                    className="ai-gradient-btn"
-                    onClick={() => {
-                      const prompt = document.getElementById('ai-prompt-prev').value;
-                      handleUpload(`🤖 AI: "${prompt}"`, '#aivideo #moneyprinterturbo #ia');
-                      setAiStudioModal(false);
-                    }}
-                  >
-                    ⚡ Generar y Publicar con IA
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {profileModal && (
-            <div className="drawer-backdrop" onClick={() => setProfileModal(false)}>
-              <div className="drawer-content" style={{ minHeight: '75%', maxHeight: '90%' }} onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>Perfil de Usuario</div>
-                  <button className="close-btn" onClick={() => setProfileModal(false)}>&times;</button>
-                </div>
-                <div className="modal-body" style={{ textAlign: 'center' }}>
-                  
-                  <div className="profile-avatar-wrapper" onClick={() => avatarFileInputRef.current?.click()} title="Toca para cambiar foto">
-                    <img src={currentUser.avatar} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} className="profile-avatar-img" />
-                    <div className="avatar-camera-badge">📷</div>
-                  </div>
-
-                  <h3 style={{ marginTop: '10px', fontSize: '20px', fontFamily: 'var(--font-heading)', fontWeight: '800' }}>{currentUser.name}</h3>
-                  <div style={{ color: 'var(--taktak-cyan)', fontSize: '14px', fontWeight: '700' }}>@{currentUser.username}</div>
-                  <p style={{ color: '#eee', fontSize: '13.5px', marginTop: '6px', padding: '0 10px' }}>{currentUser.bio}</p>
-
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '26px', margin: '14px 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '12px 0' }}>
-                    <div><strong>{currentUser.following}</strong><div style={{ fontSize: '11px', color: '#888' }}>Siguiendo</div></div>
-                    <div><strong>{currentUser.followers}</strong><div style={{ fontSize: '11px', color: '#888' }}>Seguidores</div></div>
-                    <div><strong>{currentUser.likesCount}</strong><div style={{ fontSize: '11px', color: '#888' }}>Me gusta</div></div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '14px' }}>
-                    <button
-                      className="primary-btn"
-                      style={{ padding: '8px 16px', fontSize: '13px' }}
-                      onClick={() => {
-                        setEditName(currentUser.name);
-                        setEditUsername(currentUser.username);
-                        setEditBio(currentUser.bio);
-                        setEditAvatarUrl(currentUser.avatar);
-                        setEditProfileModal(true);
-                      }}
-                    >
-                      ✏️ Editar Perfil
-                    </button>
-                    <button
-                      className="badge-btn"
-                      style={{ padding: '8px 14px', fontSize: '13px', color: 'var(--taktak-pink)', borderColor: 'var(--taktak-pink)' }}
-                      onClick={() => {
-                        setShowCoverScreen(true);
-                        setCoverAuthView('buttons');
-                        setProfileModal(false);
-                      }}
-                    >
-                      🚪 Cerrar Sesión / Cambiar Cuenta
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.12)', marginBottom: '12px' }}>
-                    <button
-                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'videos' ? 'var(--taktak-pink)' : '#888', fontFamily: 'var(--font-heading)', fontWeight: '800', borderBottom: profileSubTab === 'videos' ? '2px solid var(--taktak-pink)' : 'none', cursor: 'pointer' }}
-                      onClick={() => setProfileSubTab('videos')}
-                    >
-                      🎬 Mis Vídeos ({myUploadedVideos.length})
-                    </button>
-                    <button
-                      style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: profileSubTab === 'liked' ? 'var(--taktak-pink)' : '#888', fontFamily: 'var(--font-heading)', fontWeight: '800', borderBottom: profileSubTab === 'liked' ? '2px solid var(--taktak-pink)' : 'none', cursor: 'pointer' }}
-                      onClick={() => setProfileSubTab('liked')}
-                    >
-                      ❤️ Me Gusta ({myLikedVideos.length})
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
-                    {(profileSubTab === 'videos' ? myUploadedVideos : myLikedVideos).map(v => (
-                      <div key={v.id} style={{ position: 'relative', height: '110px', background: '#161628', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer' }} onClick={() => { setProfileModal(false); setActiveTab('foryou'); }}>
-                        <video src={v.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
-                        <div style={{ position: 'absolute', bottom: 4, left: 4, fontSize: '10px', color: '#fff', textShadow: '0 1px 3px #000' }}>❤️ {v.likes}</div>
-                      </div>
-                    ))}
-                    {(profileSubTab === 'videos' ? myUploadedVideos : myLikedVideos).length === 0 && (
-                      <div style={{ gridColumn: 'span 3', padding: '20px', color: '#777', fontSize: '13px' }}>
-                        No hay vídeos en esta pestaña aún.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {editProfileModal && (
-            <div className="drawer-backdrop" onClick={() => setEditProfileModal(false)}>
-              <div className="drawer-content" style={{ minHeight: '80%' }} onClick={e => e.stopPropagation()}>
-                <div className="drawer-header">
-                  <div>Editar Perfil</div>
-                  <button className="close-btn" onClick={() => setEditProfileModal(false)}>&times;</button>
-                </div>
-                <div className="modal-body">
-                  
-                  <div style={{ textAlign: 'center' }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      ref={editAvatarFileInputRef}
-                      style={{ display: 'none' }}
-                      onChange={(e) => handleAvatarFilePicked(e, (url) => setEditAvatarUrl(url))}
-                    />
-                    <div
-                      className="profile-avatar-wrapper"
-                      onClick={() => editAvatarFileInputRef.current?.click()}
-                      title="Seleccionar foto desde galería/cámara"
-                    >
-                      <img src={editAvatarUrl} onError={e => e.target.src='copilot_image_1758359058839.jpeg'} className="profile-avatar-img" />
-                      <div className="avatar-camera-badge">📷</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="badge-btn"
-                      style={{ margin: '10px auto 0', display: 'inline-flex' }}
-                      onClick={() => editAvatarFileInputRef.current?.click()}
-                    >
-                      📁 Elegir Foto de Galería / Archivo
-                    </button>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Nombre Completo</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      placeholder="Tu nombre real"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Nombre de Usuario (@)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editUsername}
-                      onChange={e => setEditUsername(e.target.value.replace(/\s+/g, '_'))}
-                      placeholder="tu_usuario"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Biografía</label>
-                    <textarea
-                      className="form-textarea"
-                      rows="2"
-                      value={editBio}
-                      onChange={e => setEditBio(e.target.value)}
-                      placeholder="Describe lo que haces..."
-                    />
-                  </div>
-
-                  <button
-                    className="primary-btn"
-                    onClick={() => {
-                      if (!editName.trim() || !editUsername.trim()) {
-                        alert('Por favor ingresa nombre y nombre de usuario');
-                        return;
-                      }
-                      const updated = {
-                        ...currentUser,
-                        name: editName.trim(),
-                        username: editUsername.trim(),
-                        bio: editBio.trim(),
-                        avatar: editAvatarUrl
-                      };
-                      setCurrentUser(updated);
-                      try { localStorage.setItem('taktak_user', JSON.stringify(updated)); } catch(e){}
-                      setEditProfileModal(false);
-                      showToast('¡Perfil guardado correctamente! ✅');
-                    }}
-                  >
-                    💾 Guardar Cambios
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+      // Games Play Button
+      document.getElementById('btnPlayBeatGame').addEventListener('click', () => {
+        showToast('🎮 Iniciando TakTak Beat Runner...');
+      });
+    });
   </script>
 </body>
 </html>
