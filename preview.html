@@ -914,6 +914,243 @@
       display: flex;
     }
 
+    /* ================= CREATOR / MONETIZATION PANEL STYLES ================= */
+    .monetize-fullscreen {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      background: var(--bg-main);
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+      animation: fadeIn 0.25s ease;
+    }
+    .monetize-fullscreen.active { display: flex; }
+
+    .monetize-header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(10,10,20,0.95);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .monetize-header h2 {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 800;
+      background: var(--gradient-taktak);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 0 16px;
+    }
+
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      text-align: center;
+    }
+
+    .stat-card .stat-value {
+      font-family: var(--font-heading);
+      font-size: 24px;
+      font-weight: 900;
+      display: block;
+    }
+
+    .stat-card .stat-label {
+      font-size: 11.5px;
+      color: var(--color-text-muted);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    .stat-value.pink { color: var(--taktak-pink); text-shadow: 0 0 12px var(--taktak-pink-glow); }
+    .stat-value.cyan { color: var(--taktak-cyan); text-shadow: 0 0 12px var(--taktak-cyan-glow); }
+    .stat-value.gold { color: var(--taktak-gold); text-shadow: 0 0 12px rgba(255,214,0,0.4); }
+    .stat-value.purple { color: var(--taktak-purple); text-shadow: 0 0 12px rgba(176,75,251,0.4); }
+
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 800;
+      padding: 16px 16px 8px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .creator-list-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: background var(--transition-fast);
+    }
+
+    .creator-list-item:hover {
+      background: rgba(255,255,255,0.03);
+    }
+
+    .creator-info {
+      flex: 1;
+    }
+
+    .creator-info .cname {
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .creator-info .ccode {
+      font-size: 12px;
+      color: var(--taktak-cyan);
+      font-weight: 600;
+    }
+
+    .creator-info .cstats {
+      font-size: 11.5px;
+      color: var(--color-text-muted);
+      margin-top: 2px;
+    }
+
+    .payout-amount {
+      font-family: var(--font-heading);
+      font-weight: 900;
+      font-size: 16px;
+      color: var(--taktak-gold);
+      text-shadow: 0 0 10px rgba(255,214,0,0.3);
+    }
+
+    .campaign-card {
+      margin: 0 16px 10px;
+      background: var(--bg-surface);
+      border: 1px solid rgba(176,75,251,0.3);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    .campaign-card h4 {
+      font-family: var(--font-heading);
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .campaign-card p {
+      font-size: 12.5px;
+      color: var(--color-text-muted);
+      line-height: 1.4;
+    }
+
+    .campaign-card .campaign-tag {
+      display: inline-block;
+      background: rgba(176,75,251,0.2);
+      color: var(--taktak-purple);
+      border: 1px solid rgba(176,75,251,0.35);
+      border-radius: var(--radius-full);
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .admin-badge {
+      background: linear-gradient(135deg, var(--taktak-gold) 0%, var(--taktak-pink) 100%);
+      color: #000;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    .promo-code-display {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,247,212,0.12);
+      border: 1px solid rgba(0,247,212,0.35);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--taktak-cyan);
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+
+    .promo-code-display:hover {
+      background: rgba(0,247,212,0.22);
+      box-shadow: 0 0 15px var(--taktak-cyan-glow);
+    }
+
+    .deep-link-box {
+      background: #0c0c18;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 11.5px;
+      color: var(--taktak-cyan);
+      word-break: break-all;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+
+    .deep-link-box:hover {
+      border-color: var(--taktak-cyan);
+      box-shadow: 0 0 12px var(--taktak-cyan-glow);
+    }
+
+    .tab-switcher {
+      display: flex;
+      gap: 0;
+      margin: 12px 16px 6px;
+      background: var(--bg-surface);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .tab-switcher button {
+      flex: 1;
+      padding: 10px 8px;
+      background: transparent;
+      border: none;
+      color: var(--color-text-muted);
+      font-family: var(--font-heading);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+
+    .tab-switcher button.active {
+      background: var(--gradient-btn-pink);
+      color: #fff;
+      box-shadow: 0 0 15px var(--taktak-pink-glow);
+    }
+
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   </style>
@@ -1089,6 +1326,258 @@
         </div>
       </div>
 
+      <!-- ================= MONETIZATION / CREATOR PANEL ================= -->
+      <div id="monetizePanel" class="monetize-fullscreen">
+        <div class="monetize-header">
+          <h2>💰 TakTak Creator Hub</h2>
+          <button class="close-btn" id="btnCloseMonetize">&times;</button>
+        </div>
+
+        <!-- Tab Switcher -->
+        <div class="tab-switcher">
+          <button class="active" id="monTabDashboard">📊 Dashboard</button>
+          <button id="monTabCampaigns">📋 Campañas</button>
+          <button id="monTabCreators">👥 Creadores</button>
+          <button id="monTabAdmin" style="display: none;">👑 Admin</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="monDashboardView">
+          <div class="section-title">📊 Resumen de Rendimiento</div>
+          <div class="stat-card-grid">
+            <div class="stat-card">
+              <span class="stat-value pink" id="statTotalViews">40,000</span>
+              <span class="stat-label">Vistas Totales</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value cyan" id="statInstalls">350</span>
+              <span class="stat-label">Installs Atribuidas</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value gold" id="statRevenue">$730</span>
+              <span class="stat-label">Revenue Total</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value purple" id="statCTR">5.0%</span>
+              <span class="stat-label">CTR al Landing</span>
+            </div>
+          </div>
+
+          <div class="section-title">🔗 Tu Enlace y Código de Creador</div>
+          <div style="padding: 0 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px;">Tu código promocional:</div>
+              <div class="promo-code-display" id="myPromoCode" title="Click para copiar">TAK-0001</div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px;">Tu deep link con UTM:</div>
+              <div class="deep-link-box" id="myDeepLink" title="Click para copiar">https://taktakmessenger.github.io/?utm_source=mi_usuario&utm_medium=tiktok&utm_campaign=general&creador_code=TAK-0001</div>
+            </div>
+          </div>
+
+          <div class="section-title">💵 Desglose de Pagos (Mes Actual)</div>
+          <div style="padding: 0 16px;">
+            <div style="background: var(--bg-surface); border-radius: var(--radius-md); padding: 14px; border: 1px solid rgba(255,214,0,0.2);">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: #ccc;">Base fijo (50%)</span>
+                <span style="font-weight: 800; color: var(--taktak-gold);">$125.00</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: #ccc;">CPI ($0.50 × 350 installs)</span>
+                <span style="font-weight: 800; color: var(--taktak-cyan);">$175.00</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: #ccc;">CPM ($1.00 × 50K imp.)</span>
+                <span style="font-weight: 800; color: var(--taktak-purple);">$50.00</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: #ccc;">Comisión ventas (10%)</span>
+                <span style="font-weight: 800; color: var(--taktak-pink);">$200.00</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 13px; color: #ccc;">Bonus por metas</span>
+                <span style="font-weight: 800; color: #fff;">$30.00</span>
+              </div>
+              <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; display: flex; justify-content: space-between;">
+                <span style="font-size: 14px; font-weight: 800; color: #fff;">TOTAL PAGO</span>
+                <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 900; color: var(--taktak-gold); text-shadow: 0 0 12px rgba(255,214,0,0.4);">$730.00</span>
+              </div>
+              <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 8px;">Método: PayPal/Stripe • Plazo: neto 30 días • Retención antifraude: 10%</div>
+            </div>
+          </div>
+
+          <div style="padding: 16px;">
+            <button class="primary-btn" id="btnRequestPayout" style="width: 100%;">💳 Solicitar Retiro de Pago</button>
+          </div>
+        </div>
+
+        <!-- Campaigns Tab -->
+        <div id="monCampaignsView" style="display: none;">
+          <div class="section-title">📋 Campañas Activas</div>
+
+          <div class="campaign-card">
+            <h4>🚀 Campaña Lanzamiento TakTak 2026</h4>
+            <p>Objetivo: Captar creadores, impulsar descargas, aumentar ventas y visibilidad en TikTok para TAKTAK.</p>
+            <p style="margin-top: 6px;">Entregables: 1 video TikTok (60s), 2 clips verticales (15s), assets para stories.</p>
+            <p style="margin-top: 6px;">KPIs: Installs atribuidas (UTM/código) • CTR al landing • Conversiones (compras)</p>
+            <p style="margin-top: 6px;">CTA: <em>"Descarga TAKTAK y usa TAK-XXXX"</em></p>
+            <p style="margin-top: 6px;">Compensación: <strong>50% Base fijo + 30% rendimiento + 20% bonus</strong></p>
+            <span class="campaign-tag">🟢 ACTIVA</span>
+          </div>
+
+          <div class="campaign-card" style="border-color: rgba(0,247,212,0.3);">
+            <h4>🎮 Promo Minijuegos TakTak</h4>
+            <p>Crear contenido mostrando los minijuegos integrados en TakTak. Hook en primeros 3s.</p>
+            <p style="margin-top: 6px;">Entregables: 2 clips de 15s jugando + 1 review completa.</p>
+            <p style="margin-top: 6px;">Compensación: CPI $0.75 + $50 base + bonus por 500+ installs</p>
+            <span class="campaign-tag" style="background: rgba(0,247,212,0.15); color: var(--taktak-cyan); border-color: rgba(0,247,212,0.35);">🟢 ACTIVA</span>
+          </div>
+
+          <div class="section-title">📝 Brief de Campaña</div>
+          <div style="padding: 0 16px 16px;">
+            <div style="background: var(--bg-surface); border-radius: var(--radius-md); padding: 14px; border: 1px solid rgba(255,255,255,0.08); font-size: 12.5px; color: #ccc; line-height: 1.6;">
+              <strong style="color: #fff;">BRIEF CAMPAÑA TAKTAK</strong><br/>
+              <strong>Marca:</strong> TAKTAK<br/>
+              <strong>Landing/Tracking:</strong> https://taktakmessenger.github.io/<br/>
+              <strong>Objetivo:</strong> Captar creadores, impulsar descargas, aumentar ventas<br/>
+              <strong>Público:</strong> 16-35 años, intereses: vídeos, juegos, tech<br/>
+              <strong>Mensaje clave:</strong> "Descarga TAKTAK y descubre vídeos, juegos y más"<br/>
+              <strong>Creatividad:</strong> Hook primeros 3s. CTA: "Descarga TAKTAK y usa TAK-XXXX". Incluir logo y colores fosforescentes.<br/>
+              <strong>Aprobación:</strong> Enviar draft 48h antes.<br/>
+              <strong>Pagos:</strong> Base [X] + CPI [Y] por instalación + comisión % por ventas<br/>
+              <strong>Contacto:</strong> taktak.messenger@gmail.com
+            </div>
+          </div>
+        </div>
+
+        <!-- Creators Tab -->
+        <div id="monCreatorsView" style="display: none;">
+          <div class="section-title">👥 Creadores Registrados</div>
+
+          <div class="creator-list-item">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid var(--taktak-pink);" />
+            <div class="creator-info">
+              <div class="cname">Elena Gómez</div>
+              <div class="ccode">TAK-ELE1 • @elena_creadora</div>
+              <div class="cstats">50K imp. • 2K clicks • 350 installs • 20 ventas</div>
+            </div>
+            <div class="payout-amount">$730</div>
+          </div>
+
+          <div class="creator-list-item">
+            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid var(--taktak-cyan);" />
+            <div class="creator-info">
+              <div class="cname">Carlos Tech</div>
+              <div class="ccode">TAK-CAR2 • @carlos_dev</div>
+              <div class="cstats">30K imp. • 1.2K clicks • 150 installs • 5 ventas</div>
+            </div>
+            <div class="payout-amount">$280</div>
+          </div>
+
+          <div class="creator-list-item">
+            <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=60" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid var(--taktak-purple);" />
+            <div class="creator-info">
+              <div class="cname">AI Studio Bot</div>
+              <div class="ccode">TAK-AIS3 • @ai_studio</div>
+              <div class="cstats">120K imp. • 8K clicks • 890 installs • 42 ventas</div>
+            </div>
+            <div class="payout-amount">$1,450</div>
+          </div>
+
+          <div style="padding: 16px;">
+            <button class="ai-gradient-btn" id="btnAddCreator" style="width: 100%;">➕ Registrar Nuevo Creador</button>
+          </div>
+        </div>
+
+        <!-- Admin Tab (only for admin emails) -->
+        <div id="monAdminView" style="display: none;">
+          <div class="section-title">👑 Panel de Administración <span class="admin-badge">ADMIN</span></div>
+          <div style="padding: 0 16px;">
+            <div style="background: rgba(255,214,0,0.08); border: 1px solid rgba(255,214,0,0.25); border-radius: var(--radius-md); padding: 14px; margin-bottom: 12px;">
+              <div style="font-size: 13px; font-weight: 700; color: var(--taktak-gold); margin-bottom: 6px;">⚠️ Acceso exclusivo para administradores:</div>
+              <div style="font-size: 12px; color: #ccc; line-height: 1.5;">• elmalayaso7@gmail.com (Cuenta Madre)<br/>• eliecerdepablos@gmail.com<br/>• taktak.messenger@gmail.com</div>
+            </div>
+          </div>
+
+          <div class="section-title">📊 Resumen Global de la Plataforma</div>
+          <div class="stat-card-grid">
+            <div class="stat-card">
+              <span class="stat-value gold">$2,460</span>
+              <span class="stat-label">Total Pagos Pendientes</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value cyan">1,390</span>
+              <span class="stat-label">Total Installs</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value pink">200K</span>
+              <span class="stat-label">Impresiones Totales</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value purple">3</span>
+              <span class="stat-label">Creadores Activos</span>
+            </div>
+          </div>
+
+          <div class="section-title">💳 Gestión de Pagos</div>
+          <div style="padding: 0 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="background: var(--bg-surface); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.06);">
+              <div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #fff;">Elena Gómez</div>
+                <div style="font-size: 11.5px; color: var(--color-text-muted);">TAK-ELE1 • PayPal • Neto 30 días</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="payout-amount">$730</div>
+                <div style="font-size: 10.5px; color: var(--taktak-cyan);">✅ Verificado</div>
+              </div>
+            </div>
+            <div style="background: var(--bg-surface); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.06);">
+              <div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #fff;">Carlos Tech</div>
+                <div style="font-size: 11.5px; color: var(--color-text-muted);">TAK-CAR2 • Stripe • Neto 30 días</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="payout-amount">$280</div>
+                <div style="font-size: 10.5px; color: var(--taktak-gold);">⏳ Pendiente</div>
+              </div>
+            </div>
+            <div style="background: var(--bg-surface); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.06);">
+              <div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #fff;">AI Studio Bot</div>
+                <div style="font-size: 11.5px; color: var(--color-text-muted);">TAK-AIS3 • Transferencia • Neto 30 días</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="payout-amount">$1,450</div>
+                <div style="font-size: 10.5px; color: var(--taktak-cyan);">✅ Verificado</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-title">🔐 Contrato Template</div>
+          <div style="padding: 0 16px 16px;">
+            <div style="background: var(--bg-surface); border-radius: var(--radius-md); padding: 14px; border: 1px solid rgba(255,45,141,0.2); font-size: 12px; color: #bbb; line-height: 1.6; max-height: 200px; overflow-y: auto;">
+              <strong style="color: #fff;">CONTRATO DE SERVICIOS DE INFLUENCER / CREADOR DE CONTENIDO - TAKTAK</strong><br/><br/>
+              Entre TAKTAK (website: https://taktakmessenger.github.io/) ("La Marca") y [NOMBRE_CREADOR] ("El Creador").<br/><br/>
+              <strong>Compensación:</strong><br/>
+              • Pago base: USD [X] por mes<br/>
+              • CPI: Installs atribuidas vía UTM + partner de atribución<br/>
+              • Comisión por ventas: [Y]% sobre ventas atribuidas (código TAK-XXXX)<br/>
+              • Bonus por metas: según Brief<br/><br/>
+              <strong>Pagos:</strong> Neto 30 días. Método: Transferencia/PayPal/Stripe.<br/>
+              Retención precautoria: hasta [Z]% por verificación antifraude 30 días.<br/><br/>
+              <strong>Derechos:</strong> Licencia no exclusiva para republicar contenido [X] meses.<br/>
+              <strong>Legal:</strong> Contenido patrocinado marcado (#ad). Cumplimiento de políticas.<br/>
+              <strong>Terminación:</strong> Incumplimiento grave o fraude = terminación inmediata.
+            </div>
+          </div>
+
+          <div style="padding: 0 16px 16px; display: flex; gap: 10px;">
+            <button class="primary-btn" id="btnExportCSV" style="flex: 1; font-size: 13px;">📄 Exportar CSV</button>
+            <button class="gold-btn" id="btnProcessPayouts" style="flex: 1; font-size: 13px;">💰 Procesar Pagos</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ================= BOTTOM NAVIGATION ================= -->
       <nav class="bottom-nav-bar">
         <button id="navHome" class="nav-item-btn active">
@@ -1098,8 +1587,8 @@
           <span>🎮</span><span>Juegos</span>
         </button>
         <button id="navCreate" class="nav-create-btn" title="Crear / Subir">+</button>
-        <button id="navAI" class="nav-item-btn">
-          <span>✨</span><span>AI Studio</span>
+        <button id="navMonetize" class="nav-item-btn">
+          <span>💰</span><span>Monetizar</span>
         </button>
         <button id="navProfile" class="nav-item-btn">
           <img id="navAvatarImg" src="copilot_image_1758359058839.jpeg" onerror="this.src='taktak_cover.jpeg'" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--taktak-pink);" />
@@ -1244,16 +1733,66 @@
       }
     ];
 
+    // Admin emails list
+    const ADMIN_EMAILS = [
+      'elmalayaso7@gmail.com',
+      'eliecerdepablos@gmail.com',
+      'taktak.messenger@gmail.com'
+    ];
+
     let currentUser = {
       name: 'Usuario TakTak',
       username: 'usuario_taktak',
       avatar: 'copilot_image_1758359058839.jpeg',
       bio: 'Creando contenido y jugando en TakTak 🚀✨',
+      email: '',
       isLoggedIn: false
     };
 
     let selectedAvatarBase64 = null;
     let isMuted = true;
+
+    // ================= UTM TRACKING SYSTEM =================
+    function getUTMParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        source: params.get('utm_source') || '',
+        medium: params.get('utm_medium') || '',
+        campaign: params.get('utm_campaign') || '',
+        content: params.get('utm_content') || '',
+        creadorCode: params.get('creador_code') || ''
+      };
+    }
+
+    function trackAttribution() {
+      const utm = getUTMParams();
+      if (utm.source || utm.creadorCode) {
+        const attribution = {
+          ...utm,
+          timestamp: new Date().toISOString(),
+          referrer: document.referrer
+        };
+        try {
+          localStorage.setItem('taktak_attribution', JSON.stringify(attribution));
+          const events = JSON.parse(localStorage.getItem('taktak_events') || '[]');
+          events.push({ type: 'visit', ...attribution });
+          localStorage.setItem('taktak_events', JSON.stringify(events));
+        } catch(e) {}
+      }
+    }
+
+    function isAdmin() {
+      return currentUser.email && ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
+    }
+
+    function generatePromoCode(username) {
+      const prefix = (username || 'user').substring(0, 3).toUpperCase();
+      const num = Math.floor(Math.random() * 9000) + 1000;
+      return 'TAK-' + prefix + num;
+    }
+
+    // Track UTM on page load
+    trackAttribution();
 
     // Load saved user
     try {
@@ -1290,16 +1829,44 @@
     // ================= AUTH & LOGIN HANDLERS =================
     function performLogin(userData) {
       currentUser = { ...currentUser, ...userData, isLoggedIn: true };
+      
+      // Generate promo code for creator if new
+      if (!currentUser.promoCode) {
+        currentUser.promoCode = generatePromoCode(currentUser.username);
+      }
+      
       try {
         localStorage.setItem('taktak_user', JSON.stringify(currentUser));
+        // Track login event for attribution
+        const events = JSON.parse(localStorage.getItem('taktak_events') || '[]');
+        events.push({ type: 'login', user: currentUser.username, email: currentUser.email, timestamp: new Date().toISOString() });
+        localStorage.setItem('taktak_events', JSON.stringify(events));
       } catch(e) {}
       
       updateProfileUI();
+      updateMonetizeUI();
 
       triggerOpeningAnimation(() => {
         document.getElementById('coverLandingScreen').classList.add('hidden');
         showToast(`¡Bienvenido a TakTak, ${currentUser.name}! 🚀`);
       });
+    }
+
+    function updateMonetizeUI() {
+      // Show/hide admin tab
+      const adminTab = document.getElementById('monTabAdmin');
+      if (adminTab) {
+        adminTab.style.display = isAdmin() ? 'block' : 'none';
+      }
+      // Update promo code and deep link
+      const promoEl = document.getElementById('myPromoCode');
+      const deepLinkEl = document.getElementById('myDeepLink');
+      if (promoEl && currentUser.promoCode) {
+        promoEl.innerText = currentUser.promoCode;
+      }
+      if (deepLinkEl && currentUser.username) {
+        deepLinkEl.innerText = `https://taktakmessenger.github.io/?utm_source=${currentUser.username}&utm_medium=tiktok&utm_campaign=general&creador_code=${currentUser.promoCode || 'TAK-0001'}`;
+      }
     }
 
     function updateProfileUI() {
@@ -1562,18 +2129,25 @@
       const tabGames = document.getElementById('tabGames');
       const feedContainer = document.getElementById('feedContainer');
       const gamesContainer = document.getElementById('gamesContainer');
+      const monetizePanel = document.getElementById('monetizePanel');
+
+      function hideAllViews() {
+        feedContainer.style.display = 'none';
+        gamesContainer.style.display = 'none';
+        monetizePanel.classList.remove('active');
+      }
 
       tabForYou.addEventListener('click', () => {
         tabForYou.classList.add('active');
         tabGames.classList.remove('active');
+        hideAllViews();
         feedContainer.style.display = 'block';
-        gamesContainer.style.display = 'none';
       });
 
       tabGames.addEventListener('click', () => {
         tabGames.classList.add('active');
         tabForYou.classList.remove('active');
-        feedContainer.style.display = 'none';
+        hideAllViews();
         gamesContainer.style.display = 'flex';
       });
 
@@ -1584,6 +2158,108 @@
       document.getElementById('navGames').addEventListener('click', () => {
         tabGames.click();
       });
+
+      // ================= MONETIZATION PANEL =================
+      document.getElementById('navMonetize').addEventListener('click', () => {
+        hideAllViews();
+        monetizePanel.classList.add('active');
+        updateMonetizeUI();
+      });
+
+      document.getElementById('btnCloseMonetize').addEventListener('click', () => {
+        monetizePanel.classList.remove('active');
+        feedContainer.style.display = 'block';
+      });
+
+      // Monetize tab switcher
+      const monTabs = {
+        monTabDashboard: 'monDashboardView',
+        monTabCampaigns: 'monCampaignsView',
+        monTabCreators: 'monCreatorsView',
+        monTabAdmin: 'monAdminView'
+      };
+
+      Object.entries(monTabs).forEach(([tabId, viewId]) => {
+        const tabEl = document.getElementById(tabId);
+        if (tabEl) {
+          tabEl.addEventListener('click', () => {
+            // Hide all views
+            Object.values(monTabs).forEach(vId => {
+              const v = document.getElementById(vId);
+              if (v) v.style.display = 'none';
+            });
+            // Deactivate all tabs
+            Object.keys(monTabs).forEach(tId => {
+              const t = document.getElementById(tId);
+              if (t) t.classList.remove('active');
+            });
+            // Show selected
+            const view = document.getElementById(viewId);
+            if (view) view.style.display = 'block';
+            tabEl.classList.add('active');
+          });
+        }
+      });
+
+      // Copy promo code
+      document.getElementById('myPromoCode').addEventListener('click', () => {
+        const code = document.getElementById('myPromoCode').innerText;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(code);
+          showToast('¡Código ' + code + ' copiado! 📋');
+        }
+      });
+
+      // Copy deep link
+      document.getElementById('myDeepLink').addEventListener('click', () => {
+        const link = document.getElementById('myDeepLink').innerText;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(link);
+          showToast('¡Deep link copiado! 🔗');
+        }
+      });
+
+      // Request payout
+      document.getElementById('btnRequestPayout').addEventListener('click', () => {
+        showToast('💳 Solicitud de pago enviada. Procesando neto 30 días...');
+      });
+
+      // Add creator button
+      document.getElementById('btnAddCreator').addEventListener('click', () => {
+        const name = prompt('Nombre del nuevo creador:');
+        if (name) {
+          const code = generatePromoCode(name);
+          showToast(`✅ Creador ${name} registrado con código ${code}`);
+        }
+      });
+
+      // Admin: Export CSV
+      const btnExportCSV = document.getElementById('btnExportCSV');
+      if (btnExportCSV) {
+        btnExportCSV.addEventListener('click', () => {
+          const csvContent = 'creator_id,creator_nombre,base_fee,impressions,views,clicks,installs_atribuidas,install_payout,ventas_atribuidas,commission_payout,cpm_payout,bonus_payout,total_payout,payment_date,notes\n'
+            + 'crea001,Elena Gómez,125,50000,40000,2000,350,175,20,200,50,30,730,' + new Date().toISOString().split('T')[0] + ',"Pago base + rendimiento (tracking vía https://taktakmessenger.github.io/)"\n'
+            + 'crea002,Carlos Tech,125,30000,25000,1200,150,75,5,50,30,0,280,' + new Date().toISOString().split('T')[0] + ',"Cumple parcial metas"\n'
+            + 'crea003,AI Studio Bot,125,120000,100000,8000,890,445,42,420,120,65,1450,' + new Date().toISOString().split('T')[0] + ',"Alto rendimiento"';
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'taktak_payouts_' + new Date().toISOString().split('T')[0] + '.csv';
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('📄 CSV exportado correctamente');
+        });
+      }
+
+      // Admin: Process payouts
+      const btnProcessPayouts = document.getElementById('btnProcessPayouts');
+      if (btnProcessPayouts) {
+        btnProcessPayouts.addEventListener('click', () => {
+          showToast('💰 Procesando pagos para todos los creadores...');
+          setTimeout(() => showToast('✅ Pagos procesados y registrados'), 2000);
+        });
+      }
 
       // Profile Modal
       const profileModal = document.getElementById('profileModal');

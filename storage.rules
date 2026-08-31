@@ -1,28 +1,50 @@
 // Reglas de seguridad para Firebase Storage - TakTak Plataforma de vídeos y juegos
+// Administradores Oficiales:
+//   - elmalayaso7@gmail.com (Cuenta Madre)
+//   - eliecerdepablos@gmail.com
+//   - taktak.messenger@gmail.com
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // Función para identificar Administradores Oficiales de TakTak
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'elmalayaso7@gmail.com' ||
+        request.auth.token.email == 'eliecerdepablos@gmail.com' ||
+        request.auth.token.email == 'taktak.messenger@gmail.com'
+      );
+    }
     
     // Subida de vídeos cortos y clips
     match /videos/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId
+      allow write: if isAdmin() || (request.auth != null && request.auth.uid == userId
                    && request.resource.contentType.matches('video/.*')
-                   && request.resource.size < 50 * 1024 * 1024; // Límite 50MB
+                   && request.resource.size < 50 * 1024 * 1024); // Límite 50MB
+      allow delete: if isAdmin();
     }
 
     // Subida de avatares de usuario y carátulas
     match /avatars/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId
+      allow write: if isAdmin() || (request.auth != null && request.auth.uid == userId
                    && request.resource.contentType.matches('image/.*')
-                   && request.resource.size < 5 * 1024 * 1024; // Límite 5MB
+                   && request.resource.size < 5 * 1024 * 1024); // Límite 5MB
+      allow delete: if isAdmin();
     }
 
     // Archivos de minijuegos / assets
     match /games/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin() || request.auth != null;
+      allow delete: if isAdmin();
+    }
+
+    // Archivos generales de la plataforma (config, assets públicos)
+    match /platform/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }
