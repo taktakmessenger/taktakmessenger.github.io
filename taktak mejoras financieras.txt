@@ -1,0 +1,179 @@
+CONTRATO DE SERVICIOS DE INFLUENCER / CREADOR DE CONTENIDO - TAKTAK
+
+Entre TAKTAK (website: https://taktakmessenger.github.io/) (en adelante "La Marca") y [NOMBRE_CREADOR] (en adelante "El Creador"),
+
+Objeto: El Creador realizará las acciones descritas en el Brief (anexo) para la campaña [NOMBRE_CAMPANA] entre [FECHA_INICIO] y [FECHA_FIN].
+
+Entregables: Ejemplo: 1 video TikTok (60s), 2 clips de 15s, 1 Live opcional. Fechas: [FECHAS].
+
+Compensación:
+
+Pago base: USD [X] por mes.
+Pago por rendimiento: según métricas verificadas (installs atribuidas vía https://taktakmessenger.github.io/ con UTM y partner de atribución).
+Comisión por ventas: [Y]% sobre ventas atribuidas mediante código/link del Creador (ej. TAK-XXXX).
+Bonus por metas: según condiciones del Brief.
+Pagos:
+
+Plazo: neto 30 días tras verificación por TAKTAK.
+Método: [Transferencia/PayPal/Stripe].
+Retención precautoria: TAKTAK podrá retener hasta [Z]% por verificación antifraude 30 días.
+Derechos de uso:
+
+El Creador cede a TAKTAK licencia no exclusiva para republicar contenido en redes y materiales promocionales por [X] meses.
+Marca/Legal:
+
+El Creador deberá marcar contenido patrocinado (#ad) según legislación local.
+Cumplimiento de políticas de TikTok.
+Confidencialidad y fiscales:
+
+Ambas partes responsables de sus obligaciones fiscales.
+Terminación:
+
+Incumplimiento grave y fraude habilitan terminación inmediata.
+Legislación:
+
+[Jurisdicción]
+Firmado: TAKTAK ________________________ [NOMBRE_CREADOR] ________________________ Fecha: //____
+
+
+
+ plan a la marca TAKTAK usando tu dominio público: https://taktakmessenger.github.io/. He adaptado los links de tracking, ejemplos de deep links y los templates (contrato, brief, CSV) para que apunten a esa URL y estén listos para copiar/pegar en tus procesos.
+
+Qué hice ahora (resumen breve)
+
+Reemplacé los ejemplos de enlaces/landing por https://taktakmessenger.github.io/ y añadí UTMs y deep links listos para usar.
+Actualicé el contrato y el brief para TAKTAK con el link de la landing y un campo de contacto para que lo completes.
+Generé una fila de ejemplo en la tabla CSV usando el dominio y mostrando cómo calcular pagos CPI/CPM/bonos.
+Incluyo instrucciones prácticas para generar deep links, códigos y para el tracking con partners (AppsFlyer/Adjust/Branch) o con SDK propio.
+Te propongo las siguientes acciones automáticas (pídeme una): generar DOCX/PDF/CSV listos para descargar, crear un Google Sheet con el dashboard mockup o añadir los archivos al repo taktakmessenger/taktakmessenger.github.io (si quieres que los suba, confírmalo y me dices la ruta).
+Plan (adaptado y listo para copiar/pegar) — puntos clave con tu dominio
+
+Resumen directo
+
+Objetivo: captar creadores, impulsar descargas, aumentar ventas y visibilidad en TikTok para TAKTAK.
+Estructura de pago por campaña/mes: 50% Base fijo + 30% por rendimiento + 20% bonus por metas.
+Dominio landing: https://taktakmessenger.github.io/ (usar subruta o query para cada creador).
+Deep links / UTMs (usar tal cual — cambiar [CREADOR] / [CAMPAÑA] / [VIDEO] según corresponda)
+
+Deep link ejemplo (landing general): https://taktakmessenger.github.io/?utm_source=[CREADOR]&utm_medium=tiktok&utm_campaign=[CAMPAÑA]&utm_content=[VIDEO]
+Deep link ejemplo con subruta para creatives: https://taktakmessenger.github.io/tiktok-campaña?utm_source=[CREADOR]&utm_campaign=[CAMPAÑA]&creador_code=[TAK-XXXX]
+Código de descuento ejemplo visible en la app / checkout: TAK-XXXX (único por creador).
+Tracking y atribución
+
+Preferible integrar un partner (AppsFlyer/Adjust/Branch) o usar tu propio SDK para validar installs y eventos (registro, compra).
+Cada creador debe recibir:
+Deep link con UTM.
+Código de descuento único (TAK-XXXX).
+Dashboard parcial para que puedan ver métricas básicas (opcional).
+Plantillas adaptadas (ya listas para copiar)
+
+Contrato - TAKTAK (usa y revisa legalmente)
+
+
+CONTRATO DE SERVICIOS DE INFLUENCER / CREADOR DE CONTENIDO - TAKTAK
+
+Entre TAKTAK (website: https://taktakmessenger.github.io/) (en adelante "La Marca") y [NOMBRE_CREADOR] (en adelante "El Creador"),
+
+Objeto: El Creador realizará las acciones descritas en el Brief (anexo) para la campaña [NOMBRE_CAMPANA] entre [FECHA_INICIO] y [FECHA_FIN].
+
+Entregables: Ejemplo: 1 video TikTok (60s), 2 clips de 15s, 1 Live opcional. Fechas: [FECHAS].
+
+Compensación:
+
+Pago base: USD [X] por mes.
+Pago por rendimiento: según métricas verificadas (installs atribuidas vía https://taktakmessenger.github.io/ con UTM y partner de atribución).
+Comisión por ventas: [Y]% sobre ventas atribuidas mediante código/link del Creador (ej. TAK-XXXX).
+Bonus por metas: según condiciones del Brief.
+Pagos:
+
+Plazo: neto 30 días tras verificación por TAKTAK.
+Método: [Transferencia/PayPal/Stripe].
+Retención precautoria: TAKTAK podrá retener hasta [Z]% por verificación antifraude 30 días.
+Derechos de uso:
+
+El Creador cede a TAKTAK licencia no exclusiva para republicar contenido en redes y materiales promocionales por [X] meses.
+Marca/Legal:
+
+El Creador deberá marcar contenido patrocinado (#ad) según legislación local.
+Cumplimiento de políticas de TikTok.
+Confidencialidad y fiscales:
+
+Ambas partes responsables de sus obligaciones fiscales.
+Terminación:
+
+Incumplimiento grave y fraude habilitan terminación inmediata.
+Legislación:
+
+[Jurisdicción]
+Firmado: TAKTAK ________________________ [NOMBRE_CREADOR] ________________________ Fecha: //____
+
+
+
+BRIEF CAMPANA TAKTAK - [NOMBRE_CAMPANA]
+
+Marca: TAKTAK Landing / Tracking: https://taktakmessenger.github.io/ (cada creador recibirá un deep link y código único) Objetivo: captar creadores, impulsar descargas, aumentar ventas y visibilidad. Periodo: [FECHA_INICIO] - [FECHA_FIN] Público objetivo: [edad, intereses, países] Mensaje clave: "Descarga TAKTAK y [beneficio principal en 1 frase]"
+
+KPIs por publicación:
+
+Installs atribuidas (UTM / código)
+CTR al landing
+Conversiones (compras)
+Entregables:
+
+1 video TikTok principal (60s), 2 clips verticales (15s), assets para stories.
+Publicación en ventana acordada.
+Tracking:
+
+Deep link ejemplo: https://taktakmessenger.github.io/?utm_source=[CREADOR]&utm_medium=tiktok&utm_campaign=[CAMPAÑA]&creador_code=[TAK-XXXX]
+Código descuento del creador: TAK-XXXX
+Creatividad:
+
+Hook en primeros 3s. CTA: "Descarga TAKTAK y usa TAK-XXXX".
+Incluir logo TAKTAK y colores (ajustar CSS/branding en landing).
+Aprobación:
+
+Enviar draft 48h antes.
+Pagos:
+
+Base 
+[
+X
+]
++
+C
+P
+I
+[Y] por instalación + comisión % por ventas.
+Contacto TAKTAK:
+
+[Nombre responsable] — completar: ejemplo: growth@taktakmessenger.github.io (reemplazar por email real)
+
+
+
+creator_id,creator_nombre,base_fee,impressions,views,clicks,installs_atribuidas,install_payout,ventas_atribuidas,commission_payout,cpm_payout,bonus_payout,total_payout,payment_date,notes
+crea001,Nombre Uno,125,50000,40000,2000,350,175,20,200,50,30,730,2026-09-05,"Pago base + rendimiento (tracking vía https://taktakmessenger.github.io/)"
+crea002,Nombre Dos,125,30000,25000,1200,150,75,5,50,30,0,280,2026-09-05,"Cumple parcial metas"
+
+
+Fórmulas: install_payout = installs_atribuidas * CPI_rate; cpm_payout = (impressions/1000) * CPM_rate; commission_payout = ventas_atribuidas * avg_order_value * commission_rate.
+Recomendación de landing / UX mínima
+
+Página destino para creadores: https://taktakmessenger.github.io/tiktok-campaign (crear subruta).
+Landing debe:
+Mostrar beneficio principal (headline claro).
+Tener un campo para introducir código (TAK-XXXX) y enlace directo a store (App Store / Play Store).
+Detectar UTM y adjuntar al evento de instalación en partner de atribución.
+Mostrar un micro-flow de onboarding con incentivos iniciales (ej. crédito in-app).
+Cómo reinvertir (breve, con tu dominio)
+
+Usar parte del revenue atribuido para:
+Mejoras de onboarding alojadas en tu dominio (páginas, tutoriales, A/B tests).
+Créditos para usuarios referidos canjeables en la app (código visible tras instalación).
+“Boost” para creadores: permitirles promocionar su propio contenido en un espacio de la web/app (ej. "Promote your post" con saldo).
+Siguientes pasos que puedo ejecutar ahora (elige uno o varios)
+
+Generar DOCX y PDF con el Contrato_TAKTAK.md y Brief_TAKTAK.md y un CSV completo con N ejemplos (dime N).
+Crear un Google Sheet mockup del dashboard y compartir el link.
+Crear la subruta /tiktok-campaign y añadir los archivos (index.html, assets) directamente en tu repo taktakmessenger/taktakmessenger.github.io — puedo hacerlo si me autorizas a subir al repo y me indicas la ruta. (Nota: antes de cualquier write, confirmar owner/repo y la rama de destino; no haré cambios sin tu confirmación).
+Preparar un paquete ZIP con todos los archivos listos para enviar a creadores.
+¿Quieres que genere ya los DOCX/PDF/CSV y el Google Sheet? ¿O prefieres que suba los archivos al repo https://github.com/taktakmessenger/taktakmessenger.github.io/? Si eliges que suba al repo, dime exactamente en qué carpeta los ponga y si hay que crear una nueva página /tiktok-campaign (te pediré confirmación del owner/repo antes de cualquier write).
