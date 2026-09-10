@@ -1789,7 +1789,6 @@
         </div>
         <div style="padding: 0 22px 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
           <button id="qcRequestMic" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🎤 Micrófono</button>
-          <button id="qcRequestCamera" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">📸 Cámara</button>
           <button id="qcRequestScreen" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🖥️ Pantalla</button>
           <button id="qcRequestHeadphones" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🎧 Auriculares</button>
         </div>
@@ -2235,112 +2234,82 @@
       renderVideos();
 
       // Cover Screen Actions
-      const btnOpenGoogle = document.getElementById('btnOpenGoogle');
-      const btnOpenPhone = document.getElementById('btnOpenPhone');
-      const btnBackGoogle = document.getElementById('btnBackGoogle');
-      const btnBackPhone = document.getElementById('btnBackPhone');
-      const googleBox = document.getElementById('coverGoogleBox');
-      const phoneBox = document.getElementById('coverPhoneBox');
-      const phoneStep1 = document.getElementById('phoneStep1');
-      const phoneStep2 = document.getElementById('phoneStep2');
-      const mainBtns = document.getElementById('coverMainButtons');
-
-      if (btnOpenGoogle) btnOpenGoogle.addEventListener('click', () => {
-        try {
-          if (mainBtns) mainBtns.style.display = 'none';
-          if (phoneBox) phoneBox.style.display = 'none';
-          if (googleBox) googleBox.style.display = 'block';
-        } catch (err) { console.error('open google error', err); }
+      document.getElementById('btnOpenGoogle').addEventListener('click', () => {
+        mainBtns.style.display = 'none';
+        phoneBox.style.display = 'none';
+        googleBox.style.display = 'block';
       });
 
-      if (btnOpenPhone) btnOpenPhone.addEventListener('click', () => {
-        try {
-          if (mainBtns) mainBtns.style.display = 'none';
-          if (googleBox) googleBox.style.display = 'none';
-          if (phoneBox) phoneBox.style.display = 'block';
-          if (phoneStep1) phoneStep1.style.display = 'flex';
-          if (phoneStep2) phoneStep2.style.display = 'none';
-        } catch (err) { console.error('open phone error', err); }
+      document.getElementById('btnOpenPhone').addEventListener('click', () => {
+        mainBtns.style.display = 'none';
+        googleBox.style.display = 'none';
+        phoneBox.style.display = 'block';
+        phoneStep1.style.display = 'flex';
+        phoneStep2.style.display = 'none';
       });
 
-      if (btnBackGoogle) btnBackGoogle.addEventListener('click', () => {
-        if (googleBox) googleBox.style.display = 'none';
-        if (mainBtns) mainBtns.style.display = 'flex';
+      document.getElementById('btnBackGoogle').addEventListener('click', () => {
+        googleBox.style.display = 'none';
+        mainBtns.style.display = 'flex';
       });
 
-      if (btnBackPhone) btnBackPhone.addEventListener('click', () => {
-        if (phoneBox) phoneBox.style.display = 'none';
-        if (mainBtns) mainBtns.style.display = 'flex';
+      document.getElementById('btnBackPhone').addEventListener('click', () => {
+        phoneBox.style.display = 'none';
+        mainBtns.style.display = 'flex';
       });
 
       // Quick Google Connect
-      const btnGoogleInstant = document.getElementById('btnGoogleInstant');
-      const btnSubmitGoogle = document.getElementById('btnSubmitGoogle');
-      const btnSendPhoneCode = document.getElementById('btnSendPhoneCode');
-      const btnSubmitPhone = document.getElementById('btnSubmitPhone');
-      const inputGoogleEmail = document.getElementById('inputGoogleEmail');
-      const inputGoogleName = document.getElementById('inputGoogleName');
-      const inputPhoneNum = document.getElementById('inputPhoneNum');
-      const inputPhoneName = document.getElementById('inputPhoneName');
-      const lblPhoneTarget = document.getElementById('lblPhoneTarget');
-
-      if (btnGoogleInstant) btnGoogleInstant.addEventListener('click', () => {
-        try {
-          const email = (inputGoogleEmail && inputGoogleEmail.value.trim()) || 'usuario.google@gmail.com';
-          const name = (inputGoogleName && inputGoogleName.value.trim()) || 'Usuario Google';
-          const username = (email.split('@')[0] || 'usuario_google').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-          performLogin({
-            name: name,
-            username: username,
-            email: email,
-            avatar: selectedAvatarBase64 || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-            bio: `Cuenta conectada con Google (${email}) ✨`
-          });
-        } catch (err) { console.error('google instant error', err); }
+      document.getElementById('btnGoogleInstant').addEventListener('click', () => {
+        const email = document.getElementById('inputGoogleEmail').value.trim() || 'usuario.google@gmail.com';
+        const name = document.getElementById('inputGoogleName').value.trim() || 'Usuario Google';
+        const username = (email.split('@')[0] || 'usuario_google').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        performLogin({
+          name: name,
+          username: username,
+          email: email,
+          avatar: selectedAvatarBase64 || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          bio: `Cuenta conectada con Google (${email}) ✨`
+        });
       });
 
-      if (btnSubmitGoogle) btnSubmitGoogle.addEventListener('click', () => {
-        try {
-          const email = (inputGoogleEmail && inputGoogleEmail.value.trim()) || 'usuario.google@gmail.com';
-          const name = (inputGoogleName && inputGoogleName.value.trim()) || 'Usuario Google';
-          const username = (email.split('@')[0] || 'usuario_google').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-          performLogin({
-            name: name,
-            username: username,
-            email: email,
-            avatar: selectedAvatarBase64 || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-            bio: `Cuenta conectada con Google (${email}) ✨`
-          });
-        } catch (err) { console.error('google submit error', err); }
+      // Google Form Submit
+      document.getElementById('btnSubmitGoogle').addEventListener('click', () => {
+        const email = document.getElementById('inputGoogleEmail').value.trim() || 'usuario.google@gmail.com';
+        const name = document.getElementById('inputGoogleName').value.trim() || 'Usuario Google';
+        const username = (email.split('@')[0] || 'usuario_google').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        performLogin({
+          name: name,
+          username: username,
+          email: email,
+          avatar: selectedAvatarBase64 || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          bio: `Cuenta conectada con Google (${email}) ✨`
+        });
       });
 
-      if (btnSendPhoneCode) btnSendPhoneCode.addEventListener('click', () => {
-        try {
-          const phone = (inputPhoneNum && inputPhoneNum.value.trim()) || '';
-          if (!phone) {
-            alert('Por favor ingresa tu número de teléfono');
-            return;
-          }
-          if (lblPhoneTarget) lblPhoneTarget.innerText = phone;
-          if (phoneStep1) phoneStep1.style.display = 'none';
-          if (phoneStep2) phoneStep2.style.display = 'flex';
-          showToast('Código SMS enviado: 123456 📲');
-        } catch (err) { console.error('phone code error', err); }
+      // Phone SMS flow
+      document.getElementById('btnSendPhoneCode').addEventListener('click', () => {
+        const phone = document.getElementById('inputPhoneNum').value.trim();
+        if (!phone) {
+          alert('Por favor ingresa tu número de teléfono');
+          return;
+        }
+        document.getElementById('lblPhoneTarget').innerText = phone;
+        phoneStep1.style.display = 'none';
+        phoneStep2.style.display = 'flex';
+        showToast('Código SMS enviado: 123456 📲');
       });
 
-      if (btnSubmitPhone) btnSubmitPhone.addEventListener('click', () => {
-        try {
-          const phone = (inputPhoneNum && inputPhoneNum.value.trim()) || '+34 600 000 000';
-          const name = (inputPhoneName && inputPhoneName.value.trim()) || `Usuario ${phone.slice(-4)}`;
-          const username = `user_${phone.slice(-4)}`;
-          performLogin({
-            name: name,
-            username: username,
-            phone: phone,
-            avatar: selectedAvatarBase64 || 'copilot_image_1758359058839.jpeg',
-            bio: `Verificado con teléfono (${phone}) 📱`
-          });
-        } catch (err) { console.error('phone submit error', err); }
+      document.getElementById('btnSubmitPhone').addEventListener('click', () => {
+        const phone = document.getElementById('inputPhoneNum').value.trim() || '+34 600 000 000';
+        const name = document.getElementById('inputPhoneName').value.trim() || `Usuario ${phone.slice(-4)}`;
+        const username = `user_${phone.slice(-4)}`;
+        performLogin({
+          name: name,
+          username: username,
+          phone: phone,
+          avatar: selectedAvatarBase64 || 'copilot_image_1758359058839.jpeg',
+          bio: `Verificado con teléfono (${phone}) 📱`
+        });
       });
 
       // Photo pickers in Auth
@@ -2797,8 +2766,6 @@
       }
 
       if (qcRequestMic) qcRequestMic.addEventListener('click', requestMicrophone);
-      const qcRequestCamera = document.getElementById('qcRequestCamera');
-      if (qcRequestCamera) qcRequestCamera.addEventListener('click', requestCamera);
       if (qcRequestScreen) qcRequestScreen.addEventListener('click', requestScreen);
       if (qcRequestHeadphones) qcRequestHeadphones.addEventListener('click', requestHeadphones);
 
