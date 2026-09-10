@@ -1153,6 +1153,184 @@
 
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    /* ================= QUANTUMCALL PHONE DIALER ================= */
+    .quantumcall-panel {
+      position: absolute;
+      inset: 0;
+      z-index: 45;
+      background: var(--bg-main);
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.25s ease;
+    }
+    .quantumcall-panel.active { display: flex; }
+
+    .quantumcall-header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(10,10,20,0.95);
+      backdrop-filter: blur(12px);
+    }
+
+    .quantumcall-header h2 {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 800;
+      background: var(--gradient-taktak);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .qc-number-display {
+      padding: 28px 20px 18px;
+      text-align: center;
+    }
+
+    .qc-number-display input {
+      width: 100%;
+      max-width: 320px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 32px;
+      font-weight: 800;
+      text-align: center;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1.5px;
+      outline: none;
+      padding-bottom: 8px;
+    }
+
+    .qc-number-display input::placeholder {
+      color: rgba(255,255,255,0.25);
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .qc-dial-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 10px 22px;
+      max-width: 360px;
+      margin: 0 auto;
+      width: 100%;
+      align-content: center;
+    }
+
+    .qc-dial-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius-md);
+      color: #fff;
+      font-family: var(--font-heading);
+      font-size: 26px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 16px 0;
+      transition: var(--transition-fast);
+      -webkit-tap-highlight-color: transparent;
+      min-height: 64px;
+    }
+
+    .qc-dial-btn:active {
+      background: rgba(255,255,255,0.12);
+      transform: scale(0.96);
+    }
+
+    .qc-dial-btn .qc-sub {
+      font-size: 10px;
+      color: var(--color-text-muted);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .qc-actions {
+      padding: 16px 22px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .qc-call-btn {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border: none;
+      color: #fff;
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(16,185,129,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-fast);
+    }
+
+    .qc-call-btn:active {
+      transform: scale(0.94);
+    }
+
+    .qc-end-btn {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+      border: none;
+      color: #fff;
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(244,63,94,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-fast);
+    }
+
+    .qc-end-btn:active {
+      transform: scale(0.94);
+    }
+
+    .qc-backspace-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #fff;
+      font-size: 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-fast);
+    }
+
+    .qc-backspace-btn:active {
+      background: rgba(255,255,255,0.14);
+      transform: scale(0.94);
+    }
+
+    .qc-status-bar {
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--taktak-cyan);
+      font-weight: 700;
+      min-height: 36px;
+    }
   </style>
 </head>
 <body>
@@ -1304,6 +1482,7 @@
           <button id="tabFollowing" class="header-tab-btn">Siguiendo</button>
           <button id="tabForYou" class="header-tab-btn active">Para ti</button>
           <button id="tabGames" class="header-tab-btn game-tab">🎮 Juegos</button>
+          <button id="tabQuantumCall" class="header-tab-btn">📞 QuantumCall</button>
         </div>
 
         <div class="header-right-actions">
@@ -1575,6 +1754,47 @@
             <button class="primary-btn" id="btnExportCSV" style="flex: 1; font-size: 13px;">📄 Exportar CSV</button>
             <button class="gold-btn" id="btnProcessPayouts" style="flex: 1; font-size: 13px;">💰 Procesar Pagos</button>
           </div>
+        </div>
+      </div>
+
+      <!-- ================= QUANTUMCALL PANEL ================= -->
+      <div id="quantumCallPanel" class="quantumcall-panel">
+        <div class="quantumcall-header">
+          <button id="btnCloseQuantumCall" class="close-btn" style="font-size: 14px; font-weight: 700; color: #fff;">&larr; Volver</button>
+          <h2>QuantumCall</h2>
+          <div style="width: 50px;"></div>
+        </div>
+        <div class="qc-status-bar" id="qcStatusBar">Listo para llamar</div>
+        <div class="qc-number-display">
+          <input type="text" id="qcNumberInput" placeholder="Número de teléfono" readonly />
+        </div>
+        <div class="qc-dial-grid">
+          <button class="qc-dial-btn" data-digit="1">1</button>
+          <button class="qc-dial-btn" data-digit="2">2<span class="qc-sub">ABC</span></button>
+          <button class="qc-dial-btn" data-digit="3">3<span class="qc-sub">DEF</span></button>
+          <button class="qc-dial-btn" data-digit="4">4<span class="qc-sub">GHI</span></button>
+          <button class="qc-dial-btn" data-digit="5">5<span class="qc-sub">JKL</span></button>
+          <button class="qc-dial-btn" data-digit="6">6<span class="qc-sub">MNO</span></button>
+          <button class="qc-dial-btn" data-digit="7">7<span class="qc-sub">PQRS</span></button>
+          <button class="qc-dial-btn" data-digit="8">8<span class="qc-sub">TUV</span></button>
+          <button class="qc-dial-btn" data-digit="9">9<span class="qc-sub">WXYZ</span></button>
+          <button class="qc-dial-btn" data-digit="*">*</button>
+          <button class="qc-dial-btn" data-digit="0">0<span class="qc-sub">+</span></button>
+          <button class="qc-dial-btn" data-digit="#">#</button>
+        </div>
+        <div class="qc-actions">
+          <button class="qc-backspace-btn" id="qcBackspace">⌫</button>
+          <button class="qc-call-btn" id="qcCallBtn">📞</button>
+          <button class="qc-end-btn" id="qcEndBtn" style="display:none;">✖</button>
+        </div>
+        <div style="padding: 0 22px 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+          <button id="qcRequestMic" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🎤 Micrófono</button>
+          <button id="qcRequestScreen" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🖥️ Pantalla</button>
+          <button id="qcRequestHeadphones" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🎧 Auriculares</button>
+        </div>
+        <div id="qcMediaStatus" style="padding: 0 22px 18px; text-align: center; font-size: 12px; color: var(--taktak-cyan); min-height: 18px;"></div>
+        <div id="qcLocalVideoContainer" style="display: none; padding: 0 22px 18px; justify-content: center;">
+          <video id="qcLocalVideo" autoplay muted playsinline style="width: 100%; max-width: 320px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); transform: scaleX(-1);"></video>
         </div>
       </div>
 
@@ -2004,6 +2224,7 @@
       const phoneStep1 = document.getElementById('phoneStep1');
       const phoneStep2 = document.getElementById('phoneStep2');
       const globalAvatarFile = document.getElementById('globalAvatarFile');
+      const quantumCallPanel = document.getElementById('quantumCallPanel');
 
       // Check if user is already logged in
       if (currentUser.isLoggedIn) {
@@ -2135,6 +2356,8 @@
         feedContainer.style.display = 'none';
         gamesContainer.style.display = 'none';
         monetizePanel.classList.remove('active');
+        const qcPanel = document.getElementById('quantumCallPanel');
+        if (qcPanel) qcPanel.classList.remove('active');
       }
 
       tabForYou.addEventListener('click', () => {
@@ -2366,7 +2589,175 @@
       document.getElementById('btnPlayBeatGame').addEventListener('click', () => {
         showToast('🎮 Iniciando TakTak Beat Runner...');
       });
-    });
+    
+      // ================= QUANTUMCALL DIALER =================
+      const qcInput = document.getElementById('qcNumberInput');
+      const qcStatus = document.getElementById('qcStatusBar');
+      const tabQuantumCall = document.getElementById('tabQuantumCall');
+      const btnCloseQC = document.getElementById('btnCloseQuantumCall');
+      const qcCallBtn = document.getElementById('qcCallBtn');
+      const qcEndBtn = document.getElementById('qcEndBtn');
+      const qcBackspace = document.getElementById('qcBackspace');
+      let qcInCall = false;
+
+      function showQuantumCall() {
+        quantumCallPanel.classList.add('active');
+        qcInCall = false;
+        qcInput.value = '';
+        qcStatus.innerText = 'Listo para llamar';
+        qcCallBtn.style.display = 'flex';
+        qcEndBtn.style.display = 'none';
+        stopLocalMedia();
+        const qcMediaStatus = document.getElementById('qcMediaStatus');
+        if (qcMediaStatus) qcMediaStatus.innerText = '';
+      }
+
+      function hideQuantumCall() {
+        quantumCallPanel.classList.remove('active');
+        qcInCall = false;
+      }
+
+      if (tabQuantumCall) {
+        tabQuantumCall.addEventListener('click', () => {
+          tabQuantumCall.classList.add('active');
+          document.getElementById('tabForYou').classList.remove('active');
+          document.getElementById('tabGames').classList.remove('active');
+          hideAllViews();
+          showQuantumCall();
+        });
+      }
+
+      if (btnCloseQC) {
+        btnCloseQC.addEventListener('click', hideQuantumCall);
+      }
+
+      document.querySelectorAll('.qc-dial-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (qcInCall) return;
+          const digit = btn.getAttribute('data-digit');
+          if (digit === '*' && qcInput.value.endsWith('*')) return;
+          qcInput.value += digit;
+        });
+      });
+
+      if (qcBackspace) {
+        qcBackspace.addEventListener('click', () => {
+          if (qcInCall) return;
+          qcInput.value = qcInput.value.slice(0, -1);
+        });
+      }
+
+      if (qcCallBtn) {
+        qcCallBtn.addEventListener('click', () => {
+          const num = qcInput.value.trim();
+          if (!num) {
+            showToast('Ingresa un número para llamar 📞');
+            return;
+          }
+          qcInCall = true;
+          qcStatus.innerText = 'Llamando a ' + num + '... (QuantumCall cifrado)';
+          qcCallBtn.style.display = 'none';
+          qcEndBtn.style.display = 'flex';
+          showToast('📞 Llamada QuantumCall iniciada a ' + num);
+        });
+      }
+
+      if (qcEndBtn) {
+        qcEndBtn.addEventListener('click', () => {
+          qcInCall = false;
+          qcStatus.innerText = 'Llamada finalizada';
+          qcCallBtn.style.display = 'flex';
+          qcEndBtn.style.display = 'none';
+          qcInput.value = '';
+          stopLocalMedia();
+          showToast('Llamada finalizada ✖');
+        });
+      }
+
+      // ================= MEDIA DEVICES PERMISSIONS =================
+      const qcRequestMic = document.getElementById('qcRequestMic');
+      const qcRequestScreen = document.getElementById('qcRequestScreen');
+      const qcRequestHeadphones = document.getElementById('qcRequestHeadphones');
+      const qcMediaStatus = document.getElementById('qcMediaStatus');
+      const qcLocalVideo = document.getElementById('qcLocalVideo');
+      const qcLocalVideoContainer = document.getElementById('qcLocalVideoContainer');
+      let qcLocalStream = null;
+
+      async function requestMicrophone() {
+        try {
+          qcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          showToast('🎤 Micrófono activado');
+          if (qcMediaStatus) qcMediaStatus.innerText = '🎤 Micrófono: activo';
+        } catch (err) {
+          showToast('Error micrófono: ' + err.message);
+        }
+      }
+
+      async function requestCamera() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          if (qcLocalVideo) {
+            qcLocalVideo.srcObject = stream;
+            qcLocalVideoContainer.style.display = 'flex';
+          }
+          showToast('📸 Cámara activada');
+          if (qcMediaStatus) qcMediaStatus.innerText = '📸 Cámara: activa';
+        } catch (err) {
+          showToast('Error cámara: ' + err.message);
+        }
+      }
+
+      async function requestScreen() {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          showToast('🖥️ Pantalla compartida activa');
+          if (qcMediaStatus) qcMediaStatus.innerText = '🖥️ Pantalla: compartiendo';
+          stream.getTracks().forEach(t => t.stop());
+        } catch (err) {
+          showToast('Error pantalla: ' + err.message);
+        }
+      }
+
+      async function requestHeadphones() {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioOutput = devices.find(d => d.kind === 'audiooutput');
+          if (audioOutput) {
+            const label = audioOutput.label || 'Dispositivo de salida de audio';
+            showToast('🎧 Auriculares: ' + label);
+            if (qcMediaStatus) qcMediaStatus.innerText = '🎧 Auriculares: ' + label;
+            if (qcLocalVideo && qcLocalStream && typeof qcLocalVideo.setSinkId === 'function') {
+              try {
+                await qcLocalVideo.setSinkId(audioOutput.deviceId);
+              } catch (sinkErr) {
+                console.warn('setSinkId no soportado:', sinkErr);
+              }
+            }
+          } else {
+            showToast('🎧 No se detectaron auriculares/altavoces de salida');
+          }
+        } catch (err) {
+          showToast('Error detectando auriculares: ' + err.message);
+        }
+      }
+
+      function stopLocalMedia() {
+        if (qcLocalStream) {
+          qcLocalStream.getTracks().forEach(t => t.stop());
+          qcLocalStream = null;
+        }
+        if (qcLocalVideo) {
+          qcLocalVideo.srcObject = null;
+        }
+        if (qcLocalVideoContainer) {
+          qcLocalVideoContainer.style.display = 'none';
+        }
+      }
+
+      if (qcRequestMic) qcRequestMic.addEventListener('click', requestMicrophone);
+      if (qcRequestScreen) qcRequestScreen.addEventListener('click', requestScreen);
+      if (qcRequestHeadphones) qcRequestHeadphones.addEventListener('click', requestHeadphones);
+
   </script>
 </body>
 </html>
