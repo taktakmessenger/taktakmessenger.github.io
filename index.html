@@ -1789,6 +1789,7 @@
         </div>
         <div style="padding: 0 22px 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
           <button id="qcRequestMic" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🎤 Micrófono</button>
+          <button id="qcRequestCamera" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">📸 Cámara</button>
           <button id="qcRequestScreen" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🖥️ Pantalla</button>
           <button id="qcRequestHeadphones" class="badge-btn" style="font-size: 12px; padding: 8px 14px;">🎧 Auriculares</button>
         </div>
@@ -2766,6 +2767,8 @@
       }
 
       if (qcRequestMic) qcRequestMic.addEventListener('click', requestMicrophone);
+      const qcRequestCamera = document.getElementById('qcRequestCamera');
+      if (qcRequestCamera) qcRequestCamera.addEventListener('click', requestCamera);
       if (qcRequestScreen) qcRequestScreen.addEventListener('click', requestScreen);
       if (qcRequestHeadphones) qcRequestHeadphones.addEventListener('click', requestHeadphones);
 
