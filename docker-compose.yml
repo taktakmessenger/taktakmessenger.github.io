@@ -1,0 +1,66 @@
+# TAK TAK - stack de desarrollo completo.
+# MongoDB se levanta como replica set de un solo nodo para habilitar
+# transacciones multi-documento (requisito del flujo de regalos).
+services:
+  mongodb:
+    image: mongo:6
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      # Bind mount dentro del repo, no un volumen con nombre: los volúmenes
+      # viven en /var/lib/docker, que se borra al reiniciar el entorno de
+      # desarrollo, y con él las cuentas y los vídeos.
+      - ./.data/mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # One-shot init: makes the replica set usable before the API starts.
+  mongo-init:
+    image: mongo:6
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      bash -c "
+      mongosh --host mongodb:27017 --quiet --eval '
+        try { rs.status() } catch (e) {
+          rs.initiate({ _id: \"rs0\", members: [{ _id: 0, host: \"mongodb:27017\" }] })
+        }'
+      "
+
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGODB_URI: mongodb://mongodb:27017/taktak?replicaSet=rs0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET_is_required}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      # Activa HLS solo si la imagen incluye ffmpeg.
+      TRANSCODE_ENABLED: ${TRANSCODE_ENABLED:-false}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
+    volumes:
+      # Los originales y sus versiones HLS deben sobrevivir a un redeploy.
+      # Bind mount, no volumen con nombre: los volúmenes viven en
+      # /var/lib/docker, que se borra al reiniciar el entorno de desarrollo.
+      - ./.data/uploads:/app/uploads
+    ports:
+      - "4000:4000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+

@@ -1,0 +1,493 @@
+# AGENTS.md
+
+Guía para agentes que trabajen en este repositorio.
+
+## Resumen
+
+TAK TAK: plataforma de video con economía de tokens TTC.
+- `backend/` — API Express + Mongoose (CommonJS).
+- `frontend/` — React 18 + Vite (ESM, JSX).
+
+## Comandos
+
+```bash
+# Pila completa (Docker + MongoDB + backend + frontend). Idempotente.
+bash scripts/dev-up.sh
+bash scripts/dev-down.sh
+
+# Vigilante: relanza la pila sola si se cae (contenedor que se reinicia).
+setsid bash scripts/dev-watch.sh > /tmp/taktak-watch.log 2>&1 < /dev/null &
+
+# Backend
+cd backend && npm install
+npm run dev                                  # servidor con watch
+TEST_MONGODB_URI=mongodb://localhost:27017/taktak_test npm test
+
+# Frontend
+cd frontend && npm install
+npm run dev
+npm run build
+
+# Base de datos (replica set de un nodo, necesario para transacciones)
+docker run -d --name taktak-mongo -p 27017:27017 mongo:6 mongod --replSet rs0 --bind_ip_all
+docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})'
+```
+
+### Notas del entorno (contenedor de desarrollo)
+
+- El usuario **no** pertenece al grupo `docker`: hay que usar `sudo docker`.
+  `scripts/dev-up.sh` detecta esto solo y guarda el comando en `$DOCKER`.
+- **No hay `ss`, `lsof` ni `fuser`** en el contenedor. Para saber si algo está
+  vivo, usa `curl` contra el endpoint o `pgrep -f <patrón>`. `scripts/dev-down.sh`
+  se apoya en pidfiles (`.run/`) con `pgrep` como respaldo.
+- Arrancar un proceso con `nohup ... &` dentro de un script que luego termina
+  deja el pipe de salida abierto y la terminal se queda colgada. Lanza el script
+  con `setsid ... < /dev/null > log 2>&1 &` o usa `scripts/dev-up.sh`.
+
+## Convenciones
+
+- Backend en CommonJS; frontend en ESM con componentes `.jsx`.
+- **Estilos:** los tokens de marca están en `frontend/src/styles/index.css`
+  (paleta neón: `--pink`, `--primary`, `--accent`, `--glow-*`) y la maquetación
+  en `App.css`. Al tocar estilos, **conserva los nombres de clase**: los
+  componentes los usan y no hay comprobación automática de que existan. Si
+  añades una clase nueva en un componente, añade también su regla.
+- Mensajes de error de la API en español, con la forma `{ error: string }`.
+  Los errores de validación añaden `{ details: [{ field, message }] }`.
+- Todo endpoint que reciba datos pasa por reglas de `express-validator` +
+  middleware `validate`.
+- Los handlers async se envuelven en `asyncHandler` para que los rechazos
+  lleguen al manejador de errores.
+- Los componentes de React usan el cliente `api` (`src/api/client.js`), que ya
+  inyecta el token y normaliza los errores.
+
+## Reglas importantes
+
+- **Toda ruta nueva debe montarse en `app.js`.** Cuatro módulos completos
+  (`feed`, `analytics`, `gifts`, `sounds`) vivieron meses con tests en verde y
+  respondiendo 404, porque `app.js` no los registraba. Si añades un fichero a
+  `src/routes/`, añádelo también a `createApp()`. El test "the previously
+  orphaned routes are mounted" cubre esta regresión.
+- **Un `$inc` de contador necesita una condición de idempotencia.** El endpoint
+  de likes decía ser idempotente pero incrementaba sin filtro, y como el minado
+  paga `likes × 2`, un doble clic imprimía Diamantes. Usa `likedBy` con
+  `findOneAndUpdate({ _id, likedBy: { $ne: userId } }, { $addToSet, $inc })` y
+  trata el no-match como "quitar el like".
+- **`fs.access` no busca en el PATH.** `fs.access('ffmpeg')` resuelve relativo
+  al cwd y fallaba siempre, dejando el HLS muerto en silencio. Para un binario
+  por nombre usa `execFile(binary, ['-version'])`; `path.isAbsolute` sí vale con
+  `fs.access`.
+- **El ranking del feed vive en `rankingService.js`, no en Mongo.** Necesita
+  compresión logarítmica, decaimiento exponencial y tope por creador, que el
+  pipeline de agregación no expresa de forma legible. Además, así la misma
+  fórmula que prueban los tests es la que se ejecuta. La consulta de Mongo solo
+  pre-filtra y ordena el conjunto de candidatos; no reimplementa el modelo.
+- **Un tope por creador no puede "rellenarse desde el sobrante".** Si al llegar
+  al límite se completa la página con los videos descartados, el tope deja de
+  existir: una cuenta vuelve a ocupar todo. Una página corta es correcta; una
+  página de un solo creador no lo es.
+- **Toda métrica de ranking se comprime con `log1p`.** Con suma lineal, un solo
+  video con un millón de vistas aplasta a todos los demás candidatos y el feed
+  se congela en el pasado.
+- **Las señales negativas son parte del recomendador.** "No me interesa" y
+  "ocultar creador" deben excluir en la recuperación (`$nin`), no solo bajar el
+  puntaje. Si solo bajan el score, el contenido silenciado sigue apareciendo.
+- **En la nube el host público debe estar en `allowedHosts`.** Vite 5 rechaza
+  cualquier cabecera `Host` que no reconozca (protección contra DNS rebinding).
+  Si la app se sirve detrás de un proxy en un dominio público, la respuesta es
+  `403 Blocked request. This host is not allowed.` y la página parece "en
+  blanco". `vite.config.js` permite `*.prod-runtime.all-hands.dev` por defecto y
+  acepta más hosts con `VITE_ALLOWED_HOSTS=a.com,b.com`. El puerto sale de
+  `PORT` (por defecto 3000), para poder usar el 12000 del contenedor.
+- **El build usa `base: './'`.** Los assets deben ser relativos para que el
+  bundle funcione servido desde una subruta o abierto desde disco, no solo
+  desde la raíz del dominio. Con rutas absolutas (`/assets/...`) los ficheros
+  dan 404 y la página queda en blanco.
+- **`localStorage` se lee con `try/catch`.** Un `taktak_user` corrupto hacía
+  que `JSON.parse` lanzara dentro de `useState`; sin error boundary React
+  desmonta el árbol y la pantalla queda vacía. `AuthContext` descarta el valor
+  inválido, y `ErrorBoundary` (en `main.jsx`) muestra el error en lugar de un
+  blanco silencioso.
+- **El dinero (TTC) solo se mueve con actualizaciones atómicas.** Nunca hagas
+  `read -> check in JS -> save` sobre `wallet`: usa `$inc` con condición
+  (`findOneAndUpdate({ _id, 'wallet.ttcC': { $gte: amount } }, { $inc: ... })`).
+  El test "concurrent gifts cannot overdraw the balance" cubre esta regresión.
+- **Transacciones:** `walletService` detecta si el servidor soporta
+  transacciones (replica set) antes de usarlas. No vuelvas a intentar
+  `withTransaction` con un `catch` de fallback: en un servidor standalone las
+  escrituras se aplican *antes* de lanzar el error y el fallback duplicaría la
+  operación. Dos detalles que ya rompieron el flujo de regalos:
+  - `Transaction.create([...], { session })` con **varios** documentos exige
+    `ordered: true`; sin él Mongoose lanza y todo regalo devuelve 500.
+  - El crédito al creador debe ir **dentro** de la sesión
+    (`creditWithdrawable(id, amount, session)`). Si se ejecuta fuera, el creador
+    cobra aunque el asiento contable falle y se crean tokens de la nada.
+- **Nunca** pongas un `JWT_SECRET` por defecto que se use en producción; `env.js`
+  falla a propósito si falta.
+- Las rutas `/api/admin/*` requieren `auth` + `requireAdmin`.
+- **El reparto de ingresos es 75/25 y debe sumar 1.** `CREATOR_SHARE` y
+  `PLATFORM_SHARE` se validan al arrancar; un desajuste crearía o destruiría
+  tokens. El share del creador se redondea hacia abajo (`Math.floor`) porque los
+  Diamantes son enteros, y el resto va a la plataforma para que ambos lados
+  sumen siempre el importe debitado.
+- El corte de plataforma se registra como `Transaction` con
+  `type: 'platform'`. No lo omitas: sin ese asiento los ingresos de la casa no
+  son auditables.
+- El vocabulario de cara al usuario es **Monedas (`coins`)** y **Diamantes
+  (`diamonds`)**; `ttcC`/`ttcR` son los nombres internos. Mantén ambos en las
+  respuestas.
+- Los `joinCode` de TAK Squads nunca se devuelven al cliente.
+- **Cambiar de pestaña no debe cambiar de vista.** En `AuthForm`, las pestañas
+  Correo/Teléfono llamaban a `reset('login')`, que además de limpiar el estado
+  hacía `setView('login')`. Estando en registro, pulsar "Teléfono" devolvía al
+  login y el formulario de teléfono de registro quedaba en blanco. Para cambiar
+  solo de proveedor usa `switchTab`, que preserva la vista. El mismo formulario
+  sirve a login y registro: muestra usuario/contraseña cuando `view === 'register'`
+  y los omite en login (el backend reutiliza la cuenta existente).
+
+## Tests
+
+- `node:test` + `supertest`, contra MongoDB real.
+- Los ficheros de test comparten una base de datos y la vacían en
+  `beforeEach`, por eso se ejecutan en serie (`--test-concurrency=1`). Si
+  añades un fichero nuevo, mantén la convención `test/*.test.js`.
+
+## Identidad de usuario en el frontend
+
+- El mismo usuario llega con formas distintas según el endpoint: `/users/me`
+  devuelve el documento con `_id`, mientras que los mensajes y el feed traen
+  `id`. Comparar `user.id` a secas deja `undefined` y rompe cosas silenciosas:
+  la copia optimista del chat no se empareja (el mensaje sale duplicado) y las
+  burbujas no se alinean por lado. Normaliza siempre con un helper que pruebe
+  `_id ?? id` antes de comparar.
+
+## Mensajería en tiempo real
+
+- El fan-out vive en `services/liveSockets.js` (`broadcastMessage`) y lo llaman
+  tanto el handler de socket como la ruta REST. Si añades otra vía de envío,
+  difunde desde ahí: el frontend solo pinta lo que llega por `chat:message`.
+- En el hilo (`Messages.jsx`), el efecto que se suscribe a `chat:message` **no**
+  debe depender de `messages.length`. Si depende, cada mensaje nuevo deshace y
+  rehace la suscripción y el evento que la provocó puede caer en ese hueco.
+- Un mismo mensaje llega por dos vías (eco del socket y respuesta del POST) más
+  la copia optimista local. Usa `mergeMessage` para deduplicar por id y retirar
+  la copia pendiente; dos hijos con la misma `key` descuadran el hilo.
+
+### Recibos, presencia y "escribiendo…" (estilo WhatsApp)
+
+- El estado del mensaje **se deriva, no se guarda**: `serializeMessage` lo calcula
+  a partir de `deliveredTo` y `readTo` (listas de ids, no booleanos, para que
+  sirvan también en grupos). Nunca se escribe un campo `status` en la base.
+- `deliveredTo` se marca en `broadcastMessage` **solo si el destinatario tiene
+  algún socket abierto** (`fetchSockets`). Emitir a una sala vacía no entrega
+  nada, así que darlo por hecho pintaría un ✓✓ falso.
+- La presencia en vivo es un **contador de sockets por usuario** (`onlineSockets`
+  en `liveSockets.js`), no un booleano: varias pestañas del mismo usuario no
+  deben marcar "desconectado" al cerrar una. Al irse el último socket se guarda
+  `lastSeenAt` en el usuario y se avisa por `chat:presence` a quienes comparten
+  conversación (no a todo el mundo: la presencia es dato de contactos).
+- `chat:typing` es efímero y solo se reenvía al hilo (`socket.to(room)`, no
+  `io.to`), previa comprobación de que el emisor es participante. En el cliente se
+  espacia a un evento cada 2,5 s: sin ese freno, teclear una frase dispararía
+  decenas de eventos por socket.
+- El doble tick azul se pinta con la clase `.ticks.read` y el **turquesa de la
+  marca** (`--accent`), no con el azul de WhatsApp.
+
+## Llamadas de voz y vídeo
+
+- El audio y el vídeo van de peer a peer por WebRTC; el servidor solo retransmite
+  la señalización (`call:invite`, `call:offer`, `call:answer`, `call:ice`,
+  `call:accept`, `call:reject`, `call:end`). Con solo STUN configurado, una
+  llamada funciona en la misma red pero se corta detrás de NAT estricto: para eso
+  hace falta un TURN (`VITE_TURN_URL`, `VITE_TURN_USERNAME`,
+  `VITE_TURN_CREDENTIAL`).
+- El historial de llamadas reutiliza el hilo de mensajes. Una llamada es un
+  `Message` con `kind: 'call'` y un subdocumento `call` (`kind`, `status`,
+  `durationSeconds`). Así comparte orden, no leídos y paginación con el texto sin
+  código extra. `text` es opcional cuando `kind === 'call'`.
+- Solo **quien inicia** la llamada escribe la entrada del hilo (`isCallerRef` en
+  `CallContext`). Si escribieran los dos, cada llamada aparecería duplicada, ya
+  que el hilo es compartido. El receptor nunca registra nada. La marca se pone
+  **después** de conseguir el micrófono/cámara: si el usuario deniega el permiso,
+  nunca hubo llamada y no debe quedar una "perdida" en el historial.
+- Todo final de llamada pasa por `finalize`, el único punto que cierra la
+  conexión y registra el resultado. Lo llaman colgar, rechazar, el fin remoto y
+  el temporizador de timbrado (45 s sin respuesta = `missed`). `loggedRef` evita
+  un doble registro y se rearma en `cleanup` para la siguiente llamada.
+- La duración cuenta desde `activeSinceRef`, que se fija al quedar activa (el
+  receptor en `acceptCall`, el llamante al recibir `call:answer`). El servidor
+  fuerza a 0 la duración de cualquier llamada no contestada.
+- El endpoint es `POST /api/messages/calls` con `peerId`, `status`
+  (`answered|missed|declined|cancelled|unreachable`), `kind` y
+  `durationSeconds`. Se identifica por `peerId` porque la llamada puede no tener
+  hilo previo; el servidor lo crea. El estado lo reporta el cliente: es historial,
+  no una fuente de verdad para facturación.
+
+## Verificación por correo/SMS en desarrollo
+
+- Sin `SMTP_HOST` ni `SMS_PROVIDER` configurados, ningún código sale del
+  servidor: solo se escribe en el log (`[MAIL:dev]` / `[SMS:dev]`) y el usuario
+  no puede leerlo. El helper `devCode(code)` de `routes/auth.js` devuelve el
+  código en la respuesta **solo** cuando `NODE_ENV !== 'production'`, y el
+  frontend lo pinta en un `DevCodeBox` que lo autorrellena al pulsar.
+- La guarda es sobre `isProduction`, **no** sobre "¿hay proveedor?". En
+  producción devuelve `undefined` siempre: enviar el código en la respuesta
+  dejaría que cualquiera con un email o teléfono ajeno tomase esa cuenta.
+- `phone/start` puede responder `existingAccount: true` sin código. El frontend
+  debe mostrar ese aviso; el formulario de teléfono tenía el `notice` sin
+  renderizar, así que el mensaje era invisible y el usuario quedaba atascado.
+  Al reintentar se limpia `notice` para no mostrar un aviso viejo junto a un
+  resultado nuevo que lo contradice.
+
+## Verificación de edad y verificación de noticias (Fase 2)
+
+### Verificación de edad
+
+- El estado vive en `User.ageVerification` (`status`, `verifiedAt`, `provider`,
+  `reference`). Los valores son `unverified`, `pending`, `verified`, `rejected`.
+- `services/ageService.js` abstrae al proveedor externo. En producción, sin
+  proveedor configurado, **falla cerrado**: `startVerification` lanza 503 en vez
+  de dejar pasar. El proveedor `dev` (por defecto fuera de producción) **nunca
+  auto-aprueba**: abre una sesión `pending` y solo un administrador la resuelve.
+- **Declarar la fecha de nacimiento no verifica.** `PUT /api/verification/age/declaration`
+  guarda `dateOfBirth` para la experiencia de edad, pero deja el estado como
+  está. Si esa ruta tocase `ageVerification.status`, cualquiera se verificaría
+  escribiendo una fecha. La fecha se rechaza si es futura.
+- **El único camino que el propio usuario puede usar para llegar a `verified` es
+  `POST /api/verification/age/refresh`**, que relee el veredicto del proveedor.
+  No lo escribas a mano en una ruta de usuario.
+- El gating del contenido adulto es **404, no 403**, y se aplica en tres sitios
+  (feed, listado y vídeo individual): un 403 confirmaría que el vídeo existe. El
+  creador conserva acceso a su propia subida. La misma comprobación
+  (`feedService.canViewAdultContent`) bloquea la subida de `isNSFW` sin verificar
+  (ahí sí 403, porque el creador ya conoce su propio contenido).
+- La ruta `GET /api/users/me` no debe exponer `dateOfBirth`: es dato personal y
+  el panel de admin ya tiene su propia vista.
+
+### Verificación de noticias
+
+- El sello `newsVerified` **solo lo concede un administrador**
+  (`POST /api/admin/news-claims/:id/approve`). El creador reclama la autoría de
+  la fuente al subir; no puede sellarse solo.
+- Una fuente (`NewsSource`) empieza en `pending` y no aparece en el catálogo
+  público (`GET /api/videos/news-sources` filtra `status: 'verified'`). Se
+  propone con `POST /api/verification/news-sources` (cualquiera con sesión puede
+  proponer; solo el admin verifica).
+- Al reclamar, `newsService.validateClaim` comprueba que el `sourceUrl` cuelga
+  de uno de los dominios de la fuente. Un enlace de otro dominio se rechaza con
+  **400**. La comprobación usa `hostnameOf` (no un `includes` de cadena, que
+  aceptaría `malicioso-diario.test` para la fuente `diario.test`).
+- **Revocar una fuente retira el sello en cascada** de todo lo ya publicado bajo
+  ella (`Video.updateMany`). Si no, un medio desacreditado conservaría su
+  credibilidad en contenido ya en vivo.
+- El `Video.create` de la subida copia campo a campo, **nunca** con spread del
+  body: un spread dejaría que el cliente enviase `newsVerified: true` y se
+  saltase la revisión.
+
+## Contrato de respuestas de la API (y el error "no es JSON")
+
+- **La API responde JSON en todas las rutas, incluidos los errores.** El único
+  servicio que puede devolver HTML es el *frontend*: en un hosting estático
+  (o en el `try_files` de nginx) una ruta desconocida devuelve `index.html` con
+  **200**, no un 404. Por eso `/api/...` nunca debe quedar fuera del proxy: si el
+  proxy no reenvía `/api`, el cliente recibe el HTML de la SPA.
+- Ese HTML con 200 es la causa de
+  `Unexpected token '<', "<!DOCTYPE" ... is not valid JSON`: el cliente parseaba
+  la respuesta como JSON sin mirar el `Content-Type`. `frontend/src/api/client.js`
+  ahora rechaza cualquier respuesta que no sea JSON antes de que un componente
+  lea campos de ella, y muestra un texto comprensible en vez del error del
+  parser. `frontend/src/api/response.js` tiene los mensajes y los predicados.
+- **No basta con ocultar el mensaje**: si aparece, es que la petición no llegó a
+  la API. Revisa el proxy (`nginx.conf`, `vite.config.js`) y que el backend esté
+  arriba. Las pruebas `frontend/test/api-response.test.js` fijan este contrato.
+- Los componentes siguen comprobando la forma del cuerpo (`Array.isArray(...)`)
+  porque un JSON válido puede venir incompleto si el backend y el frontend van
+  desincronizados.
+
+## Comentarios
+
+- Un comentario es un **documento propio** (`models/Comment.js`), no un array
+  dentro de `Video`: un array crecería sin límite y obligaría a cargar el hilo
+  entero para pintar una página.
+- **Un solo nivel de anidamiento.** Responder a una respuesta cuelga del
+  comentario raíz (`parent.parent`). No hay árbol.
+- **El contador `comments` del vídeo solo cuenta comentarios de primer nivel.**
+  Una respuesta incrementa `replyCount` del padre, no el contador del vídeo, que
+  es lo que la UI muestra. El servicio y el panel aplican la misma regla; si
+  cambias una, cambia la otra.
+- **Borrado suave.** La fila queda con `deletedAt` y `text: ''`, sin autor, para
+  que las respuestas no pierdan su sitio. El borrado se hace con `updateOne`, no
+  con `save()`: `text` es `required` y guardar un documento vaciado fallaría la
+  validación. La validación sigue protegiendo la creación.
+- **La visibilidad del hilo sigue la del vídeo.** `assertVideoVisible` aplica
+  las mismas reglas que la ruta del vídeo (aprobado, y NSFW solo con edad
+  verificada o para el propio creador). Un vídeo restringido responde 404 en sus
+  comentarios: no se confirma que exista.
+- Borrar un vídeo retira su hilo en cascada (`commentService.removeForVideo`).
+- Los me gusta de un comentario usan el mismo patrón que los del vídeo: el
+  conjunto `likedBy` es la fuente de verdad, así que tocar dos veces no infla el
+  contador.
+- El panel (`frontend/src/components/Comments.jsx`) es `position: fixed` dentro
+  del feed para que el vídeo de detrás siga reproduciéndose y no se pierda la
+  posición del scroll al cerrarlo.
+
+## WhaTaka: contacto contextual desde el reel
+
+Lo que se pidió como "extensión WhaTaka" (chat, voz y vídeo desde el feed) se
+apoya en la mensajería y las llamadas que ya existían. **No hay un segundo
+sistema en paralelo**: `CreatorSheet` solo abre lo que ya hay.
+
+- **Por qué no se usó libp2p.** El diseño original proponía señalización por
+  libp2p con `@libp2p/tcp`. Ese transporte **no existe en el navegador** (así lo
+  documenta libp2p: `@libp2p/tcp (not available in browsers)`), y un navegador
+  tampoco puede *escuchar* en un WebSocket, solo marcar. Un `listenAddrs` como
+  `/ip4/0.0.0.0/tcp/0` lanzaría en el cliente. Además, "cero servidores
+  centrales" no es alcanzable en una app web: alguien tiene que presentar a los
+  pares (un nodo bootstrap, un relay o un servidor de señalización), y WebRTC ya
+  necesita STUN y, tras NAT estricto, TURN. La señalización actual por socket.io
+  cumple esa función y ya está probada.
+- **`CreatorSheet.jsx`** es la acción contextual: se abre tocando el nombre del
+  creador en el reel y ofrece Mensaje, Llamada de voz, Videollamada y Seguir.
+  Es una hoja inferior, no una pantalla: el vídeo sigue detrás y al cerrarla el
+  scroll no se mueve.
+- Toda acción de contacto exige sesión. Sin usuario la hoja avisa ("Inicia sesión
+  para contactar con el creador") en vez de no hacer nada.
+- **"Mensaje" reutiliza la ruta de conversaciones.** `App` guarda el creador en
+  `chatTarget` y `Messages` lo consume una sola vez (`onConsumeInitialUser`)
+  para abrir el hilo; si no se consumiera, volver a Mensajes lo reabriría.
+- **`onCall` acepta `id` o `_id`.** El feed entrega el creador tal cual viene del
+  vídeo (`_id`), mientras el chat usa `id`. `callPeer` normaliza los dos; sin eso
+  una llamada desde el reel no arrancaría.
+
+### Burbuja flotante de llamada (picture-in-picture)
+
+- `CallContext` expone `minimized` y `toggleMinimize`. Minimizar **solo** se
+  ofrece con la llamada activa: una entrante debe verse entera para poder
+  aceptarla o rechazarla, y durante el timbrado hay que ver a quién se llama.
+- La burbuja es un `<button>` que devuelve a la pantalla completa. **No lleva
+  `muted`**: es una llamada en curso y silenciarla al minimizar cortaría al
+  interlocutor, que es justo lo contrario de lo que se pide.
+- El efecto que engancha el stream remoto depende también de `minimized`: al
+  pasar de pantalla completa a burbuja el `<video>` es otro elemento, y sin esa
+  dependencia la burbuja se quedaría negra.
+- `cleanup` restablece `minimized` a `false`. Si no, la siguiente llamada
+  nacería minimizada.
+- `z-index` 88: por debajo del overlay de llamada (90) y de la pantalla de
+  bienvenida (100), por encima del resto. Se coloca sobre la barra inferior.
+
+### Cómo se negocian las llamadas (y por qué el orden importa)
+
+La negociación tiene un orden estricto que costó encontrar, porque el fallo era
+silencioso: la pantalla se quedaba en "Llamando…" para siempre.
+
+1. A llama: `call:invite`. **No** manda la oferta todavía.
+2. B acepta: `call:accept`. Aquí B **no** puede esperar la oferta para
+   contestarla, porque A aún no la ha mandado: A espera el `accept` para mandarla
+   y B esperaba la oferta para aceptar. Ese abrazo mortal dejaba la llamada
+   colgada sin ningún error. B solo avisa de que acepta y pide permisos.
+3. A recibe `call:accept` y manda la oferta. Si B ya aceptó, B contesta en el
+   momento con `answerOffer`.
+4. Los candidatos ICE van sueltos con `call:ice`, y se encolan si llegan antes
+   que la conexión (`pendingIceRef`), o se pierden en silencio.
+
+Reglas que no se deben romper:
+
+- **En llamada de voz hace falta un `<audio>` remoto.** El `<video>` remoto solo
+  existe con `kind === 'video'` y `status === 'active'`. Sin un elemento de audio
+  propio, una llamada de voz conectaba (los dos lados "En llamada") pero no se
+  oía nada. `CallOverlay` monta `<audio ref={remoteAudioRef}>` fuera del bloque
+  condicional, para que exista desde el primer render y no se desmonte.
+- **`answerOffer` no debe montar una segunda conexión.** Una oferta duplicada
+  (reenvío o carrera) se ignora si ya hay `pcRef`.
+- **No se puede llamar sin socket conectado.** `startCall` y `acceptCall`
+  comprueban `connectedRef`. Si el socket aún no conectó, la invitación se
+  perdería sin aviso y la pantalla quedaría en "Llamando…" para siempre. Mejor
+  un error claro ("Sin conexión…") que una llamada fantasma. Ese aviso es la
+  razón de que exista `connectedRef`: se lee dentro de `startCall` sin recrear la
+  función en cada reconexión.
+- **El aviso de TURN es informativo, no un error.** Si la lista ICE del servidor
+  no trae `turn:`, `hasTurn` es falso y la primera llamada avisa de que puede
+  cortarse fuera de la red local. Va en `notice`, no en `error`: la llamada sigue
+  en pie y no debe parecer rota.
+
+### Cómo se probó de verdad
+
+No hay Playwright en el entorno, pero **sí hay Chromium en `/usr/bin/chromium`**,
+y basta con `puppeteer-core` (que no descarga navegador) para lanzar **dos
+navegadores con cámara y micrófono falsos** y hacer una llamada real entre ellos:
+
+- Flags imprescindibles: `--use-fake-ui-for-media-stream` (concede permisos sin
+  diálogo) y `--use-fake-device-for-media-stream` (cámara y micro sintéticos).
+  Sin el primero, `getUserMedia` se queda esperando un permiso que nadie pulsa.
+- El test **no se fía de la UI**: comprueba `video.srcObject.getTracks()` y que
+  el audio esté `playing`, es decir, que llegan pistas de audio (y de vídeo en
+  videollamada). Eso es lo que distingue "conectó" de "funciona".
+- **Cuidado con el límite de registro.** `authLimiter` permite 20 registros cada
+  15 minutos. Una tanda de rondas que registre cuentas nuevas se agota y falla
+  por 429, no por la llamada. Reutiliza cuentas (login como respaldo) o reinicia
+  el backend, que limpia el limitador en memoria.
+- La espera de socket listo en el test usa `window.__taktakSocketConnected`, una
+  señal que `SocketContext` solo expone en desarrollo (`import.meta.env.DEV`).
+- Resultado: 6/6 en voz y 4/4 en vídeo, con audio (y vídeo) remotos confirmados.
+
+### Verificación funcional integral (prueba de humo y UI)
+
+- `scripts/smoke-api.sh` recorre la API completa con `curl` sobre una pila ya
+  levantada: auth (registro, verificación de correo, login, 401 sin sesión),
+  subida y feed, like idempotente, comentarios, social, economía (regalos,
+  retiro, monetización abierta), mensajería, squads, salud, analítica, catálogos,
+  admin y ICE. Son ~48 comprobaciones; salir en verde es la señal de que la API
+  no se ha roto. Registra usuarios nuevos cada vez, así que reinicia el backend
+  antes si has agotado el `authLimiter`.
+- Dos detalles del script que no son de la app: hay que declarar
+  `-F "video=@archivo;type=video/mp4"` (curl no adivina el MIME de un archivo sin
+  extensión reconocible y el filtro del servidor lo rechaza) y `/wallet/transactions`
+  devuelve un **array plano**, no `{ transactions: [...] }`.
+- Para la UI hay tres harness con **Chromium real** (`puppeteer-core` sobre
+  `/usr/bin/chromium`, sin descargar navegador), en `scripts/`:
+  - `node scripts/e2e-ui.js` recorre feed (comprueba que el `<video>` se
+    reproduce, `readystate` y `paused`), registro, like, comentario, wallet
+    (incluido enviar un regalo y ver bajar el saldo), squads, salud y perfil.
+  - `node scripts/e2e-calls.js` lanza **dos navegadores** y hace una llamada de
+    voz y otra de vídeo reales entre ellos, comprobando que llegan pistas
+    remotas de audio (y vídeo) y que colgar cierra la llamada en el otro lado.
+  - `node scripts/e2e-messaging.js` lanza **dos navegadores** y verifica lo que no
+    se ve desde la API: presencia ("en línea" / "última vez…"), aviso de
+    "escribiendo…", llegada del mensaje en vivo, ticks que pasan a leído y el
+    contador de no leídos en la bandeja.
+  - `bash scripts/check-messaging.sh` es una comprobación rápida por API de los
+    recibos (`sent` → `read`) y la presencia, útil para depurar sin navegador.
+  - `puppeteer-core` se declara en el `package.json` raíz (utilidades de
+    desarrollo, no forma parte de la app) y los scripts lo resuelven desde
+    cualquier `node_modules` del repo. El fixture de vídeo lo genera el propio
+    harness con ffmpeg en `.data/` (ignorado por git).
+  - Ojo: muchas etiquetas se muestran en mayúsculas por CSS, así que
+    `innerText` las devuelve transformadas; compara sin distinguir mayúsculas.
+
+#### El proxy de `/uploads` en desarrollo (bug real)
+
+Los vídeos subidos se sirven desde el backend en `/uploads/...`. En producción
+nginx ya proxea esa ruta, **pero el servidor de desarrollo de Vite no lo hacía**:
+la petición caía en el fallback del SPA y devolvía `index.html` con
+`Content-Type: text/html`. Resultado: cualquier vídeo recién subido fallaba en el
+reproductor (`DEMUXER_ERROR_COULD_NOT_OPEN`, `readyState=0`) y el feed parecía
+roto. Arreglado añadiendo `/uploads` al `proxy` de `frontend/vite.config.js`.
+Si vuelves a ver ese error, comprueba que el proxy sigue ahí.
+
+- Otra trampa al probar: el **Chromium de código abierto no trae el códec H.264**.
+  Un fixture `.mp4` válido da `readyState=0` por el códec, no por la app. Genera
+  el vídeo de prueba en **WebM** (`ffmpeg -c:v libvpx`).
+
+### Persistencia de datos en el contenedor de desarrollo
+
+- **Lo único que sobrevive a un reinicio del entorno es `/workspace`.** Docker,
+  los volúmenes (`/var/lib/docker`) y `/tmp` viven en la capa del contenedor y
+  se borran. Un reinicio deja el enlace en 502 y la base de datos vacía.
+- Por eso los datos de Mongo van a `<repo>/.data/mongo` (bind mount) y no a un
+  volumen con nombre. `scripts/dev-up.sh` detecta un contenedor viejo que aún
+  apunte a un volumen y lo recrea solo; `docker-compose.yml` monta el mismo
+  directorio. Los ficheros subidos van a `.data/uploads` por el mismo motivo.
+- Si ves el feed vacío tras un reinicio, es esto: la app está bien, se perdió la
+  base. No busques el fallo en el código.
+- Recuperar el enlace sin perder nada: `bash scripts/dev-up.sh` (idempotente).
+  Para que se relance solo, el vigilante `scripts/dev-watch.sh`.

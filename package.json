@@ -1,0 +1,13 @@
+{
+  "name": "taktak-tools",
+  "private": true,
+  "description": "Utilidades de desarrollo y verificación de TAK TAK (no forma parte de la app).",
+  "scripts": {
+    "e2e:ui": "node scripts/e2e-ui.js",
+    "e2e:calls": "node scripts/e2e-calls.js",
+    "smoke": "bash scripts/smoke-api.sh"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^23.0.0"
+  }
+}

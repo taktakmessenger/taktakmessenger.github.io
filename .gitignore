@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build output
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Uploads (local dev only)
+backend/uploads/
+
+# Pidfiles de los scripts de desarrollo (scripts/dev-up.sh)
+.run/
+
+# Datos de MongoDB en desarrollo (scripts/dev-up.sh). Vive aquí, y no en
+# /var/lib/docker, porque /workspace es lo único persistente del contenedor.
+.data/
