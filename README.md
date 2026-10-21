@@ -62,6 +62,16 @@ en `GET /api/admin/stats` como `platformEarnings`.
 
 El `joinCode` nunca se devuelve al cliente.
 
+### Sala de voz
+
+Cada creator tiene una sala de voz de grupo, dentro de la app. Es una malla
+WebRTC: cada miembro conecta con los demás y el audio viaja de par a par, sin
+pasar por el servidor. Se entra desde el contenido del creator y una barra
+flotante mantiene el audio mientras sigues navegando. Los eventos son
+`voice:join`, `voice:offer`, `voice:answer`, `voice:ice`, `voice:mute` y
+`voice:leave`; la membresía se valida contra la base de datos, igual que el
+feed.
+
 ## Requisitos
 
 - Node.js >= 20
@@ -305,13 +315,16 @@ backend/
 frontend/
   src/
     api/          cliente axios
-    contexts/     AuthContext
+    contexts/     AuthContext, SocketContext, CallContext, VoiceRoomContext
     components/   Navigation, Feed, Upload, Wallet, Profile, AdminPanel, AuthForm
     styles/       index.css (tokens de marca) + App.css (maquetación)
 scripts/
   dev-up.sh       levanta Docker + Mongo + backend + frontend
   dev-down.sh     para la pila
   dev-watch.sh    vigilante: relanza la pila si se cae
+  e2e-ui.js       recorrido de UI con navegador real
+  e2e-calls.js    llamadas 1 a 1 (tono, audio y vídeo remotos)
+  e2e-voice-room.js  sala de voz de un creator con dos navegadores
 ```
 
 ## Notas de seguridad

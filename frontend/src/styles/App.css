@@ -1513,6 +1513,181 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   Sala de voz del creator
+   ------------------------------------------------------------------
+   Panel persistente mientras estás dentro, fuera de las vistas, para no
+   cortar el audio al cambiar de pestaña. Se apoya encima de la barra
+   inferior, como la burbuja de llamada. */
+.voice-room {
+  margin: 0.9rem 0;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.voice-room-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.voice-room-head h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.voice-live {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-shadow: 0 0 12px var(--glow-cyan);
+}
+
+.voice-bar {
+  position: fixed;
+  right: 0.75rem;
+  left: 0.75rem;
+  /* Por encima de la barra inferior, para no tapar la navegación. */
+  bottom: calc(5.2rem + env(safe-area-inset-bottom));
+  z-index: 89;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem 0.6rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.94);
+  box-shadow: var(--shadow), 0 0 30px -8px var(--glow-cyan);
+  backdrop-filter: blur(14px);
+  animation: bubble-in 0.2s ease-out;
+}
+
+.voice-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.voice-bar-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--glow-cyan);
+  animation: voice-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+.voice-bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.voice-bar-text strong {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-bar-text small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.voice-bar-peers {
+  display: flex;
+  gap: 0;
+}
+
+.voice-avatar {
+  width: 26px;
+  height: 26px;
+  margin-left: -6px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+  border: 2px solid rgba(13, 10, 26, 0.94);
+}
+
+.voice-avatar.muted {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.voice-bar-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.voice-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1.05rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.voice-btn.on {
+  background: rgba(255, 92, 138, 0.18);
+  border-color: var(--danger);
+}
+
+.voice-btn.end {
+  background: rgba(255, 45, 141, 0.2);
+  border-color: var(--pink);
+}
+
+.voice-btn:active {
+  transform: scale(0.94);
+}
+
+/* Los elementos de audio solo existen para sonar: no se ven. */
+.voice-audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-bar,
+  .voice-bar-dot {
+    animation: none;
+  }
+}
+
 .call-bubble-video {
   width: 54px;
   height: 54px;

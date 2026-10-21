@@ -747,3 +747,38 @@ Verificación: `npm run e2e:calls` (dos navegadores reales; tono entrante y
 saliente, parada al aceptar, audio remoto, burbuja con vídeo y audio vivos) y
 `npm run e2e:notifications` (el aviso aparece, explica que sonará con la app
 cerrada y desaparece con el permiso concedido).
+
+## Sala de voz del creator (malla WebRTC)
+
+La sala de voz de un TAK Creator es audio en grupo. Está en
+`VoiceRoomContext.jsx`, `VoiceRoomBar.jsx` y la sección `voice:*` de
+`backend/src/services/liveSockets.js`.
+
+- **Es una malla, no un mezclador.** Cada participante abre una
+  `RTCPeerConnection` con cada uno de los demás y el audio viaja de par a par; el
+  servidor no toca el audio. Para el tamaño de un creator y sus fans (unos pocos)
+  es lo más simple y con menos latencia. No escala a cientos: si algún día hacen
+  falta salas grandes, haría falta un SFU (mediasoup, LiveKit) y eso es otro
+  trabajo, no un ajuste.
+- **Un solo sentido de negociación.** Quien entra es siempre quien ofrece, a cada
+  uno de los que ya estaban (`voice:joined` trae la lista de `peers`). Los que ya
+  estaban esperan la oferta. Sin esta regla, dos ofertas simultáneas se pisan.
+- **La autorización va contra la base de datos**, igual que el feed REST: el
+  handler `voice:join` busca el squad por `slug` y comprueba la membresía si es
+  privado. El nombre de la sala sale de `squad.voiceRoom` (fijado en el servidor
+  al crear), nunca de un string del cliente, que podría apuntar a la sala de
+  otro. La señalización (`voice:offer`/`answer`/`ice`) solo se reenvía a alguien
+  de la misma sala.
+- **La barra vive fuera de las vistas** (`App.jsx`, junto a `CallOverlay`). Si se
+  desmontara al cambiar de pestaña, el `<audio>` remoto se iría con ella y la
+  sala quedaría muda; es el mismo motivo por el que la llamada minimizada no
+  pierde el audio. Por eso se puede seguir en el feed mientras hablas.
+- Los elementos `<audio>` de los pares están ocultos (`.voice-audio`): solo
+  existen para sonar, uno por participante.
+
+Verificación: `npm run e2e:voice-room` (dos navegadores reales; entran a la misma
+sala, negocian la malla, se oye el audio del otro, sobrevive al cambio de
+pestaña, el silencio se propaga y al salir el par desaparece) y
+`backend/test/voice-room.test.js` (autorización, señalización, aislamiento entre
+salas y limpieza al desconectar).
+

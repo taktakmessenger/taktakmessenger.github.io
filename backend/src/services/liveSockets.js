@@ -4,6 +4,7 @@ const messages = require('./messageService');
 const pushService = require('./pushService');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
+const Squad = require('../models/Squad');
 
 // Live chat and gift animations. Kept deliberately small: one room per stream,
 // membership is verified from the JWT, and messages are capped so a client
@@ -24,6 +25,56 @@ function userRoom(userId) {
 // Same idea for the private chat channel between two people.
 function conversationRoom(conversationId) {
   return `conversation:${conversationId}`;
+}
+
+// A creator's voice room. Derived from the squad's `voiceRoom`, which is set
+// server-side at creation, never from a client-supplied string: the room name
+// is the only thing standing between a member and a stranger's audio, so it
+// must not be forgeable.
+function voiceRoom(roomName) {
+  return `voice:${roomName}`;
+}
+
+// Quién está conectado a cada sala de voz: `voiceRoom -> Map(userId -> user)`.
+// Se lleva en memoria porque una sala es efímera: si el proceso cae, no hay
+// audio que conservar, solo participantes que vuelven a entrar. Guardar el
+// nombre y no el socket permite que un usuario tenga varias pestañas y que las
+// salas se vacíen solas al desconectar el último socket.
+const voiceRooms = new Map();
+
+function voiceMembers(room) {
+  const members = voiceRooms.get(room);
+  return members ? [...members.values()] : [];
+}
+
+// Saca al socket de su sala de voz, avisa a los que quedan y devuelve el nombre
+// de la sala si realmente estaba dentro. Se llama tanto al salir a propósito
+// como al desconectar, para que nadie quede como un participante fantasma.
+function leaveVoiceRoom(io, socket, notify = true) {
+  const room = socket.data.voiceRoom;
+  if (!room) return null;
+  socket.data.voiceRoom = null;
+  socket.leave(voiceRoom(room));
+
+  const members = voiceRooms.get(room);
+  if (members) {
+    const userId = String(socket.data.user.id);
+    // Solo se borra del mapa si este socket era el último del usuario. Con dos
+    // pestañas abiertas, cerrar una no debe expulsar al usuario de la sala.
+    const stillHere = [...(io.sockets.adapter.rooms.get(voiceRoom(room)) || [])].some(
+      (socketId) => io.sockets.sockets.get(socketId)?.data?.user?.id?.toString() === userId
+    );
+    if (!stillHere) {
+      members.delete(userId);
+      if (notify) {
+        io.to(voiceRoom(room)).emit('voice:peer-left', { userId });
+      }
+    }
+    if (members.size === 0) voiceRooms.delete(room);
+  }
+
+  if (notify) socket.emit('voice:left', { room });
+  return room;
 }
 
 // Presencia: cuántos sockets abiertos tiene cada usuario ahora mismo. Un mismo
@@ -426,6 +477,99 @@ function initLiveSockets(server) {
         io.to(userRoom(to)).emit(event, { from: me.id, ...rest });
       });
     }
+
+    // ------------------------------------------------------------------
+    // Sala de voz de un TAK Creator (audio en grupo, malla WebRTC)
+    // ------------------------------------------------------------------
+    //
+    // El audio no pasa por aquí: el servidor solo reparte quién está en la sala
+    // y reenvía la señalización (oferta/respuesta/ICE) entre pares. Es una malla
+    // completa: cada participante abre una conexión con cada uno de los demás.
+    // Sirve para grupos pequeños (el caso de un creator y sus fans), que es
+    // justo el tamaño para el que está pensado un squad.
+
+    // Entrar. La membresía se comprueba contra la base de datos, igual que el
+    // endpoint REST del feed: el socket no puede ser una puerta trasera a la
+    // sala de un creator privado.
+    socket.on('voice:join', async ({ slug } = {}) => {
+      if (!me || typeof slug !== 'string' || !slug.trim()) return;
+      try {
+        const squad = await Squad.findOne({ slug: slug.trim().toLowerCase() });
+        if (!squad || !squad.voiceRoom) {
+          return socket.emit('voice:error', { error: 'Creator no encontrado' });
+        }
+        if (squad.visibility === 'private' && !squad.isMember(me.id)) {
+          return socket.emit('voice:error', { error: 'Debes ser miembro del creator' });
+        }
+
+        // Una sola sala por socket: si estaba en otra, sale primero para no
+        // quedar conectado a dos sitios a la vez (y con el micrófono abierto).
+        if (socket.data.voiceRoom) leaveVoiceRoom(io, socket);
+
+        const room = squad.voiceRoom;
+        socket.data.voiceRoom = room;
+        socket.join(voiceRoom(room));
+
+        // Quienes ya estaban: se le entregan al que llega para que sea él quien
+        // llame (oferta) a cada uno. Así hay un único sentido de negociación y
+        // no se cruzan dos ofertas simultáneas.
+        const existing = voiceMembers(room);
+
+        if (!voiceRooms.has(room)) voiceRooms.set(room, new Map());
+        voiceRooms.get(room).set(String(me.id), { id: String(me.id), username: me.username });
+
+        socket.emit('voice:joined', {
+          room,
+          slug: squad.slug,
+          name: squad.name,
+          peers: existing,
+        });
+
+        // A los que ya estaban se les avisa del nuevo; ellos no llaman, esperan
+        // la oferta del que entra.
+        socket.to(voiceRoom(room)).emit('voice:peer-joined', {
+          id: String(me.id),
+          username: me.username,
+        });
+      } catch {
+        socket.emit('voice:error', { error: 'No se pudo entrar en la sala de voz' });
+      }
+    });
+
+    socket.on('voice:leave', () => {
+      if (!me) return;
+      leaveVoiceRoom(io, socket);
+    });
+
+    // Micrófono silenciado. Es solo un aviso para pintar el icono en los demás;
+    // quien corta el audio de verdad es la pista local.
+    socket.on('voice:mute', ({ muted } = {}) => {
+      if (!me || !socket.data.voiceRoom) return;
+      socket
+        .to(voiceRoom(socket.data.voiceRoom))
+        .emit('voice:peer-mute', { userId: String(me.id), muted: muted !== false });
+    });
+
+    // Señalización entre pares de la sala. Igual que en las llamadas 1 a 1, el
+    // servidor reenvía el contenido tal cual, pero solo a alguien que esté en la
+    // misma sala: sin esa comprobación un socket podría inyectar SDP en la
+    // llamada de dos desconocidos.
+    for (const event of ['voice:offer', 'voice:answer', 'voice:ice']) {
+      socket.on(event, ({ to, ...rest } = {}) => {
+        if (!me || typeof to !== 'string' || !socket.data.voiceRoom) return;
+        const room = socket.data.voiceRoom;
+        const members = voiceRooms.get(room);
+        if (!members || !members.has(String(to))) return;
+        io.to(userRoom(to)).emit(event, { from: String(me.id), room, ...rest });
+      });
+    }
+
+    // Al desconectar hay que sacarlo de la sala: si no, los demás seguirían
+    // intentando hablar con un socket muerto y el usuario aparecería "dentro"
+    // para siempre.
+    socket.on('disconnect', () => {
+      if (me && socket.data.voiceRoom) leaveVoiceRoom(io, socket);
+    });
 
   });
 

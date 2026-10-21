@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
+import { useVoiceRoom } from '../contexts/VoiceRoomContext';
 
 // TAK Creators: la comunidad privada de un creador. Los creators públicos están
 // abiertos; los privados piden el código de invitación que comparte el dueño.
@@ -11,6 +12,7 @@ export default function Squads() {
   const [form, setForm] = useState({ name: '', description: '', visibility: 'private' });
   const [joinCode, setJoinCode] = useState({});
   const [active, setActive] = useState(null);
+  const { room: voiceRoomState, join: joinVoice, leave: leaveVoice } = useVoiceRoom();
 
   const load = useCallback(async () => {
     try {
@@ -169,7 +171,34 @@ export default function Squads() {
       {active && (
         <div className="squad-feed">
           <h3>Contenido de {active.squad.name}</h3>
-          <p className="muted">🎙 Sala de voz activa para miembros</p>
+
+          <div className="voice-room">
+            <div className="voice-room-head">
+              <h4>🎙 Sala de voz</h4>
+              {voiceRoomState?.slug === active.squad.slug ? (
+                <span className="voice-live">● En directo</span>
+              ) : (
+                <span className="muted">Habla con el creator y los demás miembros</span>
+              )}
+            </div>
+            {voiceRoomState?.slug === active.squad.slug ? (
+              <button type="button" className="btn-danger" onClick={leaveVoice}>
+                Salir de la sala de voz
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() =>
+                  joinVoice({ slug: active.squad.slug, name: active.squad.name })
+                }
+              >
+                🎤 Entrar a la sala de voz
+              </button>
+            )}
+          </div>
+
+          <h4>Miembros</h4>
           <ul>
             {active.members.map((member) => (
               <li key={member._id}>

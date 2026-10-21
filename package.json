@@ -7,6 +7,7 @@
     "e2e:calls": "node scripts/e2e-calls.js",
     "e2e:upload": "node scripts/e2e-upload-optimize.js",
     "e2e:notifications": "node scripts/e2e-notifications.js",
+    "e2e:voice-room": "node scripts/e2e-voice-room.js",
     "smoke": "bash scripts/smoke-api.sh"
   },
   "devDependencies": {

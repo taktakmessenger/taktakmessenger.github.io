@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { CallProvider, useCall } from './contexts/CallContext';
+import { VoiceRoomProvider } from './contexts/VoiceRoomContext';
 import Navigation from './components/Navigation';
 import Splash from './components/Splash';
 import Feed from './components/Feed';
@@ -18,6 +19,7 @@ import CallOverlay from './components/CallOverlay';
 import Settings from './components/Settings';
 import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
+import VoiceRoomBar from './components/VoiceRoomBar';
 import api from './api/client';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
@@ -219,6 +221,11 @@ function Shell() {
           debe verse sin cambiar de pestaña. */}
       <CallOverlay />
 
+      {/* La barra de la sala de voz también vive fuera de las vistas: si se
+          desmontara al cambiar de pestaña, el audio remoto se cortaría. Es lo
+          que permite seguir en el feed mientras hablas con tu creator. */}
+      {user && <VoiceRoomBar />}
+
       {/* Se ofrece una sola vez tras entrar con correo o Google, porque esas
           cuentas no tienen teléfono y sin él no se las puede llamar por número.
           Es opcional y descartable: obligar a dar el teléfono para usar la app
@@ -249,7 +256,9 @@ export default function App() {
     <AuthProvider>
       <SocketProvider>
         <CallProvider>
-          <Shell />
+          <VoiceRoomProvider>
+            <Shell />
+          </VoiceRoomProvider>
         </CallProvider>
       </SocketProvider>
     </AuthProvider>
