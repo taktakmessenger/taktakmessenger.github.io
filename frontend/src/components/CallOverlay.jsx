@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCall } from '../contexts/CallContext';
+import { listAudioOutputs, applySink } from '../lib/sound';
 
 // Texto del estado actual, en lenguaje llano.
 const LABELS = {
@@ -38,6 +39,33 @@ export default function CallOverlay() {
   // propio elemento o la llamada conectaría en silencio: se oiría nada.
   const remoteAudioRef = useRef(null);
   const localVideoRef = useRef(null);
+
+  // Salidas de audio del dispositivo (altavoz, auricular, Bluetooth). `setSinkId`
+  // no existe en todos los navegadores; si no está, la lista queda vacía y el
+  // selector no se muestra en vez de ofrecer algo que no funciona.
+  const [outputs, setOutputs] = useState([]);
+  const [speakerOn, setSpeakerOn] = useState(true);
+
+  useEffect(() => {
+    listAudioOutputs().then(setOutputs);
+  }, []);
+
+  // Manda el audio remoto a la salida elegida. Con el altavoz activado se usa la
+  // salida por defecto del sistema; al desactivarlo se intenta el auricular.
+  useEffect(() => {
+    const audio = remoteAudioRef.current;
+    if (!audio) return;
+
+    if (speakerOn) {
+      applySink(audio, '');
+      return;
+    }
+
+    // El dispositivo etiquetado como altavoz/manos libres es el que queremos
+    // evitar; cualquier otra salida (auricular, altavoz del teléfono) sirve.
+    const earpiece = outputs.find((o) => !/speaker|altavoz|manos libres/i.test(o.label));
+    if (earpiece) applySink(audio, earpiece.id);
+  }, [speakerOn, outputs, remoteTick, minimized]);
 
   // Engancha el stream remoto cuando llega. `remoteTick` cambia con cada stream
   // nuevo, así que el efecto se vuelve a ejecutar en la reconexión. `minimized`
@@ -167,6 +195,20 @@ export default function CallOverlay() {
                 aria-pressed={camOff}
               >
                 {camOff ? '📷' : '🎥'}
+              </button>
+            )}
+
+            {/* Altavoz del teléfono. Solo aparece si el navegador soporta elegir
+                la salida (setSinkId); si no, no hay nada que ofrecer. */}
+            {outputs.length > 0 && (
+              <button
+                type="button"
+                className={`call-btn ${speakerOn ? '' : 'off'}`}
+                onClick={() => setSpeakerOn((on) => !on)}
+                aria-pressed={speakerOn}
+                aria-label={speakerOn ? 'Desactivar altavoz' : 'Activar altavoz'}
+              >
+                {speakerOn ? '🔊' : '📞'}
               </button>
             )}
 

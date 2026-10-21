@@ -630,6 +630,59 @@
   display: none;
 }
 
+/* Contenedor del feed: existe solo para anclar el botón de sonido sobre el
+   vídeo sin afectar al scroll con snap de dentro. */
+.reels-wrap {
+  position: relative;
+}
+
+/* Control de sonido, fijo arriba a la derecha, por encima del vídeo. */
+.reel-sound {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 5;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.6);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.2s ease;
+}
+.reel-sound:hover {
+  transform: scale(1.08);
+}
+.reel-sound.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--glow-cyan);
+}
+
+/* Aviso de autoplay bloqueado. Es un botón porque tocarlo resuelve el
+   problema: el gesto desbloquea el audio. */
+.reel-sound-hint {
+  position: absolute;
+  top: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.85);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
 .reel {
   position: relative;
   height: calc(100dvh - var(--tabbar-h));

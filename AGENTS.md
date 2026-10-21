@@ -602,6 +602,30 @@ Si vuelves a ver ese error, comprueba que el proxy sigue ahí.
   pila cada `WATCH_INTERVAL` segundos (15 por defecto) y relanza `dev-up.sh` si
   el backend o el frontend no responden.
 
+## Audio: sonido del feed y altavoz de llamadas
+
+- **El vídeo del feed estaba siempre mudo.** `VideoCard` llevaba el atributo
+  `muted` fijo, así que nunca se oía nada. Ahora el silencio lo decide
+  `isMuted(active, soundOn)` (`frontend/src/lib/sound.js`): suena solo la tarjeta
+  visible y solo si la persona activó el sonido.
+- **Autoplay con sonido:** los navegadores lo bloquean hasta que hay un gesto.
+  Por eso el estado por defecto es **silenciado** (el vídeo se reproduce solo) y
+  el sonido es una acción explícita. Si el `play()` con sonido se rechaza, se
+  reintenta en silencio para no congelar el vídeo y se muestra
+  `.reel-sound-hint`; el primer toque sobre el vídeo o el botón levantan el
+  bloqueo.
+- **Control de sonido:** botón `.reel-sound` arriba a la derecha del feed.
+  La preferencia se guarda en `localStorage` (`taktak_sound`) y sobrevive a la
+  recarga.
+- **Altavoz en llamadas:** `CallContext` ya pedía `audio: true`, así que el
+  micrófono funcionaba; lo que faltaba era elegir la salida. `CallOverlay` usa
+  `setSinkId` (helpers `listAudioOutputs`/`applySink`) y muestra el botón de
+  altavoz **solo si el navegador lo soporta** (Firefox y parte de Safari no).
+  Con el altavoz apagado se busca una salida que no sea el altavoz externo
+  (auricular del teléfono).
+- Si añades clases nuevas (`.reels-wrap`, `.reel-sound`, `.reel-sound-hint`),
+  mantén sus reglas en `App.css`: no hay comprobación automática de que existan.
+
 ## Navegación y pantallas
 
 - La barra inferior (`.tabbar`, `Navigation.jsx`) tiene cinco pestañas —Inicio,

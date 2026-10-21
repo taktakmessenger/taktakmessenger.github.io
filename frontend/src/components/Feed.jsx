@@ -3,10 +3,11 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import Comments from './Comments';
 import CreatorSheet from './CreatorSheet';
+import { readSoundOn, writeSoundOn, isMuted } from '../lib/sound';
 
 // One vertical, full-screen player. The feed is a snap-scroll column, so each
 // card only plays while it is the visible one.
-function VideoCard({ video, active, onLike, liked, onGift, onHideCreator, onHideTag, onComments, onOpenCreator }) {
+function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGift, onHideCreator, onHideTag, onComments, onOpenCreator }) {
   const videoRef = useRef(null);
   const startedAt = useRef(0);
   const reported = useRef(false);
@@ -62,8 +63,18 @@ function VideoCard({ video, active, onLike, liked, onGift, onHideCreator, onHide
     if (active) {
       startedAt.current = Date.now();
       reported.current = false;
+      // El sonido depende del botón del feed, no de cada tarjeta.
+      el.muted = isMuted(true, soundOn);
+      el.volume = 1;
       el.play().catch(() => {
-        // Autoplay can be blocked until the user interacts; the poster stays.
+        // El navegador bloquea el autoplay con sonido hasta que hay una
+        // interacción. Si eso pasa, se reintenta en silencio para que el vídeo
+        // no se quede congelado y se avisa para ofrecer el botón de sonido.
+        if (soundOn) {
+          el.muted = true;
+          el.play().catch(() => {});
+          onSoundBlocked?.();
+        }
       });
       return;
     }
@@ -83,7 +94,23 @@ function VideoCard({ video, active, onLike, liked, onGift, onHideCreator, onHide
         })
         .catch(() => {});
     }
-  }, [active, video._id, video.duration]);
+  }, [active, soundOn, video._id, video.duration]);
+
+  // Si el usuario pidió sonido pero el navegador bloqueó el autoplay con audio,
+  // hay que avisar: si no, el vídeo se vería mudo sin explicación. El primer
+  // toque en cualquier parte de la tarjeta reanuda la reproducción con sonido.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !active || !soundOn) return;
+
+    function resumeWithSound() {
+      el.muted = false;
+      el.play().catch(() => {});
+    }
+
+    el.addEventListener('click', resumeWithSound);
+    return () => el.removeEventListener('click', resumeWithSound);
+  }, [active, soundOn]);
 
   return (
     <section className="reel" data-video-id={video._id}>
@@ -92,7 +119,7 @@ function VideoCard({ video, active, onLike, liked, onGift, onHideCreator, onHide
         className="reel-video"
         poster={video.thumbnailUrl}
         loop
-        muted
+        muted={isMuted(active, soundOn)}
         playsInline
         preload="metadata"
       />
@@ -212,7 +239,22 @@ export default function Feed({ onGiftRequest, onCall, onMessage }) {
   const [error, setError] = useState('');
   const [commentsFor, setCommentsFor] = useState(null);
   const [creatorSheet, setCreatorSheet] = useState(null);
+  // Sonido del feed. Arranca silenciado (lo exige el autoplay del navegador) y
+  // la elección se recuerda entre visitas.
+  const [soundOn, setSoundOn] = useState(readSoundOn);
+  const [soundBlocked, setSoundBlocked] = useState(false);
   const containerRef = useRef(null);
+
+  const toggleSound = useCallback(() => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      writeSoundOn(next);
+      // Al activar el sonido a mano, el gesto cuenta como interacción: se
+      // levanta el aviso de bloqueo.
+      if (next) setSoundBlocked(false);
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async (nextCursor) => {
     setLoading(true);
@@ -332,61 +374,82 @@ export default function Feed({ onGiftRequest, onCall, onMessage }) {
   }
 
   return (
-    <div className="reels" ref={containerRef} onScroll={handleScroll}>
-      {videos.map((video, index) => (
-        <VideoCard
-          key={video._id}
-          video={video}
-          active={index === activeIndex}
-          liked={likedIds.includes(video._id)}
-          onLike={like}
-          onGift={onGiftRequest}
-          onHideCreator={hideCreator}
-          onHideTag={hideTag}
-          onComments={setCommentsFor}
-          onOpenCreator={setCreatorSheet}
-        />
-      ))}
+    <div className="reels-wrap">
+      <button
+        type="button"
+        className={`reel-sound ${soundOn ? 'on' : 'off'}`}
+        onClick={toggleSound}
+        aria-pressed={soundOn}
+        aria-label={soundOn ? 'Silenciar vídeo' : 'Activar sonido'}
+        title={soundOn ? 'Silenciar' : 'Activar sonido'}
+      >
+        {soundOn ? '🔊' : '🔇'}
+      </button>
 
-      {cursor && (
-        <div className="reel-load">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => load(cursor)}
-            disabled={loading}
-          >
-            {loading ? 'Cargando…' : 'Cargar más'}
-          </button>
-        </div>
+      {soundBlocked && !soundOn && (
+        <button type="button" className="reel-sound-hint" onClick={toggleSound}>
+          🔇 Toca para activar el sonido
+        </button>
       )}
 
-      {/* El panel vive dentro del feed para que el vídeo de detrás siga
-          reproduciéndose y la posición del scroll no se pierda al cerrarlo. */}
-      {commentsFor && (
-        <Comments
-          video={commentsFor}
-          onClose={() => setCommentsFor(null)}
-          onCountChange={(delta) => adjustCommentCount(commentsFor._id, delta)}
-        />
-      )}
+      <div className="reels" ref={containerRef} onScroll={handleScroll}>
+        {videos.map((video, index) => (
+          <VideoCard
+            key={video._id}
+            video={video}
+            active={index === activeIndex}
+            soundOn={soundOn}
+            onSoundBlocked={() => setSoundBlocked(true)}
+            liked={likedIds.includes(video._id)}
+            onLike={like}
+            onGift={onGiftRequest}
+            onHideCreator={hideCreator}
+            onHideTag={hideTag}
+            onComments={setCommentsFor}
+            onOpenCreator={setCreatorSheet}
+          />
+        ))}
 
-      {/* Contactar con el creador sin salir del video: la acción contextual que
-          pide la idea de WhaTaka. Al cerrar, el feed sigue donde estaba. */}
-      {creatorSheet && (
-        <CreatorSheet
-          creator={creatorSheet}
-          onClose={() => setCreatorSheet(null)}
-          onMessage={(creator) => {
-            setCreatorSheet(null);
-            onMessage?.(creator);
-          }}
-          onCall={(creator, kind) => {
-            setCreatorSheet(null);
-            onCall?.(creator, kind);
-          }}
-        />
-      )}
+        {cursor && (
+          <div className="reel-load">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => load(cursor)}
+              disabled={loading}
+            >
+              {loading ? 'Cargando…' : 'Cargar más'}
+            </button>
+          </div>
+        )}
+
+        {/* El panel vive dentro del feed para que el vídeo de detrás siga
+            reproduciéndose y la posición del scroll no se pierda al cerrarlo. */}
+        {commentsFor && (
+          <Comments
+            video={commentsFor}
+            onClose={() => setCommentsFor(null)}
+            onCountChange={(delta) => adjustCommentCount(commentsFor._id, delta)}
+          />
+        )}
+
+        {/* Contactar con el creador sin salir del video: la acción contextual que
+            pide la idea de WhaTaka. Al cerrar, el feed sigue donde estaba. */}
+        {creatorSheet && (
+          <CreatorSheet
+            creator={creatorSheet}
+            onClose={() => setCreatorSheet(null)}
+            onMessage={(creator) => {
+              setCreatorSheet(null);
+              onMessage?.(creator);
+            }}
+            onCall={(creator, kind) => {
+              setCreatorSheet(null);
+              onCall?.(creator, kind);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
