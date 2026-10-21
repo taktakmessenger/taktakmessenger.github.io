@@ -68,7 +68,7 @@ function startTranscode(video, inputPath) {
     .processVideoToHLS(inputPath, env.uploadsDir, video._id.toString())
     .then(async (result) => {
       if (!result) {
-        await Video.updateOne({ _id: video._id }, { transcodeStatus: 'none' });
+        await Video.updateOne({ _id: video._id }, { transcodeStatus: 'failed' });
         return;
       }
       await Video.updateOne(
@@ -77,6 +77,7 @@ function startTranscode(video, inputPath) {
           hlsUrl: result.playlistUrl,
           thumbnailUrl: result.thumbnailUrl,
           transcodeStatus: 'ready',
+          transcodeError: null,
         }
       );
     })
@@ -378,6 +379,47 @@ router.get(
       reencoded: false,
       message: 'Exportación limpia: sin marca de agua ni logo de TAK TAK.',
     });
+  })
+);
+
+// Retranscode: vuelve a lanzar el HLS de un video ya subido. Existe porque un
+// upload anterior a que hubiera ffmpeg (o un transcode que falló) deja el
+// fichero original tal cual, y ese original puede ser H.265/HEVC de iPhone, que
+// el navegador no reproduce. Es idempotente: se puede pedir varias veces.
+router.post(
+  '/:id/retranscode',
+  auth,
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findById(req.params.id);
+    if (!video) throw new HttpError(404, 'Video no encontrado');
+
+    const isOwner = video.creator.toString() === req.user.userId;
+    if (!isOwner && req.user.role !== 'admin') {
+      throw new HttpError(403, 'Solo el creador puede reprocesar este video');
+    }
+
+    if (!(await transcodeService.hasFfmpeg())) {
+      throw new HttpError(
+        503,
+        'La conversión de video no está disponible en este servidor (falta ffmpeg)'
+      );
+    }
+
+    const inputPath = path.join(env.uploadsDir, path.basename(video.videoUrl));
+    try {
+      await fs.access(inputPath);
+    } catch {
+      throw new HttpError(404, 'El archivo original ya no está disponible');
+    }
+
+    // En segundo plano, igual que en la subida: un vídeo largo tardaría más que
+    // el tiempo de espera del proxy y la respuesta se cortaría.
+    await Video.updateOne({ _id: video._id }, { transcodeStatus: 'processing' });
+    startTranscode(video, inputPath);
+
+    res.status(202).json({ queued: true, transcodeStatus: 'processing' });
   })
 );
 

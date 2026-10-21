@@ -105,6 +105,36 @@ test('only the owner or an admin can delete a video', async () => {
   assert.equal(allowed.status, 200);
 });
 
+test('retranscode requires authentication', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  const created = await createVideo(agent, user.token);
+  const res = await agent.post(`/api/videos/${created.body.video._id}/retranscode`);
+  assert.equal(res.status, 401);
+});
+
+test('only the owner or an admin can retranscode a video', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const other = await registerUser(agent);
+  const created = await createVideo(agent, owner.token);
+  const res = await agent
+    .post(`/api/videos/${created.body.video._id}/retranscode`)
+    .set('Authorization', `Bearer ${other.token}`);
+  assert.equal(res.status, 403);
+});
+
+test('retranscode reports 503 when ffmpeg is unavailable', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  const created = await createVideo(agent, user.token);
+  const res = await agent
+    .post(`/api/videos/${created.body.video._id}/retranscode`)
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(res.status, 503);
+  assert.match(res.body.error, /ffmpeg|conversión/i);
+});
+
 test('follow is idempotent', async () => {
   const agent = app();
   const a = await registerUser(agent);

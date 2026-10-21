@@ -626,6 +626,42 @@ Si vuelves a ver ese error, comprueba que el proxy sigue ahí.
 - Si añades clases nuevas (`.reels-wrap`, `.reel-sound`, `.reel-sound-hint`),
   mantén sus reglas en `App.css`: no hay comprobación automática de que existan.
 
+### El vídeo se ve pero no suena: se subió en H.265/HEVC
+
+Un `.mp4` grabado con un iPhone en modo "Alta eficiencia" es H.265/HEVC. El
+fichero **sí trae pista de audio**, pero Chrome y Firefox de escritorio no traen
+el códec, así que el `<video>` falla con `MEDIA_ELEMENT_ERROR: Format error`
+(código 4): ni imagen ni sonido. No es un problema del micrófono ni del altavoz;
+es de formato.
+
+La solución es el HLS: `transcodeService` reencoda a **H.264/AAC**, que sí es
+universal. Para que eso ocurra hacen falta dos cosas:
+
+1. **`ffmpeg` instalado** (`sudo apt-get install -y ffmpeg`). El servicio lo
+   detecta en el PATH y, si no está, sirve el original tal cual y avisa por
+   consola: `[transcode] ffmpeg no disponible...`.
+2. **`TRANSCODE_ENABLED=true`** en `backend/.env` (por defecto está en `false`).
+
+Comprobación rápida de qué códec trae un fichero, sin ffprobe:
+
+```bash
+strings -n 4 archivo.mp4 | grep -oiE "hvc1|hev1|avc1|SoundHandler|mp4a"
+# hvc1 = H.265 (no reproducible en navegador) / avc1 = H.264 (sí)
+```
+
+- **Vídeos ya subidos:** `cd backend && node scripts/backfill-hls.js` regenera
+  el HLS de todos los que no lo tengan (`--all` los rehace todos). Los que ya
+  tienen `hlsUrl` y su `.m3u8` en disco se saltan por diseño.
+- **Reintento desde la app:** `POST /api/videos/:id/retranscode` (dueño o admin,
+  responde 202 y procesa en segundo plano; 503 si falta ffmpeg). Es la vía para
+  que el creador arregle un vídeo antiguo sin pasar por el servidor.
+- **Comprobación del HLS generado:**
+  `ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 backend/uploads/<id>/480p/index.m3u8`
+  debe listar `h264,video` y `aac,audio`.
+- Los `.webm` VP8 de los tests ya se reproducen; el problema es solo de los
+  `.mp4` con HEVC.
+
+
 ## Navegación y pantallas
 
 - La barra inferior (`.tabbar`, `Navigation.jsx`) tiene cinco pestañas —Inicio,

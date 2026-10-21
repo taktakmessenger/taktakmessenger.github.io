@@ -1,6 +1,10 @@
 // Set before any module is loaded: `config/env` reads NODE_ENV at require time,
 // and the auth rate limiters use it to decide whether to throttle.
 process.env.NODE_ENV = 'test';
+// La conversión HLS se prueba de extremo a extremo en scripts/, no aquí: los
+// tests de la API no deben depender de que ffmpeg esté instalado en la máquina
+// que los ejecuta.
+process.env.TRANSCODE_ENABLED = 'false';
 
 const mongoose = require('mongoose');
 const request = require('supertest');

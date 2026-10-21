@@ -131,11 +131,20 @@ function transcodeVariant(inputPath, outDir, rendition) {
             '-sc_threshold 0',
             '-map 0:v:0',
             '-map 0:a:0?',
+            // Sin subtítulos ni pistas de datos: algunos contenedores de móvil
+            // traen pistas que rompen el muxing a MPEG-TS del HLS.
+            '-sn',
+            '-dn',
             `-vf ${scalePadFilter(rendition.width, rendition.height)}`,
             '-c:v:0 libx264',
             `-b:v:0 ${rendition.bitrate}`,
+            // Nivel y perfil compatibles con móviles antiguos y con el
+            // decodificador por hardware de la mayoría de navegadores.
+            '-profile:v high',
+            '-pix_fmt yuv420p',
             '-c:a aac',
             '-b:a 128k',
+            '-ac 2',
             '-f hls',
             '-hls_time 4',
             '-hls_playlist_type vod',
