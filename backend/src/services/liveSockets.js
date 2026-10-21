@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const messages = require('./messageService');
+const pushService = require('./pushService');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 
@@ -33,6 +34,37 @@ const onlineSockets = new Map();
 
 function isOnline(userId) {
   return (onlineSockets.get(String(userId)) || 0) > 0;
+}
+
+/**
+ * Invitaciones de llamada enviadas por push a alguien que no estaba conectado.
+ *
+ * Cuando el otro no tiene socket, el `call:invite` no llega a nadie: se manda
+ * el push y ya está. Si el usuario abre la app desde la notificación, su socket
+ * conecta *después* de que el aviso se emitiera, así que sin esto la llamada se
+ * perdería justo cuando el teléfono acaba de sonar — el peor momento posible.
+ *
+ * Se guardan aquí y se reentregan al conectar. Caducan solas: quien llama cuelga
+ * a los 45 s (`ringTimeout` del cliente) y la invitación no debe resucitar una
+ * llamada muerta. La entrada se marca con la hora y se ignora si ya venció.
+ */
+const pendingCalls = new Map();
+const PENDING_CALL_TTL_MS = 45000;
+
+function rememberPendingCall(calleeId, payload) {
+  pendingCalls.set(String(calleeId), { payload, at: Date.now() });
+}
+
+function takePendingCall(calleeId) {
+  const entry = pendingCalls.get(String(calleeId));
+  if (!entry) return null;
+  pendingCalls.delete(String(calleeId));
+  if (Date.now() - entry.at > PENDING_CALL_TTL_MS) return null;
+  return entry.payload;
+}
+
+function clearPendingCall(calleeId) {
+  pendingCalls.delete(String(calleeId));
 }
 
 // Avisa del cambio de presencia a las personas que comparten un chat con él.
@@ -149,6 +181,11 @@ function initLiveSockets(server) {
       const before = onlineSockets.get(id) || 0;
       onlineSockets.set(id, before + 1);
       if (before === 0) announcePresence(io, id, true);
+
+      // Si esta conexión viene de abrir la notificación de una llamada, la
+      // invitación ya se emitió cuando no había socket. Se reentrega ahora.
+      const pendingCall = takePendingCall(id);
+      if (pendingCall) socket.emit('call:incoming', pendingCall);
 
       socket.on('disconnect', () => {
         const current = (onlineSockets.get(id) || 1) - 1;
@@ -310,11 +347,49 @@ function initLiveSockets(server) {
 
       // `fetchSockets` reports whether anyone is actually listening, so the
       // caller can say "no disponible" instead of ringing into the void.
+      //
+      // Pero "no disponible" ya no es el final: si el otro tiene la app
+      // instalada pero cerrada, no hay socket y aun así se le puede despertar
+      // con una notificación push. Eso es lo que hace que suene como WhatsApp.
+      //
+      // Se emite `call:ringing` UNA sola vez, al final, ya con la decisión
+      // tomada. Emitirlo antes de intentar el push rompería la función: el
+      // cliente vería `reachable: false` y colgaría la llamada como "no
+      // disponible" justo antes de que llegara el `pushed: true`.
       io.in(userRoom(to))
         .fetchSockets()
-        .then((sockets) => {
-          socket.emit('call:ringing', { to, reachable: sockets.length > 0 });
-          if (sockets.length > 0) io.to(userRoom(to)).emit('call:incoming', payload);
+        .then(async (sockets) => {
+          if (sockets.length > 0) {
+            socket.emit('call:ringing', { to, reachable: true });
+            io.to(userRoom(to)).emit('call:incoming', payload);
+            return;
+          }
+
+          if (!pushService.isConfigured()) {
+            socket.emit('call:ringing', { to, reachable: false });
+            return;
+          }
+
+          const { sent } = await pushService.sendToUser(
+            to,
+            pushService.incomingCallPayload({
+              from: { id: me.id, username: me.username },
+              kind: callKind,
+              conversationId: payload.conversationId,
+            })
+          );
+
+          if (sent > 0) {
+            // El aviso se emitió cuando el otro no estaba: se guarda para
+            // entregarlo en el instante en que su socket conecte al abrir la
+            // notificación. Sin esto la llamada se perdería al aceptarla.
+            rememberPendingCall(to, payload);
+          }
+
+          // `pushed: true` le dice al marcador que, aunque no haya socket, la
+          // llamada sí está sonando en el dispositivo del otro. Sin esto el
+          // llamante vería "no disponible" mientras el teléfono suena.
+          socket.emit('call:ringing', { to, reachable: false, pushed: sent > 0 });
         })
         .catch(() => socket.emit('call:ringing', { to, reachable: false }));
     });
@@ -322,11 +397,15 @@ function initLiveSockets(server) {
     // Accept / reject / hang up. `to` is the other party's user id.
     socket.on('call:accept', ({ to } = {}) => {
       if (!me || typeof to !== 'string') return;
+      // Ya no hace falta la invitación pendiente: si no se limpiara, un
+      // reconecte del mismo usuario le haría sonar una llamada ya en curso.
+      clearPendingCall(me.id);
       io.to(userRoom(to)).emit('call:accepted', { from: me.id });
     });
 
     socket.on('call:reject', ({ to, reason } = {}) => {
       if (!me || typeof to !== 'string') return;
+      clearPendingCall(me.id);
       io.to(userRoom(to)).emit('call:rejected', {
         from: me.id,
         reason: typeof reason === 'string' ? reason.slice(0, 60) : 'rechazada',
@@ -335,6 +414,7 @@ function initLiveSockets(server) {
 
     socket.on('call:end', ({ to } = {}) => {
       if (!me || typeof to !== 'string') return;
+      clearPendingCall(me.id);
       io.to(userRoom(to)).emit('call:ended', { from: me.id });
     });
 

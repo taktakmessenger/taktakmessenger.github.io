@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
+import { detachPushSubscription } from '../services/push';
 
 const AuthContext = createContext(null);
 
@@ -112,7 +113,11 @@ export function AuthProvider({ children }) {
     return data;
   }
 
-  function logout() {
+  async function logout() {
+    // Se desvincula el dispositivo del usuario *antes* de borrar el token: la
+    // llamada al servidor necesita la sesión. Si no se hiciera, a este teléfono
+    // le seguirían sonando las llamadas de quien acaba de salir.
+    await detachPushSubscription();
     setToken(null);
     setUser(null);
     localStorage.removeItem('taktak_token');

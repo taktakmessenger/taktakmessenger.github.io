@@ -2620,3 +2620,14 @@
   margin-top: 0.25rem;
 }
 
+.settings-hint {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.settings-push-btn {
+  width: 100%;
+}
+

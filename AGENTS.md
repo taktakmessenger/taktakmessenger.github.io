@@ -260,6 +260,54 @@ Detalles que cuesta descubrir:
   `onClick` (que no distingue corta de larga), y `onContextMenu` con
   `preventDefault`, porque el menú contextual del móvil cancela la pulsación.
 
+### Llamadas con la app cerrada (Web Push)
+
+Sin esto, llamar a alguien que no tiene la app abierta terminaba en "esa persona
+no está disponible". Con Web Push suena como WhatsApp: el servicio de push
+(FCM/APNs/Mozilla) despierta el dispositivo y la llamada entra.
+
+- Claves VAPID en `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT`). Se generan una vez con `npm run push:keys`. **Sin ellas el
+  servidor no intenta nada** y `isConfigured()` es false: es preferible decir "no
+  disponible" que fingir un envío que no llegará. La privada es un secreto y
+  `.env` está ignorado por git; no la metas en el repo.
+- La suscripción del navegador vive en `PushSubscription` (única por
+  `endpoint`). El endpoint es único en el mundo, así que el alta es un `upsert`
+  y la baja **filtra por usuario**: borrar por endpoint a secas dejaría a
+  cualquiera desuscribir el dispositivo de otro conociendo su endpoint.
+- En `liveSockets`, `call:invite` consulta `fetchSockets()`. Si hay socket, la
+  llamada entra en vivo y **no se manda push** (sería un aviso duplicado). Si no
+  lo hay, se manda el push, se guarda la invitación en `pendingCalls` y se
+  responde `call:ringing { reachable: false, pushed: true }`.
+- **`call:ringing` se emite una sola vez, al final, ya con la decisión tomada.**
+  Emitirlo antes de intentar el push rompe la función: el cliente ve
+  `reachable: false` y cuelga como "no disponible" justo antes de que llegue el
+  `pushed: true`. El llamante solo cuelga si `!reachable && !pushed`.
+- La invitación pendiente se reentrega en el `connection` del destinatario, que
+  es justo lo que pasa al abrir la app desde la notificación (su socket conecta
+  *después* del aviso). Sin esa reentrega la llamada se perdería al aceptarla.
+  Se limpia en `call:accept/reject/end`; si no, al reconectar sonaría otra vez
+  una llamada ya en curso. Caduca sola por TTL.
+- El service worker (`frontend/public/sw.js`) es mínimo y **no cachea nada**: un
+  SW que cachea el bundle deja servida una versión vieja de la app. Solo recibe
+  el push y muestra la notificación.
+- La notificación **no tiene acción de "Rechazar"** a propósito: la API usa
+  tokens Bearer en `localStorage` y el service worker no puede leerlos, así que
+  un rechazo desde ahí fallaría con 401 en silencio. La llamada caduca sola.
+- El permiso se pide desde **Ajustes**, no al arrancar: en iOS solo se puede
+  pedir una vez, y pedirlo antes de saber si el servidor tiene claves lo gastaría
+  en balde. `subscribeToPush` consulta `/push/config` primero. `main.jsx` solo
+  registra el SW, sin pedir permiso.
+- Al iniciar sesión, `syncPushSubscription` reenvía la suscripción al servidor:
+  el servidor guarda a qué cuenta pertenece cada dispositivo, y sin reenviarla
+  tras cambiar de usuario las llamadas sonarían en el teléfono equivocado. Al
+  cerrar sesión, `detachPushSubscription` la desvincula **sin borrarla** del
+  navegador, para que al volver a entrar se reasocie sola.
+- **Límite real que no se arregla con código:** en iPhone el push web solo
+  existe desde iOS 16.4 y **solo si la app está añadida a la pantalla de inicio**.
+  En Safari normal, `PushManager` no existe. Android y escritorio funcionan con
+  la app cerrada. La UI lo explica en Ajustes en vez de fallar en silencio.
+
 ## Verificación por correo/SMS en desarrollo
 
 - Sin `SMTP_HOST` ni `SMS_PROVIDER` configurados, ningún código sale del

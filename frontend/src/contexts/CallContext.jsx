@@ -480,8 +480,11 @@ export function CallProvider({ children }) {
         pendingOfferRef.current = sdp;
       }),
 
-      subscribe('call:ringing', ({ reachable }) => {
-        if (reachable) return;
+      subscribe('call:ringing', ({ reachable, pushed }) => {
+        // `pushed` significa que el otro no tiene la app abierta pero sí un
+        // dispositivo suscrito: la llamada está sonando en su teléfono. No se
+        // corta, se sigue timbrando hasta que conteste o venza el temporizador.
+        if (reachable || pushed) return;
         setError('Esa persona no está disponible ahora mismo');
         finalize('unreachable');
       }),

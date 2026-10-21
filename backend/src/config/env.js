@@ -281,6 +281,23 @@ const env = {
   // detrás de NAT estricto, que es el caso de la mayoría de redes móviles y
   // corporativas. Por eso el TURN no es opcional para un despliegue real.
   iceServers: resolveIceServers(),
+
+  // Web Push: notificaciones que despiertan la app aunque esté cerrada. Es lo
+  // que hace que una llamada suene como en WhatsApp cuando el otro no tiene la
+  // app abierta.
+  //
+  // El par VAPID identifica al servidor ante los servicios de push
+  // (FCM/APNs/Mozilla). Sin él no se puede enviar nada; con él, tampoco hace
+  // falta ninguna cuenta externa: las claves se generan una vez con
+  // `npm run push:keys` y se pegan aquí.
+  //
+  // La privada NO debe ir al repositorio: quien la tenga puede enviar
+  // notificaciones en nombre de la app a todos sus usuarios.
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || null,
+  // Contacto del responsable, que los servicios de push usan para avisar de
+  // abuso. Exigen `mailto:` o una URL.
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@taktak.app',
 };
 
 module.exports = env;

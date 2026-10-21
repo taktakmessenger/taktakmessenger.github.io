@@ -17,6 +17,7 @@ import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
 import Settings from './components/Settings';
 import api from './api/client';
+import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
 
 // Sending a gift straight from the feed, priced by the server catalogue so the
@@ -90,6 +91,14 @@ function Shell() {
   const [chatTarget, setChatTarget] = useState(null);
   const { user, loading } = useAuth();
   const { startCall } = useCall();
+
+  // Al haber sesión, se reenvía al servidor la suscripción push que este
+  // navegador ya tuviera. El servidor guarda qué dispositivo pertenece a qué
+  // cuenta, así que tras un cambio de usuario hay que reasociarla; si no, las
+  // llamadas sonarían en el teléfono de quien entró antes.
+  useEffect(() => {
+    if (user) syncPushSubscription();
+  }, [user]);
 
   // Iniciar una llamada desde el chat o desde el feed. Se cierra el aviso de
   // error anterior para que un fallo viejo no se confunda con el estado de la
