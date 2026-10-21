@@ -171,9 +171,6 @@ const env = {
   // TTC economy split, expressed as a fraction of every gift.
   creatorShare: shares.creatorShare,
   platformShare: shares.platformShare,
-  // Size of the TTC-R pool emitted per mining cycle.
-  miningRewardPool: Number(process.env.MINING_REWARD_POOL ?? 1000),
-  miningIntervalMs: Number(process.env.MINING_INTERVAL_MS ?? 5 * 60 * 1000),
   maxVideoBytes: Number(process.env.MAX_VIDEO_BYTES ?? 50 * 1024 * 1024),
 
   // Where uploaded originals and their HLS renditions are written. Served

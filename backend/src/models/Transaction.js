@@ -7,7 +7,7 @@ const transactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 0 },
     type: {
       type: String,
-      enum: ['gift', 'withdraw', 'mining', 'purchase', 'convert', 'platform'],
+      enum: ['gift', 'withdraw', 'purchase', 'convert', 'platform'],
       required: true,
     },
     ttcType: { type: String, enum: ['ttcC', 'ttcR'], default: 'ttcC' },

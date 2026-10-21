@@ -60,6 +60,11 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   lleguen al manejador de errores.
 - Los componentes de React usan el cliente `api` (`src/api/client.js`), que ya
   inyecta el token y normaliza los errores.
+- **Un concepto, un nombre visible.** La monetización es solo por regalos: no hay
+  minería ni emisión automática de Diamantes, así que nadie cobra dos veces por
+  el mismo engagement. La sub-comunidad privada se llama **TAK Creators** en la
+  UI, pero internamente sigue siendo `squads` (modelo, ruta `/api/squads`,
+  componente `Squads.jsx`); no renombres esos identificadores sin migración.
 
 ## Reglas importantes
 
@@ -69,8 +74,8 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   `src/routes/`, añádelo también a `createApp()`. El test "the previously
   orphaned routes are mounted" cubre esta regresión.
 - **Un `$inc` de contador necesita una condición de idempotencia.** El endpoint
-  de likes decía ser idempotente pero incrementaba sin filtro, y como el minado
-  paga `likes × 2`, un doble clic imprimía Diamantes. Usa `likedBy` con
+  de likes decía ser idempotente pero incrementaba sin filtro, y un doble clic
+  inflaba el contador con el que el feed rankea. Usa `likedBy` con
   `findOneAndUpdate({ _id, likedBy: { $ne: userId } }, { $addToSet, $inc })` y
   trata el no-match como "quitar el like".
 - **`fs.access` no busca en el PATH.** `fs.access('ffmpeg')` resuelve relativo
@@ -136,7 +141,7 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
 - El vocabulario de cara al usuario es **Monedas (`coins`)** y **Diamantes
   (`diamonds`)**; `ttcC`/`ttcR` son los nombres internos. Mantén ambos en las
   respuestas.
-- Los `joinCode` de TAK Squads nunca se devuelven al cliente.
+- Los `joinCode` de TAK Creators (internamente `squads`) nunca se devuelven al cliente.
 - **Cambiar de pestaña no debe cambiar de vista.** En `AuthForm`, las pestañas
   Correo/Teléfono llamaban a `reset('login')`, que además de limpiar el estado
   hacía `setView('login')`. Estando en registro, pulsar "Teléfono" devolvía al
@@ -543,7 +548,7 @@ navegadores con cámara y micrófono falsos** y hacer una llamada real entre ell
 - `scripts/smoke-api.sh` recorre la API completa con `curl` sobre una pila ya
   levantada: auth (registro, verificación de correo, login, 401 sin sesión),
   subida y feed, like idempotente, comentarios, social, economía (regalos,
-  retiro, monetización abierta), mensajería, squads, salud, analítica, catálogos,
+  retiro, monetización abierta), mensajería, creators, salud, analítica, catálogos,
   admin y ICE. Son ~48 comprobaciones; salir en verde es la señal de que la API
   no se ha roto. Registra usuarios nuevos cada vez, así que reinicia el backend
   antes si has agotado el `authLimiter`.
@@ -687,7 +692,7 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
 ## Navegación y pantallas
 
 - La barra inferior (`.tabbar`, `Navigation.jsx`) tiene cinco pestañas —Inicio,
-  Squads, Subir, WhaTaka, Perfil— y **cada sección es su propia pantalla**. No
+  Creators, Subir, WhaTaka, Perfil— y **cada sección es su propia pantalla**. No
   añadas pestañas nuevas a la barra: mete el acceso dentro del perfil, que es
   donde TikTok esconde ajustes, verificación y salud de la cuenta.
 - La barra es `position: fixed`. El alto vive en la variable `--tabbar-h`

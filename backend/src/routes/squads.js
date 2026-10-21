@@ -76,7 +76,7 @@ router.post(
   validate,
   asyncHandler(async (req, res) => {
     const squad = await Squad.findOne({ slug: req.params.slug }).select('+joinCode');
-    if (!squad) throw new HttpError(404, 'Squad no encontrado');
+    if (!squad) throw new HttpError(404, 'Creator no encontrado');
 
     if (squad.isMember(req.user.userId)) {
       return res.json({ joined: true, alreadyMember: true });
@@ -103,9 +103,9 @@ router.delete(
   validate,
   asyncHandler(async (req, res) => {
     const squad = await Squad.findOne({ slug: req.params.slug });
-    if (!squad) throw new HttpError(404, 'Squad no encontrado');
+    if (!squad) throw new HttpError(404, 'Creator no encontrado');
     if (squad.isOwner(req.user.userId)) {
-      throw new HttpError(400, 'El propietario no puede salir de su propio squad');
+      throw new HttpError(400, 'El propietario no puede salir de su propio creator');
     }
 
     await Squad.updateOne(
@@ -125,7 +125,7 @@ router.get(
   validate,
   asyncHandler(async (req, res) => {
     const squad = await Squad.findOne({ slug: req.params.slug });
-    if (!squad) throw new HttpError(404, 'Squad no encontrado');
+    if (!squad) throw new HttpError(404, 'Creator no encontrado');
     if (squad.visibility === 'private' && !squad.isMember(req.user.userId)) {
       throw new HttpError(403, 'Debes ser miembro del squad para ver su contenido');
     }

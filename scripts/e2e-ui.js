@@ -1,6 +1,6 @@
 // Prueba de UI de extremo a extremo con un navegador real (Chromium del
 // sistema). Recorre los flujos que un usuario ve de verdad: registro, feed,
-// like, comentario, wallet, regalo, squads, salud y perfil.
+// like, comentario, wallet, regalo, creators, salud y perfil.
 //
 // Requisitos: `puppeteer-core` instalado y Chromium del sistema. El vídeo de
 // prueba se genera solo con ffmpeg si falta.
@@ -276,24 +276,24 @@ async function gotoApp(page) {
     const afterGift = await page.evaluate(() => document.body.innerText);
     check(/90/.test(afterGift), 'el saldo baja tras enviar el regalo (100→90)');
 
-    // --- Squads -------------------------------------------------------------
-    console.log('\n▸ TAK Squads');
-    await clickByText(page, 'Squads');
-    await waitText(page, 'squad', 15000);
-    ok('la vista de squads carga');
-    const squadName = `Squad UI ${SUFFIX}`;
-    // El formulario está plegado tras el botón "Crear squad".
-    await clickByText(page, 'Crear squad');
+    // --- TAK Creators -------------------------------------------------------
+    console.log('\n▸ TAK Creators');
+    await clickByText(page, 'Creators');
+    await waitText(page, 'creator', 15000);
+    ok('la vista de creators carga');
+    const squadName = `Creator UI ${SUFFIX}`;
+    // El formulario está plegado tras el botón "Crear creator".
+    await clickByText(page, 'Crear creator');
     await sleep(500);
-    const hasForm = await page.$('input[placeholder="Nombre del squad"]');
+    const hasForm = await page.$('input[placeholder="Nombre del creator"]');
     if (hasForm) {
-      await page.type('input[placeholder="Nombre del squad"]', squadName);
+      await page.type('input[placeholder="Nombre del creator"]', squadName);
       await clickByText(page, 'Crear');
       await sleep(2500);
       const created = await page.evaluate((t) => document.body.innerText.includes(t), squadName);
-      check(created, 'el squad creado aparece en la lista');
+      check(created, 'el creator creado aparece en la lista');
     } else {
-      bad('no se encontró el formulario de creación de squad');
+      bad('no se encontró el formulario de creación de creator');
     }
 
     // --- Salud de cuenta ----------------------------------------------------

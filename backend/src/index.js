@@ -1,7 +1,6 @@
 const createApp = require('./app');
 const db = require('./config/db');
 const env = require('./config/env');
-const miningService = require('./services/miningService');
 const { seedGifts } = require('./services/giftService');
 const { initLiveSockets } = require('./services/liveSockets');
 
@@ -23,14 +22,8 @@ async function main() {
   initLiveSockets(server);
   console.log('📡 Sockets en vivo activos');
 
-  if (process.env.MINING_ENABLED !== 'false') {
-    miningService.start();
-    console.log('⛏️  Servicio de minado iniciado');
-  }
-
   const shutdown = async (signal) => {
     console.log(`\n${signal} recibido, cerrando...`);
-    miningService.stop();
     server.close(async () => {
       await db.disconnect();
       process.exit(0);

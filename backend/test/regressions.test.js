@@ -38,8 +38,8 @@ test('the previously orphaned routes are mounted', async () => {
   assert.equal(interests.status, 200);
 });
 
-// Regression: three taps from the same user produced likes=3, which also
-// inflated the mining payout because `likes` is weighted.
+// Regression: three taps from the same user produced likes=3, inflating a
+// counter that the feed ranks on.
 test('liking is idempotent and toggles off on the second tap', async () => {
   const agent = app();
   const user = await registerUser(agent);

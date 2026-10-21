@@ -160,15 +160,15 @@ INTRUSO=$(curl -s -o /dev/null -w '%{http_code}' "$API/messages/conversations/$C
 [ "$INTRUSO" = "404" ] && ok "un tercero no puede leer el hilo (404)" || bad "fuga de hilo: $INTRUSO"
 
 # --- Squads -----------------------------------------------------------------
-say "TAK Squads"
+say "TAK Creators"
 SQ=$(curl -s -X POST "$API/squads" -H "Authorization: Bearer $TA" -H 'Content-Type: application/json' \
   -d "{\"name\":\"Squad $SUFFIX\",\"description\":\"prueba\",\"visibility\":\"public\"}")
 SLUG=$(echo "$SQ" | jget "['squad']['slug']")
-[ -n "$SLUG" ] && ok "squad creado ($SLUG)" || bad "squad falló: $SQ"
-check "otro usuario se une al squad público" "$(curl -s -X POST "$API/squads/$SLUG/join" -H "Authorization: Bearer $TB")" "d.get('joined') is True"
-check "listado de squads (con sesión)" "$(curl -s "$API/squads" -H "Authorization: Bearer $TA")" "isinstance(d.get('squads'), list)"
-check "detalle del squad para miembros" "$(curl -s "$API/squads/$SLUG/feed" -H "Authorization: Bearer $TB")" "d.get('squad',{}).get('slug')=='$SLUG' and len(d.get('members',[]))>=2"
-check "salir del squad" "$(curl -s -X DELETE "$API/squads/$SLUG/leave" -H "Authorization: Bearer $TB")" "d.get('joined') is False"
+[ -n "$SLUG" ] && ok "creator creado ($SLUG)" || bad "creator falló: $SQ"
+check "otro usuario se une al creator público" "$(curl -s -X POST "$API/squads/$SLUG/join" -H "Authorization: Bearer $TB")" "d.get('joined') is True"
+check "listado de creators (con sesión)" "$(curl -s "$API/squads" -H "Authorization: Bearer $TA")" "isinstance(d.get('squads'), list)"
+check "detalle del creator para miembros" "$(curl -s "$API/squads/$SLUG/feed" -H "Authorization: Bearer $TB")" "d.get('squad',{}).get('slug')=='$SLUG' and len(d.get('members',[]))>=2"
+check "salir del creator" "$(curl -s -X DELETE "$API/squads/$SLUG/leave" -H "Authorization: Bearer $TB")" "d.get('joined') is False"
 
 # --- Salud de cuenta --------------------------------------------------------
 say "Salud de cuenta (anti-shadowban)"

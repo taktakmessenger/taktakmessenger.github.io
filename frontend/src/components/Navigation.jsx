@@ -5,7 +5,7 @@ import api from '../api/client';
 
 const TABS = [
   { id: 'feed', label: 'Inicio', icon: '🏠' },
-  { id: 'squads', label: 'Squads', icon: '👥' },
+  { id: 'squads', label: 'Creators', icon: '👥' },
   { id: 'upload', label: 'Subir', icon: '＋', primary: true },
   { id: 'messages', label: 'WhaTaka', icon: '💬' },
   { id: 'profile', label: 'Perfil', icon: '👤' },

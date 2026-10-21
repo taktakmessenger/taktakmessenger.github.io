@@ -81,18 +81,6 @@ export default function AdminPanel() {
     }
   }
 
-  async function runMining() {
-    setError('');
-    setNotice('');
-    try {
-      const { data } = await api.post('/admin/mining/run');
-      setNotice(`Minado ejecutado: ${data.distributed} TTC-R a ${data.recipients} creadores`);
-      await load();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
   return (
     <div className="admin">
       <h2>🛡️ Panel de administración</h2>
@@ -113,12 +101,6 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
-
-      <div className="admin-actions">
-        <button type="button" className="btn-secondary" onClick={runMining}>
-          ⛏️ Ejecutar ciclo de minado
-        </button>
-      </div>
 
       <div className="moderation">
         <h3>Cola de moderación ({pending.length})</h3>

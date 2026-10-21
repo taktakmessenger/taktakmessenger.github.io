@@ -406,8 +406,7 @@
   color: var(--accent);
 }
 
-.wallet-actions,
-.admin-actions {
+.wallet-actions {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;

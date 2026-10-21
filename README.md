@@ -22,7 +22,7 @@ corrección y seguridad (ver [Mejoras sobre el prototipo](#mejoras-sobre-el-prot
 Dos saldos por usuario:
 
 - **Monedas (TTC-C)** — gastables. Se usan para enviar regalos.
-- **Diamantes (TTC-R)** — retirables. Los creadores los ganan con regalos y minado.
+- **Diamantes (TTC-R)** — retirables. Los creadores los ganan con regalos.
 
 En la API se exponen ambos nombres: `coins`/`diamonds` (de cara al usuario) y
 `ttcC`/`ttcR` (los buckets internos), para no romper clientes existentes.
@@ -41,10 +41,6 @@ tokens). El 25% de la plataforma se registra como asiento contable propio
 (`Transaction.type = 'platform'`), así los ingresos son auditables, y se agregan
 en `GET /api/admin/stats` como `platformEarnings`.
 
-El minado reparte periódicamente un pool de TTC-R entre los creadores, ponderado
-por engagement (vistas, likes, comentarios, compartidos, regalos), con bonus x2
-para contenido de menos de una hora.
-
 ## Funciones diferenciales frente a TikTok
 
 | Función | Endpoint | Punto de dolor que resuelve |
@@ -52,16 +48,16 @@ para contenido de menos de una hora.
 | Monetización abierta | `GET /api/wallet/monetization` | TikTok exige 10k seguidores y 100k vistas. Aquí `eligible: true` desde el primer video. |
 | Exportar limpio | `GET /api/videos/:id/export` | Descarga sin marca de agua ni logo, sin webs externas. |
 | Panel de salud | `GET /api/health` | Muestra exactamente qué limita tu alcance. Sin shadowban opaco. |
-| TAK Squads | `POST /api/squads`, `/:slug/join`, `/:slug/feed` | Comunidad privada con código de invitación, contenido exclusivo y sala de voz. |
+| TAK Creators | `POST /api/squads`, `/:slug/join`, `/:slug/feed` | Comunidad privada con código de invitación, contenido exclusivo y sala de voz. |
 
-### TAK Squads
+### TAK Creators
 
-- `POST /api/squads` — crea un squad. El creador queda como `owner` y se genera
+- `POST /api/squads` — crea un creator. El creador queda como `owner` y se genera
   un `voiceRoom`.
-- `GET /api/squads` — squads públicos + aquellos donde ya eres miembro.
+- `GET /api/squads` — creators públicos + aquellos donde ya eres miembro.
 - `POST /api/squads/:slug/join` — los públicos entran directo; los privados
   requieren `joinCode`. Unirse dos veces no duplica al miembro.
-- `DELETE /api/squads/:slug/leave` — el `owner` no puede salir de su propio squad.
+- `DELETE /api/squads/:slug/leave` — el `owner` no puede salir de su propio creator.
 - `GET /api/squads/:slug/feed` — contenido exclusivo, solo para miembros.
 
 El `joinCode` nunca se devuelve al cliente.
@@ -134,7 +130,7 @@ TEST_MONGODB_URI=mongodb://localhost:27017/taktak_test npm test
 ```
 
 Cobertura actual: autenticación, videos, wallet (incluido un test de regresión de
-doble gasto con peticiones concurrentes) y el servicio de minado.
+doble gasto con peticiones concurrentes) y squads.
 
 ## API
 
@@ -169,13 +165,12 @@ doble gasto con peticiones concurrentes) y el servicio de minado.
 | POST | `/api/wallet/gift` | ✅ | Enviar regalo (monto o `giftId`) |
 | POST | `/api/wallet/withdraw` | ✅ | Solicitar retiro |
 | GET | `/api/health` | ✅ | Panel de salud de cuenta |
-| GET | `/api/squads` | ✅ | TAK Squads |
+| GET | `/api/squads` | ✅ | TAK Creators |
 | WS | `live:join` / `live:message` / `live:gift` | ✅ | Chat y regalos en vivo |
 | GET | `/api/admin/stats` | 🛡️ | Métricas |
 | GET | `/api/admin/videos` | 🛡️ | Cola de moderación |
 | PATCH | `/api/admin/videos/:id/moderate` | 🛡️ | Aprobar / rechazar |
 | POST | `/api/admin/users/:id/credit` | 🛡️ | Ajustar saldo |
-| POST | `/api/admin/mining/run` | 🛡️ | Forzar ciclo de minado |
 
 ## Mejoras sobre el prototipo
 
@@ -227,8 +222,8 @@ usuario, y varios fallos de dinero y de datos:
    montaba: respondían 404 en producción. El feed personalizado, el catálogo de
    regalos y el registro de retención eran inalcanzables. Ya están montados.
 2. **Likes inflables (crítico).** El endpoint decía ser idempotente pero hacía
-   `$inc` sin condición: tres toques del mismo usuario daban `likes: 3`. Como el
-   minado paga con peso `likes × 2`, eso imprimía Diamantes reales. Ahora
+   `$inc` sin condición: tres toques del mismo usuario daban `likes: 3`, inflando
+   el contador con el que el feed rankea. Ahora
    `likedBy` con `$addToSet` condicional hace que sea una alternancia real.
 3. **HLS nunca se activaba.** `hasFfmpeg()` comprobaba `fs.access('ffmpeg')`,
    que resuelve relativo al directorio de trabajo. Con la ruta por defecto
@@ -305,7 +300,7 @@ backend/
     models/       User, Video, Transaction
     middleware/   auth, validación, errores
     routes/       auth, user, video, wallet, admin
-    services/     walletService, miningService
+    services/     walletService, giftService
   test/           tests de integración (node:test + supertest)
 frontend/
   src/

@@ -33,8 +33,7 @@ const videoSchema = new mongoose.Schema(
     views: { type: Number, default: 0, min: 0 },
     likes: { type: Number, default: 0, min: 0 },
     // One entry per user who liked. `$addToSet`/`$pull` on this set make the
-    // like counter idempotent; without it a double-click inflated `likes` and,
-    // through the mining weights, paid real Diamonds for the same tap twice.
+    // like counter idempotent; without it a double-click inflated `likes`.
     likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     comments: { type: Number, default: 0, min: 0 },
     shares: { type: Number, default: 0, min: 0 },

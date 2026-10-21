@@ -4,7 +4,6 @@ const User = require('../models/User');
 const Video = require('../models/Video');
 const Transaction = require('../models/Transaction');
 const NewsSource = require('../models/NewsSource');
-const miningService = require('../services/miningService');
 const walletService = require('../services/walletService');
 const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
@@ -102,14 +101,6 @@ router.post(
     );
     if (!user) throw new HttpError(404, 'Usuario no encontrado');
     res.json({ user });
-  })
-);
-
-// Manually trigger a mining cycle (useful for ops and tests).
-router.post(
-  '/mining/run',
-  asyncHandler(async (req, res) => {
-    res.json(await miningService.distributeRewards());
   })
 );
 

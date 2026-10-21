@@ -93,7 +93,6 @@ const userSchema = new mongoose.Schema(
       totalGiftsReceived: { type: Number, default: 0 },
     },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
-    miningPoints: { type: Number, default: 0 },
 
     // Explicit negative signals for the recommender. A ranking model needs a
     // way to be told "not this", otherwise a viewer's only escape from a topic

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 
-// TAK Squads: a creator's private sub-community. Public squads are open,
-// private ones need the invite code the owner shares with their audience.
+// TAK Creators: la comunidad privada de un creador. Los creators públicos están
+// abiertos; los privados piden el código de invitación que comparte el dueño.
 export default function Squads() {
   const [squads, setSquads] = useState([]);
   const [error, setError] = useState('');
@@ -33,7 +33,7 @@ export default function Squads() {
       const { data } = await api.post('/squads', form);
       setShowCreate(false);
       setForm({ name: '', description: '', visibility: 'private' });
-      setNotice(`Squad "${data.squad.name}" creado. Tu sala de voz: ${data.squad.voiceRoom}`);
+      setNotice(`Creator "${data.squad.name}" creado. Tu sala de voz: ${data.squad.voiceRoom}`);
       await load();
     } catch (err) {
       setError(err.message);
@@ -49,8 +49,8 @@ export default function Squads() {
       });
       setNotice(
         data.alreadyMember
-          ? 'Ya eras miembro de este squad'
-          : `Te uniste al squad. Sala de voz: ${data.voiceRoom}`
+          ? 'Ya eras miembro de este creator'
+          : `Te uniste al creator. Sala de voz: ${data.voiceRoom}`
       );
       await load();
     } catch (err) {
@@ -63,7 +63,7 @@ export default function Squads() {
     setNotice('');
     try {
       await api.delete(`/squads/${slug}/leave`);
-      setNotice('Saliste del squad');
+      setNotice('Saliste del creator');
       if (active?.slug === slug) setActive(null);
       await load();
     } catch (err) {
@@ -83,7 +83,7 @@ export default function Squads() {
 
   return (
     <div className="squads">
-      <h2>👥 TAK Squads</h2>
+      <h2>👥 TAK Creators</h2>
       <p className="muted">
         Tu comunidad privada: contenido exclusivo y sala de voz, sin depender de los
         comentarios públicos.
@@ -94,7 +94,7 @@ export default function Squads() {
 
       <div className="wallet-actions">
         <button type="button" className="btn-primary" onClick={() => setShowCreate((v) => !v)}>
-          ➕ Crear squad
+          ➕ Crear creator
         </button>
       </div>
 
@@ -102,7 +102,7 @@ export default function Squads() {
         <form className="squad-form" onSubmit={create}>
           <input
             type="text"
-            placeholder="Nombre del squad"
+            placeholder="Nombre del creator"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             minLength={3}
@@ -128,7 +128,7 @@ export default function Squads() {
       )}
 
       {squads.length === 0 ? (
-        <p>Todavía no hay squads. Crea el primero.</p>
+        <p>Todavía no hay creators. Crea el primero.</p>
       ) : (
         <ul className="squad-list">
           {squads.map((squad) => (
