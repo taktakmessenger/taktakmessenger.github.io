@@ -695,6 +695,12 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
   Creators, Subir, WhaTaka, Perfil— y **cada sección es su propia pantalla**. No
   añadas pestañas nuevas a la barra: mete el acceso dentro del perfil, que es
   donde TikTok esconde ajustes, verificación y salud de la cuenta.
+- La única excepción es la **campana de Avisos**, que va la primera en la barra.
+  No es una sección más sino una acción con estado (el contador), y tiene que
+  estar visible desde cualquier pantalla: escondida en el perfil, un aviso de
+  regalo pasaría desapercibido, que es justo el fallo que se corrigió. Si añades
+  otra cosa a la barra, pregúntate si de verdad necesita estar siempre a la
+  vista; si no, va al perfil.
 - La barra es `position: fixed`. El alto vive en la variable `--tabbar-h`
   (`index.css`) y tanto `.app` como `.reels`/`.reel` lo descuentan para que el
   feed no quede tapado. Si cambias el padding de `.tabbar`, actualiza
@@ -747,6 +753,52 @@ Verificación: `npm run e2e:calls` (dos navegadores reales; tono entrante y
 saliente, parada al aceptar, audio remoto, burbuja con vídeo y audio vivos) y
 `npm run e2e:notifications` (el aviso aparece, explica que sonará con la app
 cerrada y desaparece con el permiso concedido).
+
+## Actividad: avisos de regalos, seguidores, me gusta y comentarios
+
+Antes, un regalo desde el vídeo movía las monedas en silencio: `sendGift` no
+emitía nada y no existía modelo de avisos, así que el creador no se enteraba de
+que le habían regalado hasta que abría el monedero. Lo mismo con seguidores,
+me gusta y comentarios. Está en `models/Notification.js`,
+`services/notificationService.js`, `routes/notifications.js`, y en el frontend
+`components/Activity.jsx` más la campana de `Navigation.jsx`.
+
+- **Un único punto de entrada, `notificationService.notify()`.** Crea el aviso,
+  lo entrega por socket a `userRoom(recipientId)` como `notification:new` y, si
+  el destinatario no está conectado, manda un push. Los cuatro emisores (regalo
+  en `routes/wallet.js`, follow en `routes/user.js`, me gusta en
+  `routes/video.js`, comentario y respuesta en `services/commentService.js`)
+  llaman a esa función en vez de hablar con el socket directamente.
+- **Nunca se avisa a uno mismo.** El filtro está en el servicio, no en cada
+  emisor: darle me gusta a tu propio vídeo o comentarte es normal y no debe
+  llenar tu propia campana.
+- **El aviso va después del efecto, nunca antes.** En el regalo se llama cuando
+  el dinero ya se movió, y el importe que se enseña es el `result.amount` que
+  devolvió `sendGift`, no lo que pidió el cliente. Si el aviso falla, el regalo
+  sigue hecho; al revés se anunciaría un regalo que quizá no se cobró.
+- **Al quitar un me gusta no se avisa.** Solo en el `liked` (alta); el `unlike`
+  no emite. Avisar de un "ya no me gusta" sería ruido.
+- **En las respuestas, el destinatario es el autor del comentario padre**, no el
+  creador del vídeo: es con quien se está hablando. Por eso `commentService`
+  selecciona también `author` al cargar el padre.
+- **El contador de la campana se siembra del servidor** (`GET
+  /api/notifications/unread-count`) y luego sube con cada `notification:new`. No
+  se incrementa a ciegas con cada evento: si el usuario lee desde otro
+  dispositivo, al volver a la pestaña el número se recalcula.
+- **`?view=activity` abre la pantalla directamente.** Es la URL que lleva el
+  push de un aviso, y se lee una sola vez al arrancar (en `App.jsx`). Sin esto,
+  tocar la notificación abriría el feed y el usuario tendría que buscar el aviso
+  a mano; el push de llamadas ya dependía de que el frontend leyese la URL, así
+  que este era un hueco real, no una comodidad.
+- El push de un aviso **no es una llamada**: usa `type: 'activity'` y el título
+  es el nombre de quien actuó. `pushService` reserva `incomingCallPayload` para
+  las llamadas; no mezcles ambos formatos o el service worker mostraría el aviso
+  equivocado.
+
+Verificación: `backend/test/notifications.test.js` cubre los cuatro tipos, el
+filtro de uno mismo, el contador, el marcado como leído, el aislamiento entre
+cuentas, la paginación por cursor y la entrega en vivo por socket con clientes
+reales (`socket.io-client`).
 
 ## Sala de voz del creator (SFU con mediasoup, reserva a malla)
 

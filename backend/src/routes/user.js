@@ -7,6 +7,7 @@ const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
 const phoneService = require('../services/phoneService');
+const notificationService = require('../services/notificationService');
 const env = require('../config/env');
 
 const router = express.Router();
@@ -134,6 +135,12 @@ router.post(
       { _id: target._id },
       { $addToSet: { 'profile.followers': req.user.userId } }
     );
+
+    await notificationService.notify({
+      recipientId: target._id,
+      actorId: req.user.userId,
+      type: 'follow',
+    });
 
     res.json({ following: true });
   })

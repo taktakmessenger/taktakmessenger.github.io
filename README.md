@@ -48,6 +48,7 @@ en `GET /api/admin/stats` como `platformEarnings`.
 | Monetización abierta | `GET /api/wallet/monetization` | TikTok exige 10k seguidores y 100k vistas. Aquí `eligible: true` desde el primer video. |
 | Exportar limpio | `GET /api/videos/:id/export` | Descarga sin marca de agua ni logo, sin webs externas. |
 | Panel de salud | `GET /api/health` | Muestra exactamente qué limita tu alcance. Sin shadowban opaco. |
+| Actividad visible | `GET /api/notifications` + WS `notification:new` | Un regalo no cae en saco roto: el creador lo ve al instante, sin abrir el monedero. |
 | TAK Creators | `POST /api/squads`, `/:slug/join`, `/:slug/feed` | Comunidad privada con código de invitación, contenido exclusivo y sala de voz. |
 
 ### TAK Creators
@@ -184,6 +185,11 @@ doble gasto con peticiones concurrentes) y squads.
 | POST | `/api/wallet/gift` | ✅ | Enviar regalo (monto o `giftId`) |
 | POST | `/api/wallet/withdraw` | ✅ | Solicitar retiro |
 | GET | `/api/health` | ✅ | Panel de salud de cuenta |
+| GET | `/api/notifications` | ✅ | Actividad (paginada por cursor) |
+| GET | `/api/notifications/unread-count` | ✅ | Contador de la campana |
+| POST | `/api/notifications/:id/read` | ✅ | Marcar un aviso como leído |
+| POST | `/api/notifications/read-all` | ✅ | Marcar todo como leído |
+| WS | `notification:new` | ✅ | Aviso en vivo (regalo, follow, like, comentario) |
 | GET | `/api/squads` | ✅ | TAK Creators |
 | WS | `live:join` / `live:message` / `live:gift` | ✅ | Chat y regalos en vivo |
 | GET | `/api/admin/stats` | 🛡️ | Métricas |

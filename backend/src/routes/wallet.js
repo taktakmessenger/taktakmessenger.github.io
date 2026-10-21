@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { body, query } = require('express-validator');
 const walletService = require('../services/walletService');
+const notificationService = require('../services/notificationService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler } = require('../utils/http');
@@ -73,6 +74,18 @@ router.post(
       giftId: req.body.giftId,
       videoId: req.body.videoId,
       giftName: req.body.giftName,
+    });
+
+    // El aviso se manda después de que el dinero esté movido y con el resultado
+    // ya calculado: el importe que se enseña es el que de verdad se cobró, no
+    // el que el cliente pidió. Si esto falla, el regalo sigue hecho.
+    await notificationService.notify({
+      recipientId: req.body.recipientId,
+      actorId: req.user.userId,
+      type: 'gift',
+      video: req.body.videoId || null,
+      amount: result.amount,
+      giftName: result.giftName || null,
     });
 
     res.json({

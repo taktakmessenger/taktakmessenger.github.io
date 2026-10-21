@@ -2956,3 +2956,117 @@
   margin: 0 0 0.5rem;
 }
 
+/* ------------------------------------------------------------------
+   Actividad (regalos, seguidores, me gusta y comentarios)
+   ------------------------------------------------------------------ */
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1rem calc(var(--tabbar-h) + 1.5rem);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Cada fila es un botón: el aviso entero es la zona que se toca, no solo el
+   texto, porque en el móvil apuntar a una palabra es incómodo. */
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.75rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.12s ease;
+}
+
+.activity-row:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.activity-row:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+/* El aviso sin leer se marca con un borde de acento y una barra lateral, no
+   con un fondo distinto: así la fila sigue siendo legible sobre el tema oscuro. */
+.activity-row.unread {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.activity-icon {
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.activity-text {
+  line-height: 1.35;
+}
+
+.activity-text strong {
+  color: #fff;
+}
+
+.activity-preview {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.activity-amount {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.activity-time {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.activity-thumb {
+  flex: none;
+  width: 40px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.activity-more {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 0.5rem;
+}
+

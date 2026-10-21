@@ -20,6 +20,7 @@ import Settings from './components/Settings';
 import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
 import VoiceRoomBar from './components/VoiceRoomBar';
+import Activity from './components/Activity';
 import api from './api/client';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
@@ -107,6 +108,14 @@ function Shell() {
     if (!seen) setPhonePrompt(true);
   }, [user]);
 
+  // Abrir la actividad directamente cuando se llega desde el push de un aviso
+  // (`/?view=activity`). Se lee una sola vez, al arrancar: a partir de ahí manda
+  // el estado, no la URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'activity') setView('activity');
+  }, []);
+
   function dismissPhonePrompt() {
     if (user) localStorage.setItem(`taktak_phone_prompt_${user.id}`, '1');
     setPhonePrompt(false);
@@ -159,7 +168,7 @@ function Shell() {
   }
 
   // Anything other than the feed needs a session.
-  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings'].includes(view);
+  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity'].includes(view);
 
   function renderView() {
     if (needsAuth && !user) return <AuthForm onDone={() => setView('feed')} />;
@@ -185,6 +194,14 @@ function Shell() {
             onCall={callPeer}
             initialUser={chatTarget}
             onConsumeInitialUser={() => setChatTarget(null)}
+          />
+        );
+      case 'activity':
+        return (
+          <Activity
+            onBack={() => setView('feed')}
+            onOpenVideo={() => setView('feed')}
+            onOpenProfile={() => setView('profile')}
           />
         );
       case 'admin':

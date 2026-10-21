@@ -3,6 +3,7 @@ const Comment = require('../models/Comment');
 const Video = require('../models/Video');
 const User = require('../models/User');
 const feedService = require('./feedService');
+const notificationService = require('./notificationService');
 const { HttpError } = require('../utils/http');
 
 // A comment must never reveal more than the video does. If a viewer cannot see
@@ -67,7 +68,7 @@ async function listReplies({ commentId, viewerId, limit = 20 }) {
 // validated here rather than in the route so the reply can never be attached to
 // a comment belonging to a different video.
 async function createComment({ videoId, authorId, text, parentId }) {
-  await assertVideoVisible(videoId, authorId);
+  const video = await assertVideoVisible(videoId, authorId);
 
   const clean = String(text || '').trim();
   if (!clean) throw new HttpError(400, 'El comentario no puede estar vacío');
@@ -77,7 +78,7 @@ async function createComment({ videoId, authorId, text, parentId }) {
     if (!mongoose.isValidObjectId(parentId)) {
       throw new HttpError(400, 'Comentario padre inválido');
     }
-    parent = await Comment.findById(parentId).select('video parent');
+    parent = await Comment.findById(parentId).select('video parent author');
     if (!parent) throw new HttpError(404, 'Comentario padre no encontrado');
     // The parent must belong to the same video. Without this check a reply
     // could be filed under an unrelated thread and appear in the wrong video.
@@ -87,7 +88,7 @@ async function createComment({ videoId, authorId, text, parentId }) {
     // Replies are one level deep: replying to a reply attaches to its
     // top-level ancestor, which is what the UI shows.
     if (parent.parent) {
-      parent = await Comment.findById(parent.parent).select('video parent');
+      parent = await Comment.findById(parent.parent).select('video parent author');
     }
   }
 
@@ -108,6 +109,20 @@ async function createComment({ videoId, authorId, text, parentId }) {
   }
 
   await comment.populate('author', 'username profile.displayName profile.avatar');
+
+  // A quién se avisa: en una respuesta, al autor del comentario padre (es con
+  // quien se está hablando); en un comentario nuevo, al creador del vídeo. El
+  // servicio descarta el caso de avisarse a uno mismo.
+  const recipientId = parent ? parent.author : video.creator;
+  await notificationService.notify({
+    recipientId,
+    actorId: authorId,
+    type: parent ? 'reply' : 'comment',
+    video: videoId,
+    comment: comment._id,
+    text: clean,
+  });
+
   return toPublic(comment);
 }
 

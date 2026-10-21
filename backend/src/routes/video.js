@@ -12,6 +12,7 @@ const transcodeService = require('../services/transcodeService');
 const feedService = require('../services/feedService');
 const newsService = require('../services/newsService');
 const commentService = require('../services/commentService');
+const notificationService = require('../services/notificationService');
 const { auth, optionalAuth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -313,6 +314,14 @@ router.post(
 
     if (liked) {
       await User.updateOne({ _id: liked.creator }, { $inc: { 'stats.totalLikes': 1 } });
+      // Solo al dar el me gusta, no al quitarlo: avisar de un "ya no me gusta"
+      // sería ruido. Y nunca a uno mismo, de eso se encarga el servicio.
+      await notificationService.notify({
+        recipientId: liked.creator,
+        actorId: userId,
+        type: 'like',
+        video: liked._id,
+      });
       return res.json({ likes: liked.likes, liked: true });
     }
 

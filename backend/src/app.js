@@ -23,6 +23,7 @@ const verificationRoutes = require('./routes/verification');
 const commentRoutes = require('./routes/comments');
 const callRoutes = require('./routes/calls');
 const pushRoutes = require('./routes/push');
+const notificationRoutes = require('./routes/notifications');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Built as a factory so tests can mount the app without starting a listener.
@@ -79,6 +80,7 @@ function createApp() {
   app.use('/api/comments', commentRoutes);
   app.use('/api/calls', callRoutes);
   app.use('/api/push', pushRoutes);
+  app.use('/api/notifications', notificationRoutes);
 
   // Uploaded originals and their HLS renditions. Read-only.
   app.use('/uploads', express.static(env.uploadsDir, { index: false, dotfiles: 'deny' }));
