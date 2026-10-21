@@ -2297,6 +2297,121 @@
   color: var(--accent);
 }
 
+/* Tipo de llamada (voz / vídeo). El activo se marca en fucsia, como el resto
+   de selecciones de la app, para que se vea de un vistazo qué se va a lanzar. */
+.dialer-kind {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dialer-kind-btn {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dialer-kind-btn.active {
+  border-color: var(--pink);
+  color: #fff;
+  background: linear-gradient(135deg, var(--pink), var(--primary));
+}
+
+/* Número sin cuenta: no es un error, así que va en tono neutro y con las dos
+   salidas (llamar por teléfono o invitar) bien visibles. */
+.dialer-unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.dialer-unknown-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dialer-invite-link {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dialer-invite-link input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.dialer-hint {
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* Contactos del teléfono. La lista se limita en alto para que el teclado y el
+   botón de llamar sigan a la vista aunque haya cientos de contactos. */
+.dialer-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dialer-contacts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.dialer-contacts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.dialer-contact {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.dialer-contact:last-child {
+  border-bottom: none;
+}
+
+.dialer-contact-name {
+  font-weight: 600;
+}
+
 
 /* ------------------------------------------------------------------
    Barra inferior estilo TikTok

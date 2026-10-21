@@ -220,6 +220,30 @@ const env = {
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || null,
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER || null,
 
+  // Llamadas a teléfonos que no tienen la app (PSTN). Twilio Voice marca el
+  // número de verdad; sin proveedor, el marcador cae al marcador nativo del
+  // teléfono (`tel:`), que no cuesta nada y funciona en móvil.
+  //
+  // El número emisor puede ser distinto del de SMS: Twilio factura aparte la
+  // voz y los mensajes, y muchos despliegues compran un número solo para voz.
+  // Si no se indica uno, se reutiliza el de SMS para no obligar a configurar
+  // dos variables cuando una basta.
+  voiceProvider: process.env.VOICE_PROVIDER || (process.env.SMS_PROVIDER ? 'twilio' : null),
+  twilioVoiceFromNumber:
+    process.env.TWILIO_VOICE_FROM || process.env.TWILIO_FROM_NUMBER || null,
+  // Credenciales del cliente de voz. Twilio separa el "auth token" (que firma
+  // la API) de las API Keys (que firman los tokens de acceso del navegador):
+  // una API Key se puede revocar sin cambiar el auth token de toda la cuenta.
+  twilioApiKey: process.env.TWILIO_API_KEY || null,
+  twilioApiSecret: process.env.TWILIO_API_SECRET || null,
+  // TwiML App que apunta a nuestro endpoint de TwiML. Twilio la exige en los
+  // tokens de voz para saber qué URL pedir cuando el navegador marca.
+  twilioTwimlAppSid: process.env.TWILIO_TWIML_APP_SID || null,
+  // Precio en TTC-R de un minuto de llamada PSTN. Las llamadas a números que no
+  // tienen la app salen por la red telefónica y cuestan dinero real, así que se
+  // cobran del saldo retirable. A 0 quedan gratuitas (útil para pruebas).
+  voiceCostPerMinute: Number(process.env.VOICE_COST_PER_MINUTE ?? 0),
+
   // SMTP for verification and password-reset mail.
   smtpHost: process.env.SMTP_HOST || null,
   smtpPort: Number(process.env.SMTP_PORT ?? 587),

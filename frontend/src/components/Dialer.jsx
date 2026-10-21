@@ -40,6 +40,16 @@ export default function Dialer({ onCall, onOpenChat }) {
   const [status, setStatus] = useState('Listo para llamar');
   const [busy, setBusy] = useState(false);
   const [resolved, setResolved] = useState(null);
+  // Resultado de buscar el número cuando NO tiene cuenta: es lo que habilita
+  // las alternativas (llamar por teléfono o invitar por SMS).
+  const [unknown, setUnknown] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [contactsState, setContactsState] = useState('idle');
+  // Voz o vídeo. La videollamada solo existe entre cuentas de TAK TAK: a un
+  // teléfono normal se le puede llamar por voz, no con vídeo, porque no hay
+  // dónde entregarle la imagen.
+  const [callKind, setCallKind] = useState('audio');
+  const [voiceAvailable, setVoiceAvailable] = useState(false);
 
   const longPressTimer = useRef(null);
   const longPressFired = useRef(false);
@@ -52,6 +62,7 @@ export default function Dialer({ onCall, onOpenChat }) {
       .then(({ data }) => {
         const list = Array.isArray(data?.countries) ? data.countries : [];
         setCountries(list);
+        setVoiceAvailable(Boolean(data?.voice));
         // Preselecciona el país del navegador si está en la lista, para no
         // obligar a buscarlo cada vez. Si no coincide, se queda sin país y el
         // usuario escribe el prefijo internacional.
@@ -62,15 +73,19 @@ export default function Dialer({ onCall, onOpenChat }) {
       .catch(() => {});
   }, []);
 
-  function append(char) {
+  function resetResolution() {
     setResolved(null);
+    setUnknown(null);
     setStatus('Listo para llamar');
+  }
+
+  function append(char) {
+    resetResolution();
     setNumber((prev) => prev + char);
   }
 
   function backspace() {
-    setResolved(null);
-    setStatus('Listo para llamar');
+    resetResolution();
     setNumber((prev) => prev.slice(0, -1));
   }
 
@@ -99,6 +114,35 @@ export default function Dialer({ onCall, onOpenChat }) {
 
   useEffect(() => () => clearTimeout(longPressTimer.current), []);
 
+  // Contactos del teléfono. `navigator.contacts` solo existe en algunos
+  // navegadores móviles y exige permiso explícito, así que se pide con un botón
+  // y no al montar: pedir contactos nada más abrir el marcador es invasivo y en
+  // la mayoría de navegadores de escritorio ni siquiera existe la API.
+  async function importContacts() {
+    if (!navigator.contacts?.select) {
+      setContactsState('unsupported');
+      return;
+    }
+
+    setContactsState('loading');
+    try {
+      const picked = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+      const list = [];
+      for (const entry of picked || []) {
+        const name = entry.name?.[0] || 'Sin nombre';
+        for (const tel of entry.tel || []) {
+          list.push({ name, phone: tel });
+        }
+      }
+      setContacts(list);
+      setContactsState(list.length ? 'ready' : 'empty');
+    } catch {
+      // El usuario cerró el diálogo o denegó el permiso: no es un error que
+      // haya que gritar.
+      setContactsState('denied');
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return countries;
@@ -110,26 +154,117 @@ export default function Dialer({ onCall, onOpenChat }) {
     );
   }, [countries, search]);
 
-  // Resuelve el número a una cuenta y lanza la llamada. Se resuelve en el
-  // servidor porque el cliente no puede saber a quién pertenece un teléfono, y
-  // no debe: la búsqueda va autenticada y limitada.
-  async function call() {
+  // Resuelve el número a una cuenta de TAK TAK. Se resuelve en el servidor
+  // porque el cliente no puede saber a quién pertenece un teléfono, y no debe:
+  // la búsqueda va autenticada y limitada.
+  //
+  // Si el número NO tiene cuenta, no es un callejón sin salida: se ofrecen las
+  // dos alternativas reales (llamada telefónica normal o invitar por SMS).
+  async function resolve() {
     const digits = number.trim();
-    if (!digits || busy) return;
+    if (!digits || busy) return null;
 
     setBusy(true);
     setStatus('Buscando el número…');
     setResolved(null);
+    setUnknown(null);
 
     try {
       const { data } = await api.post('/users/lookup-phone', {
         phone: digits,
         country: country?.code,
       });
-      const user = data.user;
-      setResolved(user);
-      setStatus(`Llamando a @${user.username}…`);
-      onCall?.(user, 'audio');
+      setResolved(data.user);
+      setStatus(`@${data.user.username} está en TAK TAK`);
+      return data.user;
+    } catch (err) {
+      // Solo "no existe" habilita las alternativas. Un número inválido o sin
+      // sesión es un error y se queda como error.
+      if (/no hay ninguna cuenta/i.test(err.message)) {
+        setUnknown({ phone: digits });
+        setStatus('Ese número no tiene TAK TAK');
+      } else {
+        setStatus(err.message);
+      }
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Llamada entre cuentas de TAK TAK: WebRTC, con vídeo si se ha elegido.
+  async function callApp() {
+    const user = resolved || (await resolve());
+    if (!user) return;
+    onCall?.(user, callKind);
+  }
+
+  // Llamada a un teléfono normal. Se intenta primero por Twilio Voice, que
+  // funciona también desde el escritorio; si no hay proveedor configurado, cae
+  // al marcador del sistema (`tel:`), que en un móvil marca de verdad sin
+  // depender de nada.
+  async function callNative() {
+    const digits = number.trim();
+    if (!digits) return;
+
+    if (!voiceAvailable) {
+      window.location.href = `tel:${encodeURIComponent(digits)}`;
+      setStatus('Llamada abierta en el teléfono');
+      return;
+    }
+
+    setBusy(true);
+    setStatus('Llamando por teléfono…');
+    try {
+      // El SDK se carga solo cuando de verdad se va a usar: pesa bastante y la
+      // mayoría de la gente no llama a un teléfono normal en cada sesión.
+      const { Device } = await import('@twilio/voice-sdk');
+      const { data } = await api.post('/calls/token');
+
+      const device = new Device(data.token, { logLevel: 'error' });
+      await device.register();
+
+      const call = await device.connect({ params: { To: digits } });
+      call.on('disconnect', () => {
+        device.destroy();
+        setStatus('Llamada finalizada');
+        setBusy(false);
+      });
+      call.on('error', () => {
+        device.destroy();
+        setStatus('La llamada falló');
+        setBusy(false);
+      });
+
+      setStatus('En llamada…');
+    } catch (err) {
+      // Si Twilio falla (sin red, credenciales caducadas), el marcador del
+      // sistema sigue siendo una salida válida en un móvil.
+      setStatus(`${err.message || 'No se pudo llamar'}. Abriendo el marcador…`);
+      window.location.href = `tel:${encodeURIComponent(digits)}`;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Invita por SMS a un número que no tiene la app.
+  async function invite() {
+    const digits = number.trim();
+    if (!digits || busy) return;
+
+    setBusy(true);
+    setStatus('Enviando invitación…');
+    try {
+      const { data } = await api.post('/calls/invite', {
+        phone: digits,
+        country: country?.code,
+      });
+      setStatus(
+        data.delivered
+          ? `Invitación enviada a ${data.to}`
+          : 'No hay proveedor de SMS: copia el enlace y compártelo'
+      );
+      setUnknown((prev) => ({ ...prev, inviteLink: data.inviteLink, delivered: data.delivered }));
     } catch (err) {
       setStatus(err.message);
     } finally {
@@ -141,6 +276,25 @@ export default function Dialer({ onCall, onOpenChat }) {
     <div className="dialer">
       <div className="dialer-status" role="status">
         {status}
+      </div>
+
+      <div className="dialer-kind" role="group" aria-label="Tipo de llamada">
+        <button
+          type="button"
+          className={`dialer-kind-btn ${callKind === 'audio' ? 'active' : ''}`}
+          onClick={() => setCallKind('audio')}
+          aria-pressed={callKind === 'audio'}
+        >
+          📞 Voz
+        </button>
+        <button
+          type="button"
+          className={`dialer-kind-btn ${callKind === 'video' ? 'active' : ''}`}
+          onClick={() => setCallKind('video')}
+          aria-pressed={callKind === 'video'}
+        >
+          🎥 Vídeo
+        </button>
       </div>
 
       <div className="dialer-country-row">
@@ -163,8 +317,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           placeholder="Número de teléfono"
           value={number}
           onChange={(e) => {
-            setResolved(null);
-            setStatus('Listo para llamar');
+            resetResolution();
             setNumber(e.target.value);
           }}
           aria-label="Número de teléfono"
@@ -239,19 +392,18 @@ export default function Dialer({ onCall, onOpenChat }) {
         <button
           type="button"
           className="dialer-call"
-          onClick={call}
+          onClick={callApp}
           disabled={!number.trim() || busy}
-          aria-label="Llamar"
+          aria-label={callKind === 'video' ? 'Videollamada' : 'Llamar'}
         >
-          📞
+          {callKind === 'video' ? '🎥' : '📞'}
         </button>
         <button
           type="button"
           className="dialer-clear"
           onClick={() => {
             setNumber('');
-            setResolved(null);
-            setStatus('Listo para llamar');
+            resetResolution();
           }}
           aria-label="Limpiar"
           disabled={!number}
@@ -262,7 +414,7 @@ export default function Dialer({ onCall, onOpenChat }) {
 
       {resolved && (
         <div className="dialer-resolved">
-          <span className="muted">Encontrado</span>
+          <span className="muted">En TAK TAK</span>
           <strong>@{resolved.username}</strong>
           {onOpenChat && (
             <button
@@ -275,6 +427,90 @@ export default function Dialer({ onCall, onOpenChat }) {
           )}
         </div>
       )}
+
+      {/* El número no tiene cuenta. No es un error: se ofrecen las dos salidas
+          reales. La videollamada no aparece porque no hay dónde entregarla. */}
+      {unknown && (
+        <div className="dialer-unknown">
+          <p className="muted">
+            Este número no tiene TAK TAK. Puedes llamarle por teléfono o invitarle a
+            instalarla.
+          </p>
+          <div className="dialer-unknown-actions">
+            <button type="button" className="btn-primary" onClick={callNative}>
+              📱 Llamar por teléfono
+            </button>
+            <button type="button" className="btn-secondary" onClick={invite} disabled={busy}>
+              ✉️ Invitar por SMS
+            </button>
+          </div>
+          {unknown.inviteLink && (
+            <div className="dialer-invite-link">
+              <input readOnly value={unknown.inviteLink} aria-label="Enlace de invitación" />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => navigator.clipboard?.writeText(unknown.inviteLink)}
+              >
+                Copiar
+              </button>
+            </div>
+          )}
+          {!voiceAvailable && (
+            <p className="muted dialer-hint">
+              Las videollamadas solo funcionan entre cuentas de TAK TAK: al no tener la
+              app, este teléfono no puede recibir el vídeo.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="dialer-contacts">
+        <div className="dialer-contacts-head">
+          <span>Contactos del teléfono</span>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={importContacts}
+            disabled={contactsState === 'loading'}
+          >
+            {contactsState === 'loading' ? 'Leyendo…' : 'Importar'}
+          </button>
+        </div>
+
+        {contactsState === 'unsupported' && (
+          <p className="muted dialer-hint">
+            Este navegador no permite leer los contactos. Escribe el número o impórtalos
+            desde el móvil.
+          </p>
+        )}
+        {contactsState === 'denied' && (
+          <p className="muted dialer-hint">No se concedió el permiso de contactos.</p>
+        )}
+        {contactsState === 'empty' && (
+          <p className="muted dialer-hint">No se encontró ningún contacto con teléfono.</p>
+        )}
+
+        {contacts.length > 0 && (
+          <ul className="dialer-contacts-list">
+            {contacts.map((c) => (
+              <li key={`${c.name}-${c.phone}`}>
+                <button
+                  type="button"
+                  className="dialer-contact"
+                  onClick={() => {
+                    resetResolution();
+                    setNumber(c.phone);
+                  }}
+                >
+                  <span className="dialer-contact-name">{c.name}</span>
+                  <span className="muted">{c.phone}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

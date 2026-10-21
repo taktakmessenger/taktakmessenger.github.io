@@ -223,6 +223,43 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   hilo previo; el servidor lo crea. El estado lo reporta el cliente: es historial,
   no una fuente de verdad para facturación.
 
+### Llamar a teléfonos que NO tienen TAK TAK
+
+Un número sin la app **no puede recibir una videollamada WebRTC**: no hay dónde
+entregarle la invitación, igual que no se puede videollamar por WhatsApp a quien
+no tiene WhatsApp. No es un fallo que se arregle con código. Lo que sí existe:
+
+- **`tel:` (marcador del sistema)**, el camino por defecto y sin coste. En un
+  móvil abre la app de teléfono y marca de verdad. Es lo que se ofrece cuando no
+  hay proveedor de voz (`voice: false` en `/api/auth/providers`).
+- **Twilio Voice**, para llamar también desde escritorio. El navegador pide un
+  token de acceso a `POST /api/calls/token`, se registra como cliente de Twilio y
+  marca; Twilio pide el TwiML a `POST /api/calls/twiml`, que conecta la pata del
+  navegador con el número. El SDK (`@twilio/voice-sdk`) se carga con
+  `import()` dinámico: pesa 181 kB y solo se descarga si de verdad se llama.
+- **`POST /api/calls/invite`** manda un SMS con un enlace para instalar la app.
+  Es la única forma de que ese número acabe pudiendo recibir vídeo.
+
+Detalles que cuesta descubrir:
+
+- El endpoint de TwiML **no puede llevar sesión** (lo llama Twilio, no el
+  navegador), así que se protege con la firma `X-Twilio-Signature` en HMAC-SHA1.
+  Sin esa comprobación, cualquiera podría marcar números de tarificación especial
+  a costa de la cuenta.
+- La URL que se firma es la de `APP_URL`, **no** la reconstruida del `Host`: con
+  un proxy por medio el protocolo no coincide y la firma nunca valida.
+- El token de voz se firma a mano con `jsonwebtoken` (ya está en el proyecto) en
+  vez de añadir el SDK de Node solo para eso. Twilio exige el header
+  `cty: 'twilio-fpa;v=1'`; sin él el SDK lo rechaza con un error poco claro.
+- El token de acceso necesita **API Key + secreto + TwiML App SID**, no solo el
+  auth token. `voiceService.isConfigured()` exige los cuatro.
+- `navigator.contacts` solo existe en algunos navegadores móviles y exige
+  permiso. Se pide con un botón ("Importar"), nunca al montar: pedir los
+  contactos al abrir el marcador es invasivo y en escritorio la API no existe.
+- La pulsación larga del 0 para escribir "+" necesita `onPointerDown/Up`, no
+  `onClick` (que no distingue corta de larga), y `onContextMenu` con
+  `preventDefault`, porque el menú contextual del móvil cancela la pulsación.
+
 ## Verificación por correo/SMS en desarrollo
 
 - Sin `SMTP_HOST` ni `SMS_PROVIDER` configurados, ningún código sale del

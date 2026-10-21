@@ -17,6 +17,7 @@ const {
 const env = require('../config/env');
 const phoneService = require('../services/phoneService');
 const smsService = require('../services/smsService');
+const voiceService = require('../services/voiceService');
 const mailService = require('../services/mailService');
 const googleService = require('../services/googleService');
 
@@ -545,6 +546,9 @@ router.get('/providers', (req, res) => {
     googleClientId: env.googleClientId,
     sms: smsService.isConfigured(),
     email: mailService.isConfigured(),
+    // Llamadas a teléfonos que no tienen la app. El marcador lo usa para
+    // ofrecer "llamar por teléfono" en vez de dejar un botón que solo fallaría.
+    voice: voiceService.isConfigured(),
     countries: phoneService.listCountries(req.query.locale || 'es'),
   });
 });
