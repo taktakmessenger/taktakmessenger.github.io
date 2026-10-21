@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import PhoneLink from './PhoneLink';
 import {
   isIos,
   isStandalone,
@@ -18,6 +19,7 @@ export default function Settings({ onBack, onNavigate }) {
 
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
+  const [showPhoneLink, setShowPhoneLink] = useState(false);
 
   // Estado del permiso de notificaciones. Se lee del navegador, que es quien
   // manda: no se guarda en el perfil porque el permiso es del dispositivo, no
@@ -94,9 +96,31 @@ export default function Settings({ onBack, onNavigate }) {
           <strong>{user?.email}</strong>
         </div>
         <div className="settings-row">
+          <span>Teléfono</span>
+          <strong>{user?.phoneVerified ? user.phone : 'Sin vincular'}</strong>
+        </div>
+        <div className="settings-row">
           <span>Verificación</span>
           <strong>{user?.profile?.isVerified ? 'Verificada' : 'No verificada'}</strong>
         </div>
+        {/* Quien entró con correo o con Google no tiene teléfono. Sin esta
+            opción no había forma de añadirlo, y una cuenta sin teléfono no se
+            puede llamar por número ni aparece en las coincidencias. */}
+        {!user?.phoneVerified && (
+          <div className="settings-phone-link">
+            {showPhoneLink ? (
+              <PhoneLink onDone={() => setShowPhoneLink(false)} onSkip={() => setShowPhoneLink(false)} />
+            ) : (
+              <button
+                type="button"
+                className="btn-primary settings-push-btn"
+                onClick={() => setShowPhoneLink(true)}
+              >
+                📱 Vincular teléfono
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="settings-block">

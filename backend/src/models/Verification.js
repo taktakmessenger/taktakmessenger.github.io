@@ -15,7 +15,7 @@ const verificationSchema = new mongoose.Schema(
     channel: { type: String, enum: ['email', 'sms'], required: true },
     purpose: {
       type: String,
-      enum: ['verify_email', 'verify_phone', 'reset_password'],
+      enum: ['verify_email', 'verify_phone', 'link_phone', 'reset_password'],
       required: true,
     },
 

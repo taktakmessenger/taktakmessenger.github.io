@@ -470,6 +470,120 @@ router.post(
 );
 
 /* ------------------------------------------------------------------ */
+/* Link a phone to an existing account                                 */
+/* ------------------------------------------------------------------ */
+
+// These are for users who signed up with an email (or Google) and later want
+// to add a phone number. That matters beyond convenience: the dialer resolves
+// numbers to accounts through `phone`, so an account without one cannot be
+// called by number, and TAK TAK's contacts matching has nothing to match on.
+//
+// The flow mirrors phone sign-up — request a code, then verify it — but it is
+// authenticated: the phone is attached to the signed-in account, never used to
+// create or switch one. Verifying proves control of the number, so an attacker
+// cannot attach someone else's phone to their own account.
+router.post(
+  '/phone/link/start',
+  auth,
+  codeLimiter,
+  [
+    body('phone').trim().notEmpty().withMessage('Número de teléfono requerido'),
+    body('country').optional().trim().isLength({ min: 2, max: 2 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const phone = phoneService.normalizePhone(req.body.phone, req.body.country);
+
+    const owner = await User.findOne({ phone }).select('_id phoneVerified');
+    if (owner && String(owner._id) !== String(req.user.userId)) {
+      // Someone else already has it. The message is deliberately the same
+      // whether they verified or not: telling them apart would turn this into
+      // an oracle for which numbers are registered.
+      throw new HttpError(409, 'Ese número ya está vinculado a otra cuenta de TAK TAK');
+    }
+    if (owner && String(owner._id) === String(req.user.userId) && owner.phoneVerified) {
+      // Already yours and verified: nothing to do. Re-sending an SMS here would
+      // spend money on a number that is already attached.
+      return res.json({ alreadyLinked: true, phone: phoneService.maskPhone(phone) });
+    }
+
+    const issued = await Verification.issue({
+      target: phone,
+      channel: 'sms',
+      purpose: 'link_phone',
+      length: env.otpLength,
+      ttlMinutes: env.otpTtlMinutes,
+      // The account this code is for. On verify it must match the signed-in
+      // user, so a code intercepted from one session cannot link the number to
+      // another account.
+      payload: { userId: String(req.user.userId) },
+    });
+
+    const { delivered, reason } = await smsService.sendSms({
+      to: phone,
+      body: `TAK TAK: tu código para vincular el teléfono es ${issued.code}. Caduca en ${env.otpTtlMinutes} minutos.`,
+    });
+
+    return res.status(201).json({
+      sent: true,
+      delivered,
+      reason,
+      code: delivered ? undefined : devCode(issued.code),
+      phone: phoneService.maskPhone(phone),
+      expiresInSeconds: env.otpTtlMinutes * 60,
+    });
+  })
+);
+
+router.post(
+  '/phone/link/verify',
+  auth,
+  authLimiter,
+  [
+    body('phone').trim().notEmpty().withMessage('Número de teléfono requerido'),
+    body('country').optional().trim().isLength({ min: 2, max: 2 }),
+    codeRule,
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const phone = phoneService.normalizePhone(req.body.phone, req.body.country);
+
+    const result = await Verification.consume({
+      target: phone,
+      purpose: 'link_phone',
+      code: req.body.code,
+      maxAttempts: env.otpMaxAttempts,
+    });
+    if (!result.ok) throw otpError(result, 'Código incorrecto o expirado');
+
+    // The code must belong to the account asking to redeem it. Without this a
+    // leaked code could attach the number to a different account.
+    if (String(result.payload?.userId) !== String(req.user.userId)) {
+      throw new HttpError(403, 'Este código no corresponde a tu cuenta');
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) throw new HttpError(404, 'Usuario no encontrado');
+
+    user.phone = phone;
+    user.phoneVerified = true;
+    try {
+      await user.save();
+    } catch (err) {
+      // Two accounts verifying the same number at once: the unique index lets
+      // one through and rejects the other. The loser gets a clear message
+      // instead of a 500.
+      if (err.code === 11000) {
+        throw new HttpError(409, 'Ese número ya está vinculado a otra cuenta de TAK TAK');
+      }
+      throw err;
+    }
+
+    res.json({ linked: true, user: publicUser(user) });
+  })
+);
+
+/* ------------------------------------------------------------------ */
 /* Google sign-in                                                      */
 /* ------------------------------------------------------------------ */
 

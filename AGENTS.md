@@ -324,6 +324,29 @@ no está disponible". Con Web Push suena como WhatsApp: el servicio de push
   Al reintentar se limpia `notice` para no mostrar un aviso viejo junto a un
   resultado nuevo que lo contradice.
 
+## Vincular un teléfono a una cuenta que ya existe
+
+- Quien se registra por correo o con Google **no tiene teléfono**, y sin teléfono
+  la cuenta no se puede llamar por número (el marcador resuelve números a cuentas
+  por el campo `phone`) ni aparece en coincidencias de contactos. Por eso existen
+  `POST /api/auth/phone/link/start` y `/link/verify`, **autenticados**: el número
+  se adjunta a la cuenta de la sesión, nunca crea ni cambia de cuenta.
+- Es el mismo flujo en dos pasos que el registro por teléfono (pedir código,
+  verificar) pero con `purpose: 'link_phone'`. El código guarda `userId` en el
+  `payload` y en la verificación debe coincidir con la sesión: sin eso, un código
+  filtrado podría vincular el número a otra cuenta.
+- `link/start` responde 409 si el número ya es de **otra** cuenta, y
+  `alreadyLinked: true` si es de la propia y ya está verificado (no se gasta un
+  SMS en algo ya hecho). Verificar prueba el control del número, así que nadie
+  puede adjuntar un teléfono ajeno.
+- El `save()` de `link/verify` puede chocar con el índice único si dos cuentas
+  verifican el mismo número a la vez; el perdedor recibe 409, no un 500.
+- En el frontend, `PhoneLink.jsx` es un componente reutilizable (Ajustes y el
+  aviso de primer arranque). El modal de la primera vez es **opcional y
+  descartable**, y se recuerda el descarte por cuenta en `localStorage`
+  (`taktak_phone_prompt_<id>`): obligar a dar el teléfono para ver vídeos
+  espantaría a quien solo quiere mirar.
+
 ## Verificación de edad y verificación de noticias (Fase 2)
 
 ### Verificación de edad

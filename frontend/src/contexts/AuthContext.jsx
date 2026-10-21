@@ -102,6 +102,26 @@ export function AuthProvider({ children }) {
     return data;
   }
 
+  // Vincular un teléfono a una cuenta que ya existe (creada por correo o
+  // Google). Va autenticado y en dos pasos, igual que el registro por teléfono:
+  // primero se pide el código, luego se verifica. El número se adjunta a la
+  // cuenta de la sesión, nunca crea ni cambia de cuenta.
+  async function startPhoneLink({ phone, country }) {
+    const { data } = await api.post('/auth/phone/link/start', { phone, country });
+    return data;
+  }
+
+  async function verifyPhoneLink({ phone, country, code }) {
+    const { data } = await api.post('/auth/phone/link/verify', { phone, country, code });
+    // La respuesta trae el usuario ya con el teléfono: se refresca la sesión
+    // para que Ajustes y el marcador lo vean sin recargar.
+    if (data.user) {
+      setUser(data.user);
+      localStorage.setItem('taktak_user', JSON.stringify(data.user));
+    }
+    return data;
+  }
+
   async function forgotPassword(email) {
     const { data } = await api.post('/auth/forgot-password', { email });
     return data;
@@ -135,6 +155,8 @@ export function AuthProvider({ children }) {
       loginWithGoogle,
       startPhoneSignup,
       verifyPhoneSignup,
+      startPhoneLink,
+      verifyPhoneLink,
       forgotPassword,
       resetPassword,
       logout,

@@ -16,6 +16,7 @@ import AuthForm from './components/AuthForm';
 import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
 import Settings from './components/Settings';
+import PhoneLink from './components/PhoneLink';
 import api from './api/client';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
@@ -89,8 +90,24 @@ function Shell() {
   // Mensajes para que abra el hilo directamente en vez de dejar al usuario
   // buscándolo a mano en la bandeja.
   const [chatTarget, setChatTarget] = useState(null);
+  // Invitación a vincular el teléfono, una sola vez por cuenta. Muchas cuentas
+  // se crean por correo y quedan sin número: sin teléfono no se las puede llamar
+  // desde el marcador. Se muestra una vez y se recuerda el descarte para no
+  // insistir en cada inicio de sesión.
+  const [phonePrompt, setPhonePrompt] = useState(false);
   const { user, loading } = useAuth();
   const { startCall } = useCall();
+
+  useEffect(() => {
+    if (!user || user.phoneVerified) return;
+    const seen = localStorage.getItem(`taktak_phone_prompt_${user.id}`);
+    if (!seen) setPhonePrompt(true);
+  }, [user]);
+
+  function dismissPhonePrompt() {
+    if (user) localStorage.setItem(`taktak_phone_prompt_${user.id}`, '1');
+    setPhonePrompt(false);
+  }
 
   // Al haber sesión, se reenvía al servidor la suscripción push que este
   // navegador ya tuviera. El servidor guarda qué dispositivo pertenece a qué
@@ -200,6 +217,23 @@ function Shell() {
       {/* La pantalla de llamada vive fuera de las vistas: una llamada entrante
           debe verse sin cambiar de pestaña. */}
       <CallOverlay />
+
+      {/* Se ofrece una sola vez tras entrar con correo o Google, porque esas
+          cuentas no tienen teléfono y sin él no se las puede llamar por número.
+          Es opcional y descartable: obligar a dar el teléfono para usar la app
+          espantaría a quien solo quiere ver vídeos. */}
+      {phonePrompt && user && !user.phoneVerified && (
+        <div className="modal" role="dialog" aria-modal="true">
+          <div className="modal-content">
+            <h3>¿Añades tu teléfono?</h3>
+            <PhoneLink
+              onDone={dismissPhonePrompt}
+              onSkip={dismissPhonePrompt}
+              skipLabel="Ahora no"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

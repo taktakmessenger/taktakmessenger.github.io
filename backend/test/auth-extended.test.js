@@ -547,6 +547,151 @@ test('the code is never exposed in production', async () => {
   }
 });
 
+/* ------------------------------------------------------------------ */
+/* Linking a phone to an email account                                 */
+/* ------------------------------------------------------------------ */
+
+// A user who registered with an email has no phone, so the dialer cannot find
+// them by number. These endpoints let them add one from inside the app.
+test('an email account can link a phone by verifying an SMS code', async () => {
+  const agent = app();
+  const reg = await agent
+    .post('/api/auth/register')
+    .send({ username: 'solo_email', email: 'solo_email@example.com', password: 'secreto123' });
+
+  assert.equal(reg.body.user.phone, undefined);
+
+  const { phone, country, e164 } = uniquePhone();
+  const start = await agent
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country });
+
+  assert.equal(start.status, 201);
+  assert.equal(start.body.delivered, false);
+  // Nothing is attached until the code is verified.
+  assert.equal((await User.findById(reg.body.user.id)).phone, undefined);
+
+  const code = await issueAndRead(e164, 'link_phone');
+  const verify = await agent
+    .post('/api/auth/phone/link/verify')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country, code });
+
+  assert.equal(verify.status, 200);
+  assert.equal(verify.body.linked, true);
+  assert.equal(verify.body.user.phone, e164);
+  assert.equal(verify.body.user.phoneVerified, true);
+});
+
+test('linking requires a session', async () => {
+  const { phone, country } = uniquePhone();
+  const res = await app().post('/api/auth/phone/link/start').send({ phone, country });
+  assert.equal(res.status, 401);
+});
+
+test('a number already linked to another account cannot be stolen', async () => {
+  const owner = app();
+  const { phone, country, e164 } = uniquePhone();
+
+  // First account takes the number through phone sign-up.
+  await owner.post('/api/auth/phone/start').send({ phone, country });
+  const ownerCode = await issueAndRead(e164, 'verify_phone');
+  await owner.post('/api/auth/phone/verify').send({ phone, country, code: ownerCode });
+
+  // Second account tries to link the same number.
+  const other = app();
+  const reg = await other
+    .post('/api/auth/register')
+    .send({ username: 'ladron_tel', email: 'ladron@example.com', password: 'secreto123' });
+
+  const res = await other
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country });
+
+  assert.equal(res.status, 409);
+  assert.match(res.body.error, /otra cuenta/);
+});
+
+// The code is bound to the account that requested it. A code issued for one
+// account must not attach the number to another.
+test('a link code issued for one account is rejected for another', async () => {
+  const a = app();
+  const b = app();
+  const { phone, country, e164 } = uniquePhone();
+
+  const regA = await a
+    .post('/api/auth/register')
+    .send({ username: 'cuenta_a', email: 'cuenta_a@example.com', password: 'secreto123' });
+  const regB = await b
+    .post('/api/auth/register')
+    .send({ username: 'cuenta_b', email: 'cuenta_b@example.com', password: 'secreto123' });
+
+  await a
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${regA.body.token}`)
+    .send({ phone, country });
+
+  const code = await issueAndRead(e164, 'link_phone');
+
+  // B submits A's code for the same number.
+  const res = await b
+    .post('/api/auth/phone/link/verify')
+    .set('Authorization', `Bearer ${regB.body.token}`)
+    .send({ phone, country, code });
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /no corresponde a tu cuenta/);
+});
+
+test('a wrong link code is rejected and counted', async () => {
+  const agent = app();
+  const reg = await agent
+    .post('/api/auth/register')
+    .send({ username: 'mal_codigo', email: 'mal_codigo@example.com', password: 'secreto123' });
+  const { phone, country } = uniquePhone();
+
+  await agent
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country });
+
+  const res = await agent
+    .post('/api/auth/phone/link/verify')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country, code: '000000' });
+
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /Intentos restantes/);
+});
+
+test('re-linking the same verified number is reported as already linked', async () => {
+  const agent = app();
+  const reg = await agent
+    .post('/api/auth/register')
+    .send({ username: 'revincula', email: 'revincula@example.com', password: 'secreto123' });
+  const { phone, country, e164 } = uniquePhone();
+
+  await agent
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country });
+  const code = await issueAndRead(e164, 'link_phone');
+  await agent
+    .post('/api/auth/phone/link/verify')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country, code });
+
+  const again = await agent
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country });
+
+  assert.equal(again.status, 200);
+  assert.equal(again.body.alreadyLinked, true);
+});
+
 // Reads the code that was just issued, standing in for the SMS or email the
 // user would receive. The plaintext is not persisted, so it is recomputed from
 // a fresh issue only in tests that need the exact value.
