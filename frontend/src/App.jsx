@@ -17,6 +17,7 @@ import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
 import Settings from './components/Settings';
 import PhoneLink from './components/PhoneLink';
+import NotificationPrompt from './components/NotificationPrompt';
 import api from './api/client';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
@@ -234,6 +235,11 @@ function Shell() {
           </div>
         </div>
       )}
+
+      {/* Aviso para activar las notificaciones. Es lo que hace que una llamada
+          suene con la app cerrada; sin suscripción, el servidor no tiene a quién
+          despertar y la llamada acaba en "no está disponible". */}
+      {user && <NotificationPrompt user={user} onOpenSettings={() => setView('settings')} />}
     </div>
   );
 }

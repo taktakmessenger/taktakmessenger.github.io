@@ -6,6 +6,7 @@
     "e2e:ui": "node scripts/e2e-ui.js",
     "e2e:calls": "node scripts/e2e-calls.js",
     "e2e:upload": "node scripts/e2e-upload-optimize.js",
+    "e2e:notifications": "node scripts/e2e-notifications.js",
     "smoke": "bash scripts/smoke-api.sh"
   },
   "devDependencies": {

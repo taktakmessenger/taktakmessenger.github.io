@@ -133,12 +133,20 @@ async function gotoApp(page) {
       await dump(page, 'feed');
     }
 
-    // El vídeo debe estar reproduciéndose (no solo presente en el DOM).
-    const playing = await page.evaluate(() => {
-      const v = document.querySelector('video.reel-video');
-      return v ? { paused: v.paused, src: !!v.src, ready: v.readyState, muted: v.muted } : null;
-    });
-    check(playing && playing.src, 'el reel tiene una fuente de vídeo');
+    // El vídeo debe tener fuente cargada (no solo estar en el DOM). Un reel con
+    // HLS se sirve por MediaSource, así que `src` puede estar vacío aunque haya
+    // imagen; la señal fiable es que el elemento tenga datos listos. Se espera un
+    // poco porque el manifiesto HLS se carga después del primer render.
+    let playing = null;
+    for (let i = 0; i < 12; i += 1) {
+      playing = await page.evaluate(() => {
+        const v = document.querySelector('video.reel-video');
+        return v ? { paused: v.paused, src: !!v.src, ready: v.readyState, muted: v.muted, currentTime: v.currentTime } : null;
+      });
+      if (playing && (playing.src || playing.ready > 0)) break;
+      await sleep(500);
+    }
+    check(playing && (playing.src || playing.ready > 0), 'el reel tiene una fuente de vídeo');
     // El autoplay con sonido lo bloquea el navegador; el reel va silenciado a
     // propósito, así que debe arrancar solo. Si no, esperamos y reintentamos.
     if (playing && playing.paused) {
@@ -223,11 +231,22 @@ async function gotoApp(page) {
     await clickByText(page, 'Cerrar').catch(() => {});
 
     // --- Wallet y regalo ----------------------------------------------------
+    // El monedero ya no es una pestaña de la barra: vive dentro del perfil, tras
+    // el engranaje de configuración, que es donde lo pone TikTok.
     console.log('\n▸ Wallet');
     await clickByText(page, 'Cerrar').catch(() => {});
     await sleep(500);
-    const clickedWallet = await clickByText(page, 'Wallet');
-    check(clickedWallet, 'se encuentra el acceso a Wallet en la navegación');
+    await clickByText(page, 'Perfil');
+    await sleep(600);
+    const openedSettings = await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label="Configuración"]');
+      if (btn) { btn.click(); return true; }
+      return false;
+    });
+    check(openedSettings, 'se abre la configuración desde el perfil');
+    await sleep(500);
+    const clickedWallet = await clickByText(page, 'Monedero');
+    check(clickedWallet, 'se encuentra el acceso al Monedero');
     try {
       await waitText(page, 'Monedas', 15000);
       ok('la wallet carga con saldos');
@@ -278,8 +297,13 @@ async function gotoApp(page) {
     }
 
     // --- Salud de cuenta ----------------------------------------------------
+    // También cuelga de la configuración, igual que el monedero.
     console.log('\n▸ Salud de cuenta');
-    await clickByText(page, 'Salud');
+    await clickByText(page, 'Perfil');
+    await sleep(600);
+    await page.evaluate(() => document.querySelector('button[aria-label="Configuración"]')?.click());
+    await sleep(500);
+    await clickByText(page, 'Salud de la cuenta');
     await waitText(page, 'Visibilidad', 15000).then(
       () => ok('el panel de salud carga y muestra la visibilidad'),
       () => bad('el panel de salud no carga')

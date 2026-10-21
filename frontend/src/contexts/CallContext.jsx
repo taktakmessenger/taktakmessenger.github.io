@@ -10,6 +10,7 @@ import {
 import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { startRingtone, stopRingtone, unlockAudio } from '../lib/ringtone';
 
 const CallContext = createContext(null);
 
@@ -124,6 +125,38 @@ export function CallProvider({ children }) {
       cancelled = true;
     };
   }, [user]);
+
+  // El audio del navegador está bloqueado hasta que la persona toca la página.
+  // El tono de llamada es sonido generado, así que sin este desbloqueo sonaría
+  // mudo justo cuando más falta hace oírlo. Se engancha una sola vez y se quita
+  // en el primer gesto; a partir de ahí el contexto queda activo.
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  // Tono y vibración mientras la llamada timbra. Suena en 'incoming' (alguien
+  // llama) y en 'ringing' (estamos llamando), y para en cuanto la llamada se
+  // contesta, se rechaza o se cuelga: cualquier otro estado apaga el timbre.
+  useEffect(() => {
+    if (status === 'incoming') {
+      startRingtone('incoming');
+      return;
+    }
+    if (status === 'ringing') {
+      startRingtone('outgoing');
+      return;
+    }
+    stopRingtone();
+  }, [status]);
+
+  // Al desmontar no debe quedar un tono sonando para siempre.
+  useEffect(() => () => stopRingtone(), []);
 
   // Momento en que la llamada pasó a estar activa, para calcular su duración
   // real. Se guarda en un ref y no en estado porque solo se lee al colgar.

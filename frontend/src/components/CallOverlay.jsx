@@ -116,24 +116,30 @@ export default function CallOverlay() {
   // entera para poder aceptarla.
   if (minimized && isActive) {
     return (
-      <button
-        type="button"
-        className="call-bubble-pip"
-        onClick={toggleMinimize}
-        aria-label="Volver a la llamada"
-      >
-        {kind === 'video' ? (
-          <video ref={remoteVideoRef} className="call-bubble-video" autoPlay playsInline />
-        ) : (
-          <span className="call-bubble-avatar">
-            {peer?.username?.slice(0, 2).toUpperCase() || '??'}
+      <>
+        {/* El audio remoto tiene que seguir existiendo en la burbuja. Sin él,
+            una llamada de voz minimizada se quedaría muda: el elemento se
+            desmontaría y con él la reproducción del stream. */}
+        <audio ref={remoteAudioRef} autoPlay playsInline />
+        <button
+          type="button"
+          className="call-bubble-pip"
+          onClick={toggleMinimize}
+          aria-label="Volver a la llamada"
+        >
+          {kind === 'video' ? (
+            <video ref={remoteVideoRef} className="call-bubble-video" autoPlay playsInline />
+          ) : (
+            <span className="call-bubble-avatar">
+              {peer?.username?.slice(0, 2).toUpperCase() || '??'}
+            </span>
+          )}
+          <span className="call-bubble-meta">
+            <strong>@{peer?.username || '…'}</strong>
+            <small>{LABELS[status] || status}</small>
           </span>
-        )}
-        <span className="call-bubble-meta">
-          <strong>@{peer?.username || '…'}</strong>
-          <small>{LABELS[status] || status}</small>
-        </span>
-      </button>
+        </button>
+      </>
     );
   }
 

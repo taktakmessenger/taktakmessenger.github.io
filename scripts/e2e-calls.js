@@ -53,6 +53,29 @@ async function remoteAudio(page) {
   });
 }
 
+// Si hay un tono de llamada sonando en esta página. Se observa el evento que
+// emite el módulo real en vez de importarlo: Vite sirve el módulo con un sufijo
+// de versión, así que un `import` desde la prueba obtendría una segunda copia
+// con estado propio y no vería el timbre que arranca la app.
+async function startRingingWatch(page) {
+  await page.evaluate(() => {
+    window.__ringEvents = [];
+    window.addEventListener('taktak:ringtone', (e) => {
+      window.__ringEvents.push(e.detail?.ringing ?? null);
+    });
+  });
+}
+
+async function lastRinging(page) {
+  // Sin `?? undefined`: el valor de parada es `null` a propósito y no debe
+  // confundirse con "no hay datos".
+  return page.evaluate(() => {
+    const events = window.__ringEvents;
+    if (!events || events.length === 0) return 'sin-datos';
+    return events[events.length - 1];
+  });
+}
+
 async function remoteVideo(page) {
   return page.evaluate(() => {
     const v = [...document.querySelectorAll('video')].find((x) => x.className.includes('call-remote'));
@@ -69,6 +92,10 @@ async function newCtx(browser, token, user) {
   await page.evaluate((t, u) => {
     localStorage.setItem('taktak_token', t);
     localStorage.setItem('taktak_user', JSON.stringify(u));
+    // El aviso opcional del teléfono se pinta como modal y tapa la lista de
+    // chats; se marca como visto para que no interfiera con los clics. La clave
+    // es por cuenta, así que hay que usar el id del usuario.
+    localStorage.setItem(`taktak_phone_prompt_${u.id || u._id}`, '1');
   }, token, user);
   await page.reload({ waitUntil: 'domcontentloaded' });
   return page;
@@ -100,9 +127,14 @@ async function newCtx(browser, token, user) {
   const pageB = await newCtx(browser, b.token, b.user);
 
   async function openThread(page) {
-    await clickByText(page, 'Mensajes');
+    // El aviso opcional del teléfono se pinta como modal y tapa la lista de
+    // chats; se descarta antes de navegar o los clics no llegan.
+    await page.evaluate(() => {
+      localStorage.setItem('taktak_phone_prompt_dismissed', '1');
+    });
+    await clickByText(page, 'WhaTaka');
     await page.waitForSelector('button.conversation-item', { timeout: 15000 });
-    await page.click('button.conversation-item');
+    await page.evaluate(() => document.querySelector('button.conversation-item').click());
     await page.waitForSelector('.thread-call', { timeout: 10000 });
     // El interlocutor se carga en un efecto aparte; los botones se habilitan
     // cuando `peer` está listo.
@@ -114,6 +146,10 @@ async function newCtx(browser, token, user) {
 
   try {
     await openThread(pageA);
+    // El observador del tono se instala antes de cualquier llamada: recoge los
+    // eventos que emita el timbre con cada llamada de la prueba.
+    await startRingingWatch(pageA);
+    await startRingingWatch(pageB);
     const canCall = await pageA.$('.thread-call button');
     if (!canCall) { bad('Alice no ve los botones de llamada en el hilo'); }
     else ok('Alice ve los botones de llamada');
@@ -138,10 +174,29 @@ async function newCtx(browser, token, user) {
         await sleep(1500);
         continue;
       }
+
+      // Tono de timbre: quien llama oye su tono saliente y quien recibe, el
+      // entrante. Antes solo se pintaba la pantalla y nadie se enteraba si no
+      // estaba mirando.
+      const ringA = await pageA.evaluate(() => window.__ringEvents || []);
+      const ringB = await pageB.evaluate(() => window.__ringEvents || []);
+      if (ringA.includes('outgoing')) ok('Alice oye el tono de llamada saliente');
+      else bad(`Alice no tiene tono saliente -> ${JSON.stringify(ringA)}`);
+      if (ringB.includes('incoming')) ok('Bob oye el tono de llamada entrante');
+      else bad(`Bob no tiene tono entrante -> ${JSON.stringify(ringB)}`);
+
       await pageB.evaluate(() => {
         const btn = [...document.querySelectorAll('button')].find((e) => e.textContent.includes('Aceptar'));
         if (btn) btn.click();
       });
+
+      // Al aceptar, el timbre debe parar en ambos lados: el último evento
+      // recibido tiene que ser el de parada (null).
+      await sleep(1000);
+      const ringAfterA = await lastRinging(pageA);
+      const ringAfterB = await lastRinging(pageB);
+      if (ringAfterA === null && ringAfterB === null) ok('el tono para al aceptar en ambos lados');
+      else bad(`el tono sigue sonando tras aceptar -> A=${ringAfterA} B=${ringAfterB}`);
 
       // Ambos deben llegar a estado activo (botón Colgar).
       try {
@@ -167,6 +222,44 @@ async function newCtx(browser, token, user) {
         else bad(`Alice no tiene vídeo remoto -> ${JSON.stringify(va)}`);
         if (vb && vb.tracks > 0) ok(`Bob ve vídeo remoto (pistas=${vb.tracks}, playing=${vb.playing})`);
         else bad(`Bob no tiene vídeo remoto -> ${JSON.stringify(vb)}`);
+
+        // Burbuja tipo WhatsApp: al minimizar, la llamada sigue viva (audio) en
+        // una esquina con el vídeo, y tocar la burbuja devuelve a pantalla
+        // completa. Esto es lo que permite seguir en el feed sin cortar.
+        const minimized = await pageA.evaluate(() => {
+          const btn = document.querySelector('button[aria-label="Minimizar llamada"]');
+          if (btn) { btn.click(); return true; }
+          return false;
+        });
+        if (minimized) ok('Alice minimiza la videollamada');
+        else bad('no aparece el botón de minimizar la videollamada');
+
+        await sleep(1200);
+        const bubble = await pageA.evaluate(() => {
+          const b = document.querySelector('.call-bubble-pip');
+          const v = b && b.querySelector('video.call-bubble-video');
+          return b ? { visible: true, hasVideo: !!v, videoLive: v ? (v.srcObject?.getVideoTracks().length || 0) : 0 } : null;
+        });
+        if (bubble && bubble.visible) ok('aparece la burbuja flotante de la llamada');
+        else bad(`no aparece la burbuja -> ${JSON.stringify(bubble)}`);
+        if (bubble && bubble.hasVideo && bubble.videoLive > 0) ok('la burbuja muestra el vídeo remoto en vivo');
+        else bad(`la burbuja no muestra vídeo -> ${JSON.stringify(bubble)}`);
+
+        // El audio remoto debe seguir sonando con la llamada minimizada.
+        const bubbleAudio = await remoteAudio(pageA);
+        if (bubbleAudio && bubbleAudio.tracks > 0) ok('el audio sigue vivo con la llamada minimizada');
+        else bad(`el audio se perdió al minimizar -> ${JSON.stringify(bubbleAudio)}`);
+
+        // Tocar la burbuja devuelve a la pantalla completa.
+        const restored = await pageA.evaluate(() => {
+          const b = document.querySelector('.call-bubble-pip');
+          if (b) { b.click(); return true; }
+          return false;
+        });
+        await sleep(1000);
+        const backFull = await pageA.evaluate(() => !document.querySelector('.call-bubble-pip') && !!document.querySelector('.call-overlay'));
+        if (restored && backFull) ok('tocar la burbuja vuelve a la pantalla completa');
+        else bad('la burbuja no vuelve a pantalla completa');
       }
 
       // Colgar.

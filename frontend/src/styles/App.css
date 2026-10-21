@@ -2711,6 +2711,64 @@
   width: 100%;
 }
 
+/* Aviso para activar las notificaciones: una tarjeta flotante sobre el feed,
+   no un modal bloqueante. Se puede seguir usando la app sin atenderlo. */
+.notif-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 60;
+  width: min(92vw, 420px);
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: rgba(18, 12, 28, 0.96);
+  border: 1px solid var(--accent, #e6007a);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+}
+
+.notif-prompt-body {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.notif-prompt-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.notif-prompt-body strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.notif-prompt-body p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.notif-prompt-notice {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--accent-2, #00d9c0);
+  font-size: 0.8rem;
+}
+
+.notif-prompt-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.notif-prompt-actions .btn-primary {
+  flex: 1;
+}
+
 .settings-phone-link {
   margin-top: 0.75rem;
 }
