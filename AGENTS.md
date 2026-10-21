@@ -708,3 +708,37 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
   `333.3333333333333`—. Ahora viaja en `rankingBonus`, el ranker lo suma en
   `computeEngagement`, y `feedService` lo elimina antes de responder. Si añades
   otra señal de ranking, dale su propio campo y bórralo al salir del servicio.
+
+## Que una llamada se note (tono, burbuja y aviso)
+
+Una llamada que solo cambia de pantalla no sirve: si nadie mira, no se entera.
+Tres piezas, en `frontend/src/lib/ringtone.js`, `CallOverlay.jsx` y
+`NotificationPrompt.jsx`:
+
+- El tono se genera con Web Audio, sin ficheros de audio que descargar. Suena en
+  `incoming` (entrante) y `ringing` (saliente), y para en cualquier otro estado.
+  El efecto vive en `CallContext` y depende solo de `status`, así que colgar,
+  rechazar o contestar lo apaga sin casos especiales.
+- **El navegador bloquea el audio hasta el primer gesto.** Sin `unlockAudio()` en
+  el primer `pointerdown`/`keydown`, el timbre sonaría mudo justo cuando más
+  falta hace. El desbloqueo se engancha una sola vez y se quita solo.
+- `startRingtone` es idempotente y `stopRingtone` cancela sus temporizadores: dos
+  arranques no apilan dos tonos ni dejan un intervalo vivo. `isRinging()` y el
+  evento `taktak:ringtone` existen para observarlo desde las pruebas (Vite sirve
+  el módulo con sufijo de versión, así que un `import` desde el test obtendría
+  una segunda copia con estado propio: hay que escuchar el evento, no importar).
+- La **burbuja** (`minimized`) mantiene el `<audio>` remoto montado. Sin él, al
+  minimizar se desmontaría el elemento y una llamada de voz quedaría muda; el
+  efecto que engancha el stream depende de `minimized` justo por eso.
+- El **aviso de notificaciones** (`NotificationPrompt`) es una tarjeta flotante,
+  no un modal: se puede seguir usando la app sin atenderlo. El descarte se
+  recuerda por cuenta. En iOS sin la app en la pantalla de inicio no se muestra,
+  porque ahí el push no existe y el aviso solo confundiría.
+- Sin suscripción push no hay forma de despertar un dispositivo dormido; esa era
+  la causa real de que la app no estuviese "activa" para llamadas entrantes. El
+  aviso es la vía para conseguir esa suscripción sin pasar por Ajustes.
+
+Verificación: `npm run e2e:calls` (dos navegadores reales; tono entrante y
+saliente, parada al aceptar, audio remoto, burbuja con vídeo y audio vivos) y
+`npm run e2e:notifications` (el aviso aparece, explica que sonará con la app
+cerrada y desaparece con el permiso concedido).
