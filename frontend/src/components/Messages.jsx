@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import Dialer from './Dialer';
 
 function initials(person) {
   const name = person?.displayName || person?.username || '?';
@@ -393,7 +394,7 @@ function Thread({ conversationId, onBack, onCall }) {
   );
 }
 
-export default function Messages({ onCall, initialUser, onConsumeInitialUser }) {
+export default function Messages({ onCall, initialUser, onConsumeInitialUser, onOpenChat }) {
   const [conversations, setConversations] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [username, setUsername] = useState('');
@@ -402,6 +403,10 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser }) 
   const [online, setOnline] = useState({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // WhaTaka agrupa los dos modos: los chats y el marcador para llamar a un
+  // número. Van en la misma vista porque son la misma idea (hablar con alguien)
+  // y así el botón de llamada no obliga a salir de la app.
+  const [mode, setMode] = useState('chats');
   const { subscribe } = useSocket();
 
   function loadInbox() {
@@ -494,10 +499,45 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser }) 
     return name.toLowerCase().includes(query.trim().replace(/^@/, '').toLowerCase());
   });
 
+  // Abrir un chat desde el marcador tras resolver el número.
+  function openChatWith(user) {
+    api
+      .post('/messages/conversations', { userId: user.id || user._id })
+      .then(({ data }) => {
+        setMode('chats');
+        setOpenId(data.conversationId);
+        loadInbox();
+      })
+      .catch((err) => setError(err.message));
+  }
+
+  if (mode === 'dial') {
+    return (
+      <div className="messages">
+        <div className="messages-head">
+          <h2>📞 WhaTaka</h2>
+        </div>
+        <div className="whataka-tabs">
+          <button
+            type="button"
+            className="whataka-tab"
+            onClick={() => setMode('chats')}
+          >
+            💬 Chats
+          </button>
+          <button type="button" className="whataka-tab active" aria-current="page">
+            📞 Llamar
+          </button>
+        </div>
+        <Dialer onCall={onCall} onOpenChat={openChatWith} />
+      </div>
+    );
+  }
+
   return (
     <div className="messages">
       <div className="messages-head">
-        <h2>💬 Mensajes</h2>
+        <h2>💬 WhaTaka</h2>
         <button
           type="button"
           className="btn-primary btn-new-chat"
@@ -507,6 +547,16 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser }) 
           {showNew ? '✖' : '＋'}
         </button>
       </div>
+
+      <div className="whataka-tabs">
+        <button type="button" className="whataka-tab active" aria-current="page">
+          💬 Chats
+        </button>
+        <button type="button" className="whataka-tab" onClick={() => setMode('dial')}>
+          📞 Llamar
+        </button>
+      </div>
+
       <p className="muted">Habla en privado con quien quieras, sin anuncios ni ruido.</p>
 
       <input

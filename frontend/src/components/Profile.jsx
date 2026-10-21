@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function Profile() {
+export default function Profile({ onNavigate }) {
   const { user, setUser } = useAuth();
   const [videos, setVideos] = useState([]);
   const [form, setForm] = useState({ displayName: '', bio: '' });
@@ -61,7 +61,18 @@ export default function Profile() {
 
   return (
     <div className="profile">
-      <h2>@{user.username}</h2>
+      <div className="screen-head">
+        <h2>@{user.username}</h2>
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => onNavigate?.('settings')}
+          aria-label="Configuración"
+        >
+          ⚙️
+        </button>
+      </div>
 
       <div className="wallet-stats">
         <div className="stat-card">

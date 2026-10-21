@@ -490,4 +490,31 @@ Si vuelves a ver ese error, comprueba que el proxy sigue ahí.
 - Si ves el feed vacío tras un reinicio, es esto: la app está bien, se perdió la
   base. No busques el fallo en el código.
 - Recuperar el enlace sin perder nada: `bash scripts/dev-up.sh` (idempotente).
-  Para que se relance solo, el vigilante `scripts/dev-watch.sh`.
+  Para que se relance solo, el vigilante `scripts/dev-watch.sh`. Comprueba la
+  pila cada `WATCH_INTERVAL` segundos (15 por defecto) y relanza `dev-up.sh` si
+  el backend o el frontend no responden.
+
+## Navegación y pantallas
+
+- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene cinco pestañas —Inicio,
+  Squads, Subir, WhaTaka, Perfil— y **cada sección es su propia pantalla**. No
+  añadas pestañas nuevas a la barra: mete el acceso dentro del perfil, que es
+  donde TikTok esconde ajustes, verificación y salud de la cuenta.
+- La barra es `position: fixed`. El alto vive en la variable `--tabbar-h`
+  (`index.css`) y tanto `.app` como `.reels`/`.reel` lo descuentan para que el
+  feed no quede tapado. Si cambias el padding de `.tabbar`, actualiza
+  `--tabbar-h` o el último reel se cortará por abajo.
+- El feed es la única vista sin `padding` ni `max-width` (clase `app-feed`): el
+  reel ocupa toda la pantalla y la barra flota encima.
+- Las pantallas que cuelgan del perfil (Ajustes, Monedero, Verificación, Salud)
+  reciben `onBack` y pintan su cabecera con `.screen-head`. Respeta ese patrón:
+  sin botón de volver, el usuario queda atrapado (no hay historial de router).
+
+## Ranking del feed: `rankingBonus` no es un contador
+
+- La afinidad por etiquetas se suma al ranking como likes-equivalentes. Antes se
+  inyectaba sobre el campo `likes`, y como el bonus es `TAG_BONUS / weights.like`
+  (no entero), la API devolvía likes fraccionarios —el feed llegó a mostrar
+  `333.3333333333333`—. Ahora viaja en `rankingBonus`, el ranker lo suma en
+  `computeEngagement`, y `feedService` lo elimina antes de responder. Si añades
+  otra señal de ranking, dale su propio campo y bórralo al salir del servicio.

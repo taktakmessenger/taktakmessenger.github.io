@@ -24,6 +24,10 @@
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.85);
+
+  /* Alto de la barra inferior. El feed y los reels lo descuentan para no
+     quedar tapados por ella; si cambia el padding de `.tabbar`, cambia aquí. */
+  --tabbar-h: 64px;
 }
 
 * {

@@ -14,7 +14,7 @@ const STATUS_LABEL = {
   rejected: 'Rechazado',
 };
 
-export default function Verification() {
+export default function Verification({ onBack }) {
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -109,7 +109,14 @@ export default function Verification() {
 
   return (
     <div className="verification">
-      <h2>🛡️ Verificación</h2>
+      <div className="screen-head">
+        {onBack && (
+          <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+            ←
+          </button>
+        )}
+        <h2>🛡️ Verificación</h2>
+      </div>
       <p className="muted">
         La verificación de edad desbloquea el contenido para adultos y te permite publicarlo.
         Se comprueba con un documento de identidad a través de un proveedor externo.

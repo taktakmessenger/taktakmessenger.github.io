@@ -81,7 +81,9 @@ async function getForYouFeed(userId, { limit = 10, page = 1, excludeVideoIds = [
 
   const ranked = rerank(scored, { limit: safeLimit });
 
-  return ranked.slice(0, safeLimit);
+  // `rankingBonus` is an internal scoring crutch. Strip it before the videos
+  // leave the service so the API keeps exposing real engagement counts only.
+  return ranked.slice(0, safeLimit).map(({ rankingBonus, ...video }) => video);
 }
 
 // Tag overlap becomes an extra engagement-equivalent score. It is additive in
@@ -94,8 +96,10 @@ function withTagAffinity(video, preferredTags) {
 
   return {
     ...video,
-    // Folded into `likes` so the existing weights apply unchanged.
-    likes: (video.likes ?? 0) + (TAG_BONUS / env.feedWeights.like) * matches,
+    // Kept in its own field rather than folded into `likes`: the ranker reads
+    // it as an extra like-equivalent signal, but the API must keep reporting
+    // the real like count or the UI shows a fractional number.
+    rankingBonus: (TAG_BONUS / env.feedWeights.like) * matches,
   };
 }
 

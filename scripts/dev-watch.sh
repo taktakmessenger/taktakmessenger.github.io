@@ -11,7 +11,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INTERVAL="${WATCH_INTERVAL:-30}"
+INTERVAL="${WATCH_INTERVAL:-15}"
 BACKEND_URL="http://127.0.0.1:${BACKEND_PORT:-4000}/health"
 FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT:-12000}/"
 

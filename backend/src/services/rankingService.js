@@ -23,7 +23,10 @@ function computeEngagement(video, weights) {
   const signal = (count, weight) => weight * Math.log1p(Math.max(0, count || 0));
 
   return (
-    signal(video.likes, weights.like) +
+    // Tag affinity rides along as extra like-equivalents. It is additive in the
+    // same units as `likes`, so a strong topical match can outweigh a modest
+    // engagement gap without being able to override it entirely.
+    signal((video.likes || 0) + (video.rankingBonus || 0), weights.like) +
     signal(video.comments, weights.comment) +
     signal(video.shares, weights.share) +
     signal(video.gifts, weights.gift) +

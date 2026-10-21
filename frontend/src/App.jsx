@@ -15,6 +15,7 @@ import Verification from './components/Verification';
 import AuthForm from './components/AuthForm';
 import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
+import Settings from './components/Settings';
 import api from './api/client';
 import './styles/App.css';
 
@@ -129,7 +130,7 @@ function Shell() {
   }
 
   // Anything other than the feed needs a session.
-  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification'].includes(view);
+  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings'].includes(view);
 
   function renderView() {
     if (needsAuth && !user) return <AuthForm onDone={() => setView('feed')} />;
@@ -138,15 +139,17 @@ function Shell() {
       case 'upload':
         return <Upload onUploaded={() => setView('feed')} />;
       case 'wallet':
-        return <Wallet />;
+        return <Wallet onBack={() => setView('settings')} />;
       case 'profile':
-        return <Profile />;
+        return <Profile onNavigate={setView} />;
+      case 'settings':
+        return <Settings onBack={() => setView('profile')} onNavigate={setView} />;
       case 'squads':
         return <Squads />;
       case 'health':
-        return <AccountHealth />;
+        return <AccountHealth onBack={() => setView('settings')} />;
       case 'verification':
-        return <Verification />;
+        return <Verification onBack={() => setView('settings')} />;
       case 'messages':
         return (
           <Messages
@@ -173,9 +176,9 @@ function Shell() {
   }
 
   return (
-    <div className="app">
-      <Navigation currentView={view} setCurrentView={setView} />
+    <div className={`app ${view === 'feed' ? 'app-feed' : ''}`}>
       <main className="main-content">{renderView()}</main>
+      <Navigation currentView={view} setCurrentView={setView} />
 
       {giftTarget && user && (
         <GiftModal

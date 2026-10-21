@@ -1,9 +1,3 @@
-.app {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 1rem 3rem;
-}
-
 /* ------------------------------------------------------------------
    Navegación
    ------------------------------------------------------------------ */
@@ -624,7 +618,7 @@
    Feed vertical (estilo TikTok) con ajuste por tarjeta.
    ------------------------------------------------------------------ */
 .reels {
-  height: calc(100dvh - 96px);
+  height: calc(100dvh - var(--tabbar-h));
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   /* El desplazamiento es por tarjeta, no libre. */
@@ -638,7 +632,7 @@
 
 .reel {
   position: relative;
-  height: calc(100dvh - 96px);
+  height: calc(100dvh - var(--tabbar-h));
   scroll-snap-align: start;
   scroll-snap-stop: always;
   display: flex;
@@ -2031,3 +2025,483 @@
     max-height: 82vh;
   }
 }
+
+/* ------------------------------------------------------------------
+   WhaTaka — pestañas Chats / Llamar
+   ------------------------------------------------------------------ */
+.whataka-tabs {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+}
+
+.whataka-tab {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.whataka-tab.active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+  box-shadow: 0 6px 22px -8px var(--glow-pink);
+}
+
+/* ------------------------------------------------------------------
+   Marcador WhaTaka — el diseño del antiguo QuantumCall
+   ------------------------------------------------------------------ */
+.dialer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dialer-status {
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-height: 20px;
+}
+
+.dialer-country-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dialer-country-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  /* Sin selección de texto: al mantener pulsado un botón el móvil seleccionaría
+     el contenido y abriría su menú, que es lo que rompía la pulsación larga. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dialer-country-btn:active {
+  background: var(--surface-solid);
+}
+
+.dialer-flag {
+  font-size: 1.1rem;
+}
+
+.dialer-dial {
+  color: var(--accent);
+}
+
+.dialer-number {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.dialer-number::placeholder {
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0;
+}
+
+.dialer-picker {
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.dialer-picker-search {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  outline: none;
+}
+
+.dialer-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.dialer-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.dialer-picker-item:active {
+  background: var(--surface-2);
+}
+
+.dialer-picker-dial {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.dialer-no-result {
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.dialer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  max-width: 340px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.dialer-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: 0.7rem 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 800;
+  transition: background 0.12s ease, transform 0.12s ease;
+  /* Imprescindible para la pulsación larga: sin esto el móvil selecciona el
+     texto del botón, abre su menú contextual y cancela el gesto. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dialer-key:active {
+  background: var(--surface-2);
+  transform: scale(0.96);
+}
+
+.dialer-digit {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.dialer-sub {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.dialer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1rem;
+  padding: 0.4rem 0 0.6rem;
+}
+
+.dialer-backspace,
+.dialer-clear {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1.2rem;
+  display: grid;
+  place-items: center;
+}
+
+.dialer-backspace:disabled,
+.dialer-clear:disabled {
+  opacity: 0.4;
+}
+
+.dialer-call {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #04121b;
+  font-size: 1.6rem;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 26px -4px var(--glow-cyan);
+}
+
+.dialer-call:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.dialer-call:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.dialer-resolved {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.dialer-resolved strong {
+  color: var(--accent);
+}
+
+
+/* ------------------------------------------------------------------
+   Barra inferior estilo TikTok
+   La navegación va pegada al borde inferior y el contenido respira por
+   encima. En el feed la barra flota sobre el vídeo para que el reel
+   ocupe toda la pantalla.
+   ------------------------------------------------------------------ */
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1rem calc(84px + env(safe-area-inset-bottom, 0px));
+}
+
+.app-feed {
+  max-width: none;
+  padding: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-feed .main-content {
+  height: 100%;
+  padding: 0;
+}
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 0.15rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(10, 7, 20, 0.92);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(18px) saturate(160%);
+}
+
+.tabbar-btn {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 54px;
+  padding: 0.3rem 0.25rem;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  transition: color 0.15s ease, transform 0.15s ease;
+  /* Sin selección de texto: en el móvil una pulsación larga abre el menú
+     contextual y cancela el toque. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tabbar-btn:active {
+  transform: scale(0.94);
+}
+
+.tabbar-btn.active {
+  color: #fff;
+}
+
+.tabbar-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.tabbar-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* El botón central (Subir) va destacado como en TikTok. */
+.tabbar-btn.primary .tabbar-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 30px;
+  border-radius: 10px;
+  color: #04121b;
+  font-size: 1.15rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 0 20px -4px var(--glow-cyan);
+}
+
+.tabbar-btn.primary.active .tabbar-icon {
+  box-shadow: 0 0 26px -2px var(--glow-cyan);
+}
+
+/* ------------------------------------------------------------------
+   Pantallas con cabecera propia (Ajustes y las que cuelgan de ella)
+   ------------------------------------------------------------------ */
+.screen-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.screen-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.screen-head .btn-ghost {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.15rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+
+.settings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.settings-block h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.88rem;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row span {
+  color: var(--muted);
+}
+
+.settings-row strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.settings-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.75rem 0.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.settings-link:last-child {
+  border-bottom: none;
+}
+
+.settings-link:active {
+  color: var(--accent);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.settings-logout {
+  margin-top: 0.25rem;
+}
+

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 
-export default function Wallet() {
+export default function Wallet({ onBack }) {
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [monetization, setMonetization] = useState(null);
@@ -75,7 +75,14 @@ export default function Wallet() {
 
   return (
     <div className="wallet">
-      <h2>💰 Tu Wallet TAK TAK</h2>
+      <div className="screen-head">
+        {onBack && (
+          <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+            ←
+          </button>
+        )}
+        <h2>💰 Tu Wallet TAK TAK</h2>
+      </div>
 
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}

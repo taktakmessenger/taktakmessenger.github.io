@@ -5,7 +5,7 @@ const SEVERITY_ICON = { blocked: '⛔', limited: '⚠️', tip: '💡' };
 
 // Account Health: shows exactly what limits reach, and why. The point is that
 // nothing is hidden, unlike an opaque "shadowban".
-export default function AccountHealth() {
+export default function AccountHealth({ onBack }) {
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
 
@@ -21,7 +21,14 @@ export default function AccountHealth() {
 
   return (
     <div className="account-health">
-      <h2>🔍 Salud de la cuenta</h2>
+      <div className="screen-head">
+        {onBack && (
+          <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+            ←
+          </button>
+        )}
+        <h2>🔍 Salud de la cuenta</h2>
+      </div>
       <p className="muted">{report.policy}</p>
 
       <div className="wallet-stats">
