@@ -3,6 +3,7 @@ const db = require('./config/db');
 const env = require('./config/env');
 const { seedGifts } = require('./services/giftService');
 const { initLiveSockets } = require('./services/liveSockets');
+const sfu = require('./services/sfuService');
 
 async function main() {
   await db.connect();
@@ -22,8 +23,16 @@ async function main() {
   initLiveSockets(server);
   console.log('📡 Sockets en vivo activos');
 
+  // El SFU se arranca en segundo plano, sin bloquear el servidor: si tarda (o
+  // falla), la API ya está sirviendo y las salas de voz caen a malla hasta que
+  // esté listo. Bloquear aquí retrasaría el arranque por una función opcional.
+  sfu.ensureStarted().catch(() => {});
+
   const shutdown = async (signal) => {
     console.log(`\n${signal} recibido, cerrando...`);
+    // Cierra los workers del SFU (procesos hijos) antes de salir, para no
+    // dejarlos huérfanos ocupando los puertos de media.
+    await sfu.shutdown().catch(() => {});
     server.close(async () => {
       await db.disconnect();
       process.exit(0);

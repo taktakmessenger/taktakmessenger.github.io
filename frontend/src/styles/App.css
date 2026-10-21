@@ -1615,6 +1615,11 @@
   font-size: 0.75rem;
 }
 
+.voice-mode {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .voice-bar-peers {
   display: flex;
   gap: 0;

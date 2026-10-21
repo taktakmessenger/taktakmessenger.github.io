@@ -1,9 +1,13 @@
-// Regresión de la sala de voz de un TAK Creator con dos navegadores reales.
+// Regresión de la sala de voz de un TAK Creator con navegadores reales.
 //
-// Comprueba que dos miembros del mismo creator entran en la sala, negocian por
-// malla (offer → answer → ICE) y acaban con el audio del otro sonando de verdad.
-// Usa el micrófono falso de Chromium, así que la pista remota existe aunque no
-// haya hardware.
+// Comprueba que varios miembros del mismo creator entran en la sala, que el
+// servidor los pone de acuerdo en el transporte (SFU si está disponible, malla
+// si no) y que acaban oyéndose de verdad. Usa el micrófono falso de Chromium,
+// así que la pista remota existe aunque no haya hardware.
+//
+// Con SFU se prueban tres participantes: es el caso que la malla no cubre bien
+// y el motivo de haber montado el SFU. Si el servidor cae a malla, se prueban
+// dos y se deja constancia del modo.
 //
 // Requisitos: `puppeteer-core` instalado y Chromium del sistema.
 //
@@ -42,8 +46,16 @@ async function clickByText(page, text) {
   }, needle);
 }
 
-// Prueba de que el audio del otro lado llegó: una pista viva en el `srcObject`
-// del elemento oculto que pinta la barra de la sala.
+// El modo de transporte que el servidor eligió para la sala, leído de la barra.
+async function roomMode(page) {
+  return page.evaluate(() => {
+    const el = document.querySelector('.voice-mode');
+    if (!el) return null;
+    return el.textContent.includes('grupo') ? 'sfu' : 'mesh';
+  });
+}
+
+// Cuántos audios remotos vivos tiene la página.
 async function remoteVoiceAudio(page) {
   return page.evaluate(() => {
     const audios = [...document.querySelectorAll('.voice-audio audio')];
@@ -73,12 +85,14 @@ async function newCtx(browser, token, user) {
 (async () => {
   const aName = `ava${SUFFIX}`;
   const bName = `bva${SUFFIX}`;
+  const cName = `cva${SUFFIX}`;
   const a = (await api('/auth/register', { method: 'POST', body: { username: aName, email: `${aName}@e.com`, password: 'secret123' } })).data;
   const b = (await api('/auth/register', { method: 'POST', body: { username: bName, email: `${bName}@e.com`, password: 'secret123' } })).data;
-  if (!a?.token || !b?.token) { bad('no se pudieron crear las cuentas de prueba'); process.exit(1); }
+  const c = (await api('/auth/register', { method: 'POST', body: { username: cName, email: `${cName}@e.com`, password: 'secret123' } })).data;
+  if (!a?.token || !b?.token || !c?.token) { bad('no se pudieron crear las cuentas de prueba'); process.exit(1); }
   ok('cuentas de prueba creadas');
 
-  // Alice crea un creator público; Bob se une.
+  // Alice crea un creator público; Bob y Carol se unen.
   const created = await api('/squads', {
     method: 'POST',
     token: a.token,
@@ -88,7 +102,9 @@ async function newCtx(browser, token, user) {
   if (!slug) { bad(`no se pudo crear el creator -> ${JSON.stringify(created.data)}`); process.exit(1); }
   const joined = await api(`/squads/${slug}/join`, { method: 'POST', token: b.token, body: {} });
   if (joined.status !== 200) { bad(`Bob no se pudo unir -> ${joined.status}`); process.exit(1); }
-  ok('creator público creado y Bob se une');
+  const joinedC = await api(`/squads/${slug}/join`, { method: 'POST', token: c.token, body: {} });
+  if (joinedC.status !== 200) { bad(`Carol no se pudo unir -> ${joinedC.status}`); process.exit(1); }
+  ok('creator público creado y Bob y Carol se unen');
 
   const browser = await puppeteer.launch({
     executablePath: '/usr/bin/chromium',
@@ -100,6 +116,7 @@ async function newCtx(browser, token, user) {
 
   const pageA = await newCtx(browser, a.token, a.user);
   const pageB = await newCtx(browser, b.token, b.user);
+  const pageC = await newCtx(browser, c.token, c.user);
 
   // Abre el creator y despliega su feed para llegar a la sala de voz.
   async function openCreatorFeed(page, name) {
@@ -154,8 +171,25 @@ async function newCtx(browser, token, user) {
       bad('no aparece la barra de la sala de voz en Bob');
     }
 
-    // Margen para que la malla negocie (offer/answer/ICE) y lleguen las pistas.
-    await sleep(4000);
+    // El modo que el servidor eligió para la sala. Con SFU disponible debe ser
+    // el de grupo; si no, se acepta la malla y se avisa.
+    const mode = (await roomMode(pageA)) || (await roomMode(pageB));
+    if (mode === 'sfu') ok('el servidor montó la sala por SFU (grupo)');
+    else bad(`la sala cayó a malla (${mode}); se esperaba SFU en este entorno`);
+
+    // Con SFU se añade un tercero: es el caso que justifica el SFU, porque la
+    // malla obligaría a cada uno a subir dos flujos y a negociar tres enlaces.
+    if (mode === 'sfu') {
+      const openedC = await openCreatorFeed(pageC, `Sala ${SUFFIX}`);
+      if (openedC) ok('Carol abre el feed del creator'); else bad('Carol no encontró el creator');
+      await pageC.waitForSelector('.voice-room', { timeout: 10000 }).catch(() => {});
+      const joinedC = await clickByText(pageC, 'Entrar a la sala de voz');
+      if (joinedC) ok('Carol pulsa Entrar a la sala de voz'); else bad('Carol no ve el botón de entrar');
+      await pageC.waitForSelector('.voice-bar', { timeout: 12000 }).catch(() => {});
+    }
+
+    // Margen para que el SFU reparta los productores (o la malla negocie).
+    await sleep(5000);
 
     const ra = await remoteVoiceAudio(pageA);
     const rb = await remoteVoiceAudio(pageB);
@@ -163,6 +197,17 @@ async function newCtx(browser, token, user) {
     else bad(`Alice no tiene audio remoto -> ${JSON.stringify(ra)}`);
     if (rb.live > 0) ok(`Bob oye el audio de la sala (pistas=${rb.live}, ${rb.readyState})`);
     else bad(`Bob no tiene audio remoto -> ${JSON.stringify(rb)}`);
+
+    if (mode === 'sfu') {
+      // Carol entró la última: debe recibir los dos micrófonos que ya sonaban,
+      // y los otros dos deben recibir el suyo. Es la prueba de que el SFU
+      // reenvía a todos, no solo al primero.
+      const rc = await remoteVoiceAudio(pageC);
+      if (rc.live >= 2) ok(`Carol oye a los dos que ya estaban (pistas=${rc.live})`);
+      else bad(`Carol no oye a todos -> ${JSON.stringify(rc)}`);
+      if (ra.live >= 2 && rb.live >= 2) ok('Alice y Bob oyen al recién llegado');
+      else bad(`no todos oyen al recién llegado -> A=${ra.live}, B=${rb.live}`);
+    }
 
     // El audio debe sobrevivir a cambiar de pestaña: la barra vive fuera de las
     // vistas, así que el elemento no se desmonta. Es lo que permite hablar
@@ -196,9 +241,19 @@ async function newCtx(browser, token, user) {
     const goneA = await pageA.evaluate(() => !document.querySelector('.voice-bar'));
     if (goneA) ok('salir cierra la barra de la sala en Alice'); else bad('la barra sigue tras salir');
 
+    // Bob debe dejar de ver a Alice (Carol, si entró, sigue en la sala). El
+    // avatar lleva el nombre en el `title`, que es lo único que identifica a
+    // cada uno sin ambigüedad.
     let peerLeft = false;
     try {
-      await pageB.waitForFunction(() => !document.querySelector('.voice-avatar'), { timeout: 8000 });
+      await pageB.waitForFunction(
+        (name) =>
+          ![...document.querySelectorAll('.voice-avatar')].some((a) =>
+            (a.getAttribute('title') || '').toLowerCase().includes(name.toLowerCase())
+          ),
+        { timeout: 8000 },
+        aName
+      );
       peerLeft = true;
     } catch { /* se reporta abajo */ }
     if (peerLeft) ok('Bob ve que Alice ha salido'); else bad('Bob sigue viendo a Alice en la sala');

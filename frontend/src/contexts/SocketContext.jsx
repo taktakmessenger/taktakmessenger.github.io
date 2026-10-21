@@ -80,9 +80,29 @@ export function SocketProvider({ children }) {
     [socket]
   );
 
+  // Emitir y esperar respuesta. La señalización del SFU necesita el resultado
+  // para continuar (crear el transporte, publicar…): con un `await` el flujo
+  // queda lineal en lugar de encadenar eventos. El temporizador evita que un
+  // servidor que no contesta deje la promesa colgada para siempre.
+  const emitAck = useCallback(
+    (event, payload, timeoutMs = 8000) =>
+      new Promise((resolve, reject) => {
+        if (!socket) {
+          reject(new Error('Sin conexión'));
+          return;
+        }
+        const timer = setTimeout(() => reject(new Error('Tiempo de espera agotado')), timeoutMs);
+        socket.emit(event, payload, (response) => {
+          clearTimeout(timer);
+          resolve(response);
+        });
+      }),
+    [socket]
+  );
+
   const value = useMemo(
-    () => ({ socket, connected, emit, subscribe }),
-    [socket, connected, emit, subscribe]
+    () => ({ socket, connected, emit, emitAck, subscribe }),
+    [socket, connected, emit, emitAck, subscribe]
   );
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

@@ -279,6 +279,39 @@ const env = {
   // corporativas. Por eso el TURN no es opcional para un despliegue real.
   iceServers: resolveIceServers(),
 
+  // ------------------------------------------------------------------
+  // SFU (mediasoup) para las salas de voz de los TAK Creators
+  // ------------------------------------------------------------------
+  //
+  // La malla WebRTC (cada participante conectado con cada uno de los demás)
+  // sirve para grupos pequeños, pero el ancho de banda de subida crece con el
+  // número de personas: con 20 en una sala, cada móvil tendría que subir 19
+  // flujos. El SFU rompe esa relación: cada cliente sube UN flujo y el servidor
+  // lo reenvía a quien lo pida. Es lo que permite salas de cientos.
+  //
+  // Si mediasoup no está instalado (o el worker no se descargó), el servicio se
+  // desactiva solo y las salas siguen funcionando en malla. Degradar es mejor
+  // que romper: la sala pequeña sigue siendo útil.
+  sfuEnabled: process.env.SFU_ENABLED !== 'false',
+  // IP que el SFU anuncia a los navegadores para que le manden el media. En
+  // local vale 127.0.0.1; en producción TIENE que ser la IP pública (o la del
+  // balanceador), o los clientes no podrán conectarse. Es el error número uno
+  // al desplegar un SFU.
+  sfuAnnouncedAddress: process.env.SFU_ANNOUNCED_IP || '127.0.0.1',
+  // IP en la que el worker escucha. 0.0.0.0 para aceptar por cualquier
+  // interfaz.
+  sfuListenIp: process.env.SFU_LISTEN_IP || '0.0.0.0',
+  // Rango de puertos UDP/TCP que el SFU abre para el media. Hay que abrirlo en
+  // el cortafuegos del despliegue.
+  sfuRtcMinPort: Number(process.env.SFU_RTC_MIN_PORT ?? 40000),
+  sfuRtcMaxPort: Number(process.env.SFU_RTC_MAX_PORT ?? 40200),
+  // Número de workers. 0 = uno por CPU (hasta un tope). Cada worker es un
+  // proceso independiente, así que uno que se cae no tumba la app.
+  sfuWorkerCount: Number(process.env.SFU_WORKERS ?? 0),
+  // Tope de participantes por sala. 0 = sin tope. Existe para que una sala no
+  // pueda agotar los puertos del rango de arriba.
+  sfuMaxParticipants: Number(process.env.SFU_MAX_PARTICIPANTS ?? 0),
+
   // Web Push: notificaciones que despiertan la app aunque esté cerrada. Es lo
   // que hace que una llamada suene como en WhatsApp cuando el otro no tiene la
   // app abierta.

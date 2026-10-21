@@ -64,13 +64,22 @@ El `joinCode` nunca se devuelve al cliente.
 
 ### Sala de voz
 
-Cada creator tiene una sala de voz de grupo, dentro de la app. Es una malla
-WebRTC: cada miembro conecta con los demás y el audio viaja de par a par, sin
-pasar por el servidor. Se entra desde el contenido del creator y una barra
-flotante mantiene el audio mientras sigues navegando. Los eventos son
+Cada creator tiene una sala de voz de grupo, dentro de la app. El audio pasa por
+un SFU (mediasoup): cada miembro sube un solo flujo y el servidor lo reparte, así
+que la sala aguanta cientos de personas sin que el móvil de nadie tenga que subir
+un flujo por cada participante. Si el SFU no está disponible, la sala cae a malla
+WebRTC (audio de par a par) sin dejar de funcionar. Se entra desde el contenido
+del creator y una barra flotante mantiene el audio mientras sigues navegando, e
+indica el modo ("grupo" con SFU, "directo" en malla). Los eventos de malla son
 `voice:join`, `voice:offer`, `voice:answer`, `voice:ice`, `voice:mute` y
-`voice:leave`; la membresía se valida contra la base de datos, igual que el
-feed.
+`voice:leave`; el SFU añade `voice:create-transport`, `voice:connect-transport`,
+`voice:produce`, `voice:consume` y `voice:resume-consumer` (con acuse de recibo).
+La membresía se valida contra la base de datos, igual que el feed.
+
+El SFU se configura por entorno: `SFU_ANNOUNCED_IP` (la IP pública por la que los
+clientes alcanzan el servidor de media), `SFU_RTC_MIN_PORT`/`SFU_RTC_MAX_PORT`
+(el rango UDP/TCP a abrir en el cortafuegos), `SFU_WORKERS` y
+`SFU_MAX_PARTICIPANTS`.
 
 ## Requisitos
 
@@ -324,7 +333,7 @@ scripts/
   dev-watch.sh    vigilante: relanza la pila si se cae
   e2e-ui.js       recorrido de UI con navegador real
   e2e-calls.js    llamadas 1 a 1 (tono, audio y vídeo remotos)
-  e2e-voice-room.js  sala de voz de un creator con dos navegadores
+  e2e-voice-room.js  sala de voz de un creator (SFU, tres navegadores)
 ```
 
 ## Notas de seguridad

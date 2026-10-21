@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const messages = require('./messageService');
 const pushService = require('./pushService');
+const sfu = require('./sfuService');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Squad = require('../models/Squad');
@@ -42,6 +43,13 @@ function voiceRoom(roomName) {
 // salas se vacíen solas al desconectar el último socket.
 const voiceRooms = new Map();
 
+// Modo de transporte de cada sala: 'sfu' o 'mesh'. Es una propiedad de la SALA,
+// no de cada participante: si dos personas de la misma sala usaran modos
+// distintos, la de malla esperaría ofertas que nadie le manda y la de SFU
+// esperaría productores que no existen. El primero que entra decide; los demás
+// se adaptan. Se borra cuando la sala se vacía.
+const voiceRoomModes = new Map();
+
 function voiceMembers(room) {
   const members = voiceRooms.get(room);
   return members ? [...members.values()] : [];
@@ -54,7 +62,14 @@ function leaveVoiceRoom(io, socket, notify = true) {
   const room = socket.data.voiceRoom;
   if (!room) return null;
   socket.data.voiceRoom = null;
+  socket.data.voiceMode = null;
   socket.leave(voiceRoom(room));
+
+  // Libera los transportes y productores que este socket tuviera en el SFU. Sin
+  // esto, al desconectar quedarían consumiendo puertos hasta que muriera el
+  // worker. Se hace aquí y no en el handler de `disconnect` para que valga
+  // también al cambiar de sala o al salir a propósito.
+  sfu.removeParticipant(room, String(socket.data.user?.id || ''), socket.id).catch(() => {});
 
   const members = voiceRooms.get(room);
   if (members) {
@@ -70,7 +85,13 @@ function leaveVoiceRoom(io, socket, notify = true) {
         io.to(voiceRoom(room)).emit('voice:peer-left', { userId });
       }
     }
-    if (members.size === 0) voiceRooms.delete(room);
+    if (members.size === 0) {
+      voiceRooms.delete(room);
+      // Sin nadie dentro, el modo se olvida: la próxima vez que alguien entre se
+      // vuelve a decidir (y así una sala puede pasar de malla a SFU cuando el
+      // SFU esté disponible).
+      voiceRoomModes.delete(room);
+    }
   }
 
   if (notify) socket.emit('voice:left', { room });
@@ -491,7 +512,7 @@ function initLiveSockets(server) {
     // Entrar. La membresía se comprueba contra la base de datos, igual que el
     // endpoint REST del feed: el socket no puede ser una puerta trasera a la
     // sala de un creator privado.
-    socket.on('voice:join', async ({ slug } = {}) => {
+    socket.on('voice:join', async ({ slug, mesh } = {}) => {
       if (!me || typeof slug !== 'string' || !slug.trim()) return;
       try {
         const squad = await Squad.findOne({ slug: slug.trim().toLowerCase() });
@@ -507,6 +528,18 @@ function initLiveSockets(server) {
         if (socket.data.voiceRoom) leaveVoiceRoom(io, socket);
 
         const room = squad.voiceRoom;
+
+        // Aforo opcional. Se comprueba antes de tocar el SFU para no crear un
+        // router que luego se quedaría vacío. Si el SFU no está disponible no
+        // hay aforo que aplicar: en malla el límite real lo pone el cliente.
+        if (env.sfuMaxParticipants > 0 && sfu.isAvailable()) {
+          const already = sfu.getRoom(room)?.hasUser(me.id);
+          const current = sfu.participantCount(room);
+          if (!already && current >= env.sfuMaxParticipants) {
+            return socket.emit('voice:error', { error: 'La sala está llena' });
+          }
+        }
+
         socket.data.voiceRoom = room;
         socket.join(voiceRoom(room));
 
@@ -518,15 +551,50 @@ function initLiveSockets(server) {
         if (!voiceRooms.has(room)) voiceRooms.set(room, new Map());
         voiceRooms.get(room).set(String(me.id), { id: String(me.id), username: me.username });
 
+        // SFU o malla. El modo es de la SALA: el primero que entra decide y los
+        // demás se adaptan. Si cada uno eligiera por su cuenta, una sala mixta
+        // quedaría sorda —quien espera ofertas no las recibe y quien espera
+        // productores tampoco—. Se intenta SFU (es lo que permite salas grandes)
+        // y se cae a malla si no está disponible.
+        let mode = voiceRoomModes.get(room);
+        if (!mode) {
+          // `mesh` es una petición explícita del cliente (lo usa el e2e para
+          // probar las dos vías). Sin ella, se prefiere SFU.
+          mode = !mesh && sfu.isAvailable() ? 'sfu' : 'mesh';
+          voiceRoomModes.set(room, mode);
+        }
+
+        let routerRtpCapabilities = null;
+        let producers = [];
+        if (mode === 'sfu') {
+          const sfuRoom = await sfu.getOrCreateRoom(room);
+          if (sfuRoom) {
+            sfuRoom.addUser(me.id, socket.id);
+            routerRtpCapabilities = sfuRoom.router.rtpCapabilities;
+            // Los micrófonos ya vivos, para que el que entra se suscriba a ellos
+            // sin esperar a que los demás vuelvan a producir.
+            producers = sfu.listProducers(room);
+          } else {
+            // El SFU dijo que sí pero no pudo levantar la sala (worker caído).
+            // Se degrada la sala entera a malla en lugar de dejarla muda.
+            mode = 'mesh';
+            voiceRoomModes.set(room, mode);
+          }
+        }
+        socket.data.voiceMode = mode;
+
         socket.emit('voice:joined', {
           room,
           slug: squad.slug,
           name: squad.name,
+          mode,
+          routerRtpCapabilities,
+          producers,
           peers: existing,
         });
 
         // A los que ya estaban se les avisa del nuevo; ellos no llaman, esperan
-        // la oferta del que entra.
+        // la oferta del que entra (en malla) o su productor (en SFU).
         socket.to(voiceRoom(room)).emit('voice:peer-joined', {
           id: String(me.id),
           username: me.username,
@@ -541,6 +609,103 @@ function initLiveSockets(server) {
       leaveVoiceRoom(io, socket);
     });
 
+    // ------------------------------------------------------------------
+    // Señalización del SFU
+    // ------------------------------------------------------------------
+    //
+    // Solo tienen sentido si el socket entró en modo SFU. El resto de la
+    // comprobación (que sea de la misma sala) ya la hace el propio servicio: los
+    // transportes y productores se buscan por la sala del socket, así que un
+    // socket no puede tocar los de otra.
+    //
+    // Usan acuse de recibo (`ack`) en vez de un evento de respuesta: el cliente
+    // necesita el resultado para continuar (crear el transporte, publicar…) y
+    // con un `await` el código queda lineal en lugar de encadenar eventos.
+
+    socket.on('voice:create-transport', async ({ direction } = {}, ack) => {
+      if (!me || socket.data.voiceMode !== 'sfu' || !socket.data.voiceRoom) {
+        return ack?.({ ok: false, error: 'No estás en una sala de voz' });
+      }
+      try {
+        const room = sfu.getRoom(socket.data.voiceRoom);
+        if (!room) return ack?.({ ok: false, error: 'Sala no disponible' });
+        const params = await sfu.createWebRtcTransport(room, socket.id);
+        ack?.({ ok: true, direction: direction === 'recv' ? 'recv' : 'send', ...params });
+      } catch {
+        ack?.({ ok: false, error: 'No se pudo preparar el audio' });
+      }
+    });
+
+    socket.on('voice:connect-transport', async ({ transportId, dtlsParameters } = {}, ack) => {
+      if (!me || socket.data.voiceMode !== 'sfu' || !socket.data.voiceRoom) {
+        return ack?.({ ok: false, error: 'No estás en una sala de voz' });
+      }
+      try {
+        const room = sfu.getRoom(socket.data.voiceRoom);
+        if (!room) return ack?.({ ok: false, error: 'Sala no disponible' });
+        await sfu.connectTransport(room, transportId, dtlsParameters);
+        ack?.({ ok: true });
+      } catch {
+        ack?.({ ok: false, error: 'No se pudo conectar el audio' });
+      }
+    });
+
+    socket.on('voice:produce', async ({ transportId, kind, rtpParameters, appData } = {}, ack) => {
+      if (!me || socket.data.voiceMode !== 'sfu' || !socket.data.voiceRoom) {
+        return ack?.({ ok: false, error: 'No estás en una sala de voz' });
+      }
+      try {
+        const room = sfu.getRoom(socket.data.voiceRoom);
+        if (!room) return ack?.({ ok: false, error: 'Sala no disponible' });
+        const { id } = await sfu.produce(room, transportId, me.id, {
+          kind: kind === 'video' ? 'video' : 'audio',
+          rtpParameters,
+          appData,
+        });
+        ack?.({ ok: true, producerId: id });
+
+        // Avisa a los demás para que se suscriban a este micrófono. Se manda el
+        // userId para que el cliente sepa de quién es el audio antes de tenerlo.
+        socket.to(voiceRoom(socket.data.voiceRoom)).emit('voice:new-producer', {
+          producerId: id,
+          userId: String(me.id),
+          username: me.username,
+        });
+      } catch {
+        ack?.({ ok: false, error: 'No se pudo publicar tu micrófono' });
+      }
+    });
+
+    socket.on('voice:consume', async ({ transportId, producerId, rtpCapabilities } = {}, ack) => {
+      if (!me || socket.data.voiceMode !== 'sfu' || !socket.data.voiceRoom) {
+        return ack?.({ ok: false, error: 'No estás en una sala de voz' });
+      }
+      try {
+        const room = sfu.getRoom(socket.data.voiceRoom);
+        if (!room) return ack?.({ ok: false, error: 'Sala no disponible' });
+        const consumer = await sfu.consume(room, transportId, { producerId, rtpCapabilities });
+        ack?.({ ok: true, ...consumer });
+      } catch {
+        // Un productor que ya no existe (el otro salió justo ahora) no es un
+        // error que deba romper la sala: se ignora.
+        ack?.({ ok: false, error: 'Audio no disponible' });
+      }
+    });
+
+    socket.on('voice:resume-consumer', async ({ consumerId } = {}, ack) => {
+      if (!me || socket.data.voiceMode !== 'sfu' || !socket.data.voiceRoom) {
+        return ack?.({ ok: false, error: 'No estás en una sala de voz' });
+      }
+      try {
+        const room = sfu.getRoom(socket.data.voiceRoom);
+        if (room) await sfu.resumeConsumer(room, consumerId);
+        ack?.({ ok: true });
+      } catch {
+        // Ignorado: el consumidor pudo cerrarse entre medias.
+        ack?.({ ok: false, error: 'Audio no disponible' });
+      }
+    });
+
     // Micrófono silenciado. Es solo un aviso para pintar el icono en los demás;
     // quien corta el audio de verdad es la pista local.
     socket.on('voice:mute', ({ muted } = {}) => {
@@ -550,13 +715,15 @@ function initLiveSockets(server) {
         .emit('voice:peer-mute', { userId: String(me.id), muted: muted !== false });
     });
 
-    // Señalización entre pares de la sala. Igual que en las llamadas 1 a 1, el
-    // servidor reenvía el contenido tal cual, pero solo a alguien que esté en la
-    // misma sala: sin esa comprobación un socket podría inyectar SDP en la
-    // llamada de dos desconocidos.
+    // Señalización entre pares de la sala (solo malla). Igual que en las
+    // llamadas 1 a 1, el servidor reenvía el contenido tal cual, pero solo a
+    // alguien que esté en la misma sala: sin esa comprobación un socket podría
+    // inyectar SDP en la llamada de dos desconocidos. En SFU no se usa: el audio
+    // va por el servidor y aquí no hay nada que negociar entre pares.
     for (const event of ['voice:offer', 'voice:answer', 'voice:ice']) {
       socket.on(event, ({ to, ...rest } = {}) => {
         if (!me || typeof to !== 'string' || !socket.data.voiceRoom) return;
+        if (socket.data.voiceMode !== 'mesh') return;
         const room = socket.data.voiceRoom;
         const members = voiceRooms.get(room);
         if (!members || !members.has(String(to))) return;

@@ -24,21 +24,26 @@ const DEFAULT_ICE_SERVERS = [
 /**
  * Sala de voz de un TAK Creator.
  *
- * Es una malla WebRTC: cada participante abre una conexión con cada uno de los
- * demás, y el audio viaja de par a par, nunca por el servidor. El servidor solo
- * reparte la lista de quién está dentro y reenvía la señalización. Para el
- * tamaño de un creator y sus fans (unos pocos) es la opción más simple y con
- * menos latencia; una malla no escala a cientos, y eso es aceptable aquí.
+ * Hay dos formas de transportar el audio, y el servidor decide cuál se usa para
+ * cada sala (viaja en `voice:joined.mode`):
  *
- * El que entra es siempre quien ofrece: pide a cada uno de los que ya estaban y
- * ellos contestan. Un único sentido de negociación evita que dos ofertas
- * simultáneas se pisen.
+ * - `sfu`: el audio pasa por un servidor de reenvío (mediasoup). Cada persona
+ *   sube UN flujo y el servidor lo reparte. El coste de subida no crece con el
+ *   número de participantes, así que aguanta salas grandes.
+ * - `mesh`: cada participante abre una conexión con cada uno de los demás. El
+ *   audio va directo, sin servidor, con menos latencia, pero el coste de subida
+ *   crece con la sala. Es la reserva cuando el SFU no está disponible.
+ *
+ * El cliente no elige: se adapta a lo que diga el servidor, porque una sala
+ * mixta quedaría sorda (quien espera ofertas no las recibe y quien espera
+ * productores tampoco).
  */
 export function VoiceRoomProvider({ children }) {
   const { user } = useAuth();
-  const { emit, subscribe, connected } = useSocket();
+  const { emit, emitAck, subscribe, connected } = useSocket();
 
   const [room, setRoom] = useState(null); // { room, slug, name }
+  const [mode, setMode] = useState(null); // 'sfu' | 'mesh'
   const [peers, setPeers] = useState([]); // [{ id, username, muted }]
   const [muted, setMuted] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -48,11 +53,13 @@ export function VoiceRoomProvider({ children }) {
   const [streamTick, setStreamTick] = useState(0);
 
   const localStreamRef = useRef(null);
-  const pcsRef = useRef(new Map()); // peerId -> RTCPeerConnection
+  const pcsRef = useRef(new Map()); // peerId -> RTCPeerConnection (malla)
+  const sfuRef = useRef(null); // cliente SFU activo
   const remoteStreamsRef = useRef(new Map()); // peerId -> MediaStream
   const pendingCandidatesRef = useRef(new Map()); // peerId -> RTCIceCandidateInit[]
   const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
   const roomRef = useRef(null);
+  const modeRef = useRef(null);
   const mutedRef = useRef(false);
   const connectedRef = useRef(connected);
   connectedRef.current = connected;
@@ -87,20 +94,40 @@ export function VoiceRoomProvider({ children }) {
   const cleanup = useCallback(() => {
     for (const pc of pcsRef.current.values()) pc.close();
     pcsRef.current.clear();
+    sfuRef.current?.close();
+    sfuRef.current = null;
     remoteStreamsRef.current.clear();
     pendingCandidatesRef.current.clear();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     roomRef.current = null;
+    modeRef.current = null;
     setRoom(null);
+    setMode(null);
     setPeers([]);
     setMuted(false);
     mutedRef.current = false;
     setConnecting(false);
   }, []);
 
-  // Crea la conexión con un par y añade las pistas locales. El mismo camino
-  // sirve para quien ofrece y para quien contesta.
+  // Un audio remoto llegó. Se agrupa por participante: en SFU cada uno manda su
+  // propia pista, así que se crea un MediaStream por persona. Así la barra puede
+  // pintar un `<audio>` por participante igual que en malla.
+  const attachRemoteTrack = useCallback((track, peerId) => {
+    const key = String(peerId);
+    const existing = remoteStreamsRef.current.get(key);
+    if (existing) {
+      existing.addTrack(track);
+    } else {
+      remoteStreamsRef.current.set(key, new MediaStream([track]));
+    }
+    setStreamTick((n) => n + 1);
+  }, []);
+
+  // ------------------------------------------------------------------
+  // Malla: conexión directa con cada participante
+  // ------------------------------------------------------------------
+
   const createPeer = useCallback(
     (peerId) => {
       const existing = pcsRef.current.get(peerId);
@@ -155,8 +182,33 @@ export function VoiceRoomProvider({ children }) {
     [createPeer, emit, teardownPeer]
   );
 
+  // ------------------------------------------------------------------
+  // SFU: publicar el micrófono y suscribirse a los demás
+  // ------------------------------------------------------------------
+
+  const startSfu = useCallback(
+    async ({ routerRtpCapabilities, producers }) => {
+      // Importación dinámica: mediasoup-client pesa, y quien nunca entra a una
+      // sala de voz no debería descargarlo. Si el import falla, el error sube y
+      // el contexto lo muestra en lugar de fingir que se oye.
+      const { createSfuClient } = await import('../lib/sfuClient');
+      const client = await createSfuClient({
+        emitAck,
+        localStream: localStreamRef.current,
+        routerRtpCapabilities,
+        iceServers: iceServersRef.current,
+        userId: user?.id,
+        onRemoteTrack: attachRemoteTrack,
+      });
+      sfuRef.current = client;
+      // Los micrófonos que ya estaban sonando cuando entramos.
+      await client.consumeExisting(producers || []);
+    },
+    [emitAck, user, attachRemoteTrack]
+  );
+
   const join = useCallback(
-    async ({ slug, name } = {}) => {
+    async ({ slug, name, mesh = false } = {}) => {
       if (!slug) return;
       if (!connectedRef.current) {
         setError('Sin conexión: espera un momento y vuelve a intentarlo');
@@ -174,7 +226,7 @@ export function VoiceRoomProvider({ children }) {
         }
         localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
         roomRef.current = { slug, name };
-        emit('voice:join', { slug });
+        emit('voice:join', { slug, mesh });
       } catch {
         setError('No se pudo acceder al micrófono');
         cleanup();
@@ -202,19 +254,44 @@ export function VoiceRoomProvider({ children }) {
     if (!user) return undefined;
 
     const unsubs = [
-      subscribe('voice:joined', ({ room: roomName, slug, name, peers: existing = [] }) => {
-        setConnecting(false);
-        setRoom({ room: roomName, slug, name });
-        roomRef.current = { slug, name };
-        const others = existing
-          .filter((p) => String(p.id) !== String(user.id))
-          .map((p) => ({ id: String(p.id), username: p.username, muted: false }));
-        setPeers(others);
-        // Somos los que entramos: ofrecemos a cada uno de los presentes.
-        others.forEach((p) => offerTo(p.id));
-      }),
+      subscribe(
+        'voice:joined',
+        async ({
+          room: roomName,
+          slug,
+          name,
+          mode: roomMode,
+          routerRtpCapabilities,
+          producers = [],
+          peers: existing = [],
+        }) => {
+          setConnecting(false);
+          setRoom({ room: roomName, slug, name });
+          roomRef.current = { slug, name };
+          modeRef.current = roomMode;
+          setMode(roomMode);
 
-      // Alguien entra después que nosotros. No hacemos nada: él nos ofrecerá.
+          const others = existing
+            .filter((p) => String(p.id) !== String(user.id))
+            .map((p) => ({ id: String(p.id), username: p.username, muted: false }));
+          setPeers(others);
+
+          if (roomMode === 'sfu') {
+            try {
+              await startSfu({ routerRtpCapabilities, producers });
+            } catch {
+              // El SFU falló al montar el cliente (navegador sin soporte, worker
+              // caído). Se avisa en vez de fingir que se oye.
+              setError('No se pudo conectar el audio de la sala');
+            }
+          } else {
+            // En malla, quien entra ofrece a cada uno de los presentes.
+            others.forEach((p) => offerTo(p.id));
+          }
+        }
+      ),
+
+      // Alguien entra después que nosotros.
       subscribe('voice:peer-joined', ({ id, username }) => {
         if (!roomRef.current) return;
         if (String(id) === String(user.id)) return;
@@ -223,10 +300,20 @@ export function VoiceRoomProvider({ children }) {
             ? prev
             : [...prev, { id: String(id), username, muted: false }]
         );
+        // En malla no hacemos nada: él nos ofrecerá. En SFU tampoco: cuando
+        // publique su micrófono llegará `voice:new-producer`.
       }),
 
+      // En SFU, alguien acaba de publicar su micrófono: nos suscribimos.
+      subscribe('voice:new-producer', ({ producerId, userId: owner }) => {
+        if (modeRef.current !== 'sfu' || !roomRef.current) return;
+        if (String(owner) === String(user.id)) return;
+        sfuRef.current?.consume(producerId, String(owner)).catch(() => {});
+      }),
+
+      // --- Señalización de malla ---
       subscribe('voice:offer', async ({ from, sdp }) => {
-        if (!roomRef.current) return;
+        if (modeRef.current !== 'mesh' || !roomRef.current) return;
         try {
           const pc = createPeer(String(from));
           await pc.setRemoteDescription(new RTCSessionDescription(sdp));
@@ -298,7 +385,7 @@ export function VoiceRoomProvider({ children }) {
     ];
 
     return () => unsubs.forEach((unsub) => unsub());
-  }, [user, subscribe, emit, offerTo, createPeer, teardownPeer, cleanup]);
+  }, [user, subscribe, emit, startSfu, offerTo, createPeer, teardownPeer, cleanup]);
 
   // Al desmontar no debe quedar el micrófono abierto.
   useEffect(() => () => cleanup(), [cleanup]);
@@ -306,6 +393,7 @@ export function VoiceRoomProvider({ children }) {
   const value = useMemo(
     () => ({
       room,
+      mode,
       peers,
       muted,
       connecting,
@@ -318,7 +406,7 @@ export function VoiceRoomProvider({ children }) {
       remoteStreamsRef,
       localStreamRef,
     }),
-    [room, peers, muted, connecting, error, streamTick, join, leave, toggleMute]
+    [room, mode, peers, muted, connecting, error, streamTick, join, leave, toggleMute]
   );
 
   return <VoiceRoomContext.Provider value={value}>{children}</VoiceRoomContext.Provider>;
@@ -329,3 +417,4 @@ export function useVoiceRoom() {
   if (!ctx) throw new Error('useVoiceRoom debe usarse dentro de VoiceRoomProvider');
   return ctx;
 }
+

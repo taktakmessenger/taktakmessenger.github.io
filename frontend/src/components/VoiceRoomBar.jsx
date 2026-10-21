@@ -18,7 +18,7 @@ function PeerAudio({ peerId, stream }) {
  * poder seguir navegando mientras hablas (y para no perder el audio).
  */
 export default function VoiceRoomBar() {
-  const { room, peers, muted, streamTick, leave, toggleMute, remoteStreamsRef } = useVoiceRoom();
+  const { room, mode, peers, muted, streamTick, leave, toggleMute, remoteStreamsRef } = useVoiceRoom();
   const { user } = useAuth();
 
   if (!room) return null;
@@ -32,7 +32,14 @@ export default function VoiceRoomBar() {
         <span className="voice-bar-dot" aria-hidden="true" />
         <div className="voice-bar-text">
           <strong>🎙 {room.name}</strong>
-          <small>{speaking === 1 ? 'Estás solo en la sala' : `${speaking} en la sala`}</small>
+          <small>
+            {speaking === 1 ? 'Estás solo en la sala' : `${speaking} en la sala`}
+            {mode && (
+              <span className="voice-mode" title={mode === 'sfu' ? 'Audio reenviado por el servidor' : 'Audio directo entre participantes'}>
+                {' '}· {mode === 'sfu' ? 'grupo' : 'directo'}
+              </span>
+            )}
+          </small>
         </div>
         <div className="voice-bar-peers" aria-hidden="true">
           {others.map((p) => (

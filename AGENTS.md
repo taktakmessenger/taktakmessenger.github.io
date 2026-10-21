@@ -748,37 +748,58 @@ saliente, parada al aceptar, audio remoto, burbuja con vídeo y audio vivos) y
 `npm run e2e:notifications` (el aviso aparece, explica que sonará con la app
 cerrada y desaparece con el permiso concedido).
 
-## Sala de voz del creator (malla WebRTC)
+## Sala de voz del creator (SFU con mediasoup, reserva a malla)
 
 La sala de voz de un TAK Creator es audio en grupo. Está en
-`VoiceRoomContext.jsx`, `VoiceRoomBar.jsx` y la sección `voice:*` de
+`VoiceRoomContext.jsx`, `VoiceRoomBar.jsx`, `frontend/src/lib/sfuClient.js`,
+`backend/src/services/sfuService.js` y la sección `voice:*` de
 `backend/src/services/liveSockets.js`.
 
-- **Es una malla, no un mezclador.** Cada participante abre una
-  `RTCPeerConnection` con cada uno de los demás y el audio viaja de par a par; el
-  servidor no toca el audio. Para el tamaño de un creator y sus fans (unos pocos)
-  es lo más simple y con menos latencia. No escala a cientos: si algún día hacen
-  falta salas grandes, haría falta un SFU (mediasoup, LiveKit) y eso es otro
-  trabajo, no un ajuste.
-- **Un solo sentido de negociación.** Quien entra es siempre quien ofrece, a cada
-  uno de los que ya estaban (`voice:joined` trae la lista de `peers`). Los que ya
-  estaban esperan la oferta. Sin esta regla, dos ofertas simultáneas se pisan.
+- **Es un SFU, no una malla.** Cada participante sube UN flujo de audio y el
+  servidor (`mediasoup`) lo reenvía a quien lo pida. El coste de subida no crece
+  con el número de personas, así que aguanta salas de cientos. Una malla haría
+  que cada móvil subiera un flujo por cada uno de los demás (con 20 personas, 19
+  flujos), que es lo que no escala.
+- **El modo es de la sala, no del participante.** El primero que entra decide
+  (`sfu` si el servidor lo tiene disponible, `mesh` si no) y los demás se
+  adaptan; el modo viaja en `voice:joined.mode`. Si cada uno eligiera por su
+  cuenta, una sala mixta quedaría sorda: quien espera ofertas de malla no las
+  recibe y quien espera productores del SFU tampoco. La barra muestra el modo
+  ("grupo" o "directo").
+- **La malla sigue existiendo como reserva.** Si `mediasoup` no está instalado o
+  el worker no se descargó, `sfuService.isAvailable()` es `false` y la sala cae
+  a malla sin más. Degradar es mejor que romper. El cliente puede pedir malla
+  explícitamente (`voice:join { mesh: true }`), que es lo que usan los tests.
+- **Un solo sentido de negociación en malla.** Quien entra es siempre quien
+  ofrece, a cada uno de los que ya estaban (`voice:joined` trae `peers`). Los que
+  ya estaban esperan la oferta. Sin esta regla, dos ofertas simultáneas se pisan.
 - **La autorización va contra la base de datos**, igual que el feed REST: el
   handler `voice:join` busca el squad por `slug` y comprueba la membresía si es
   privado. El nombre de la sala sale de `squad.voiceRoom` (fijado en el servidor
-  al crear), nunca de un string del cliente, que podría apuntar a la sala de
-  otro. La señalización (`voice:offer`/`answer`/`ice`) solo se reenvía a alguien
-  de la misma sala.
+  al crear), nunca de un string del cliente. La señalización de malla
+  (`voice:offer`/`answer`/`ice`) solo se reenvía a alguien de la misma sala y
+  solo si la sala está en modo malla. Los eventos del SFU usan acuse de recibo y
+  operan sobre la sala del socket, así que un socket no puede tocar los
+  transportes de otra.
+- **El SFU se apaga solo cuando nadie está dentro**: al quedar vacía, la sala
+  cierra su router. Al desconectar, el socket libera sus transportes y
+  productores (`sfuService.removeParticipant`), o quedarían consumiendo puertos.
 - **La barra vive fuera de las vistas** (`App.jsx`, junto a `CallOverlay`). Si se
   desmontara al cambiar de pestaña, el `<audio>` remoto se iría con ella y la
-  sala quedaría muda; es el mismo motivo por el que la llamada minimizada no
-  pierde el audio. Por eso se puede seguir en el feed mientras hablas.
+  sala quedaría muda. Por eso se puede seguir en el feed mientras hablas.
 - Los elementos `<audio>` de los pares están ocultos (`.voice-audio`): solo
   existen para sonar, uno por participante.
 
-Verificación: `npm run e2e:voice-room` (dos navegadores reales; entran a la misma
-sala, negocian la malla, se oye el audio del otro, sobrevive al cambio de
-pestaña, el silencio se propaga y al salir el par desaparece) y
-`backend/test/voice-room.test.js` (autorización, señalización, aislamiento entre
-salas y limpieza al desconectar).
+Configuración del SFU (`backend/src/config/env.js`, todas por variable de
+entorno): `SFU_ENABLED`, `SFU_ANNOUNCED_IP` (en producción TIENE que ser la IP
+pública o los clientes no conectan), `SFU_LISTEN_IP`, `SFU_RTC_MIN_PORT` /
+`SFU_RTC_MAX_PORT` (hay que abrirlos en el cortafuegos), `SFU_WORKERS` y
+`SFU_MAX_PARTICIPANTS`.
+
+Verificación: `npm run e2e:voice-room` (navegadores reales; con SFU prueba tres
+participantes: entran a la misma sala, el servidor monta el SFU, todos oyen a
+todos, el audio sobrevive al cambio de pestaña, el silencio se propaga y al salir
+el par desaparece) y `backend/test/voice-room.test.js` (autorización, modo de la
+sala, señalización SFU con acuse de recibo, aislamiento entre salas y limpieza al
+desconectar).
 
