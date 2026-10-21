@@ -661,6 +661,28 @@ strings -n 4 archivo.mp4 | grep -oiE "hvc1|hev1|avc1|SoundHandler|mp4a"
 - Los `.webm` VP8 de los tests ya se reproducen; el problema es solo de los
   `.mp4` con HEVC.
 
+### Aviso de progreso al subir y botón "Reprocesar"
+
+La conversión a HLS corre después de responder al upload, así que antes el
+creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
+
+- **Al publicar** (`Upload.jsx`): no navega de inmediato. Muestra
+  `OptimizePanel` con "Optimizando tu vídeo…" y sondea `GET /videos/:id/status`
+  cada 3 s (máximo ~5 min) hasta `ready`, `failed` o `timeout`, con los botones
+  adecuados en cada caso (Ir al feed / Reintentar / Subir otro). El sondeo se
+  cancela al desmontar la pantalla.
+- **En el perfil** (`Profile.jsx`): cada vídeo propio muestra su estado
+  (`⏳ Optimizando…` / `⚠️ Sin optimizar`) y, si está en `failed` o no tiene
+  `hlsUrl`, un botón "🔄 Reprocesar" que llama a `POST /videos/:id/retranscode`.
+- **`GET /api/videos/:id/status`** es un endpoint ligero y sin efectos
+  secundarios: **no** incrementa el contador de vistas (a diferencia de
+  `GET /:id`), que es justo lo que permite sondearlo sin inflar las métricas.
+  El detalle de `transcodeError` solo se devuelve al dueño.
+- Clases nuevas de CSS: `.optimize-panel`, `.optimize-title`, `.optimize-actions`,
+  `.video-actions` en `App.css`.
+- Verificación con navegador real: `npm run e2e:upload` (sube un webm, comprueba
+  el aviso "Optimizando → ¡Listo!" y la visibilidad del botón Reprocesar).
+
 
 ## Navegación y pantallas
 

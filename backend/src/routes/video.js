@@ -382,6 +382,32 @@ router.get(
   })
 );
 
+// Estado del transcode, sin efectos secundarios. Existe aparte de GET /:id
+// porque ese endpoint incrementa el contador de vistas: sondearlo desde la
+// pantalla de subida inflaría las vistas del propio creador.
+router.get(
+  '/:id/status',
+  optionalAuth,
+  [param('id').isMongoId().withMessage('ID inválido')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findById(req.params.id).select(
+      'transcodeStatus transcodeError hlsUrl duration creator'
+    );
+    if (!video) throw new HttpError(404, 'Video no encontrado');
+
+    const isOwner = String(video.creator) === String(req.user?.userId);
+    res.json({
+      transcodeStatus: video.transcodeStatus,
+      hlsUrl: video.hlsUrl || null,
+      duration: video.duration ?? null,
+      // El detalle del fallo es para el creador; a un tercero no le dice nada
+      // útil y puede exponer rutas del servidor.
+      transcodeError: isOwner ? video.transcodeError || null : null,
+    });
+  })
+);
+
 // Retranscode: vuelve a lanzar el HLS de un video ya subido. Existe porque un
 // upload anterior a que hubiera ffmpeg (o un transcode que falló) deja el
 // fichero original tal cual, y ese original puede ser H.265/HEVC de iPhone, que

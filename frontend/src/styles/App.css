@@ -185,6 +185,26 @@
   font-size: 0.85rem;
 }
 
+/* Progreso de la conversión tras publicar (Upload.jsx → OptimizePanel) */
+.optimize-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.optimize-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.optimize-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 /* Auth: pestañas de proveedor, selector de país y código de 6 dígitos */
 .auth-tabs {
   display: flex;
@@ -478,6 +498,13 @@
 .moderation-item small {
   display: block;
   color: var(--muted);
+}
+
+.video-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ------------------------------------------------------------------

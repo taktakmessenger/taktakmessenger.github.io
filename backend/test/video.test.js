@@ -135,6 +135,49 @@ test('retranscode reports 503 when ffmpeg is unavailable', async () => {
   assert.match(res.body.error, /ffmpeg|conversión/i);
 });
 
+test('status endpoint reports transcode state without counting a view', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  const created = await createVideo(agent, user.token);
+  const id = created.body.video._id;
+
+  const res = await agent
+    .get(`/api/videos/${id}/status`)
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(res.status, 200);
+  assert.ok('transcodeStatus' in res.body);
+
+  // A `GET /:id` would have bumped the view counter; the status probe must not,
+  // or letting the creator watch their own upload would inflate its analytics.
+  const detail = await agent.get(`/api/videos/${id}`);
+  assert.equal(detail.body.video.views, 1);
+});
+
+test('status endpoint hides the failure detail from non-owners', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const other = await registerUser(agent);
+  const created = await createVideo(agent, owner.token);
+  const id = created.body.video._id;
+
+  const Video = require('../src/models/Video');
+  await Video.updateOne(
+    { _id: id },
+    { transcodeStatus: 'failed', transcodeError: 'ffmpeg explotó' }
+  );
+
+  const asOther = await agent
+    .get(`/api/videos/${id}/status`)
+    .set('Authorization', `Bearer ${other.token}`);
+  assert.equal(asOther.body.transcodeError, null);
+
+  const asOwner = await agent
+    .get(`/api/videos/${id}/status`)
+    .set('Authorization', `Bearer ${owner.token}`);
+  assert.equal(asOwner.body.transcodeStatus, 'failed');
+  assert.match(asOwner.body.transcodeError, /ffmpeg/);
+});
+
 test('follow is idempotent', async () => {
   const agent = app();
   const a = await registerUser(agent);

@@ -57,6 +57,58 @@ export default function Profile({ onNavigate }) {
     }
   }
 
+  // Un vídeo sin HLS es un original que el navegador puede no reproducir (por
+  // ejemplo, HEVC de iPhone). Reprocesar lanza la conversión otra vez y el vídeo
+  // aparece como "optimizando" hasta que termina.
+  function markProcessing(id) {
+    setVideos((prev) =>
+      prev.map((v) => (v._id === id ? { ...v, transcodeStatus: 'processing' } : v))
+    );
+  }
+
+  function watchVideo(id, tries = 0) {
+    if (tries >= 40) return;
+    setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/videos/${id}/status`);
+        if (data.transcodeStatus === 'processing') {
+          watchVideo(id, tries + 1);
+          return;
+        }
+        setVideos((prev) =>
+          prev.map((v) =>
+            v._id === id
+              ? { ...v, transcodeStatus: data.transcodeStatus, hlsUrl: data.hlsUrl }
+              : v
+          )
+        );
+        setNotice(
+          data.transcodeStatus === 'ready'
+            ? 'Vídeo optimizado. Ya se reproduce en todas partes.'
+            : 'No se pudo optimizar el vídeo.'
+        );
+      } catch {
+        // Silencioso: el usuario ya ve el estado en la lista.
+      }
+    }, 3000);
+  }
+
+  async function reprocessVideo(video) {
+    setError('');
+    setNotice('');
+    markProcessing(video._id);
+    try {
+      await api.post(`/videos/${video._id}/retranscode`);
+      setNotice(`Optimizando "${video.title}"…`);
+      watchVideo(video._id);
+    } catch (err) {
+      setError(err.message);
+      setVideos((prev) =>
+        prev.map((v) => (v._id === video._id ? { ...v, transcodeStatus: 'failed' } : v))
+      );
+    }
+  }
+
   if (!user) return null;
 
   return (
@@ -121,14 +173,31 @@ export default function Profile({ onNavigate }) {
             {videos.map((v) => (
               <li key={v._id}>
                 <span>{v.title}</span>
-                <small>👁 {v.views} · ❤️ {v.likes}</small>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={() => exportVideo(v)}
-                >
-                  ⬇️ Exportar limpio
-                </button>
+                <small>
+                  👁 {v.views} · ❤️ {v.likes}
+                  {v.transcodeStatus === 'processing' && ' · ⏳ Optimizando…'}
+                  {v.transcodeStatus === 'failed' && ' · ⚠️ Sin optimizar'}
+                </small>
+                <div className="video-actions">
+                  {(v.transcodeStatus === 'failed' || !v.hlsUrl) &&
+                    v.transcodeStatus !== 'processing' && (
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => reprocessVideo(v)}
+                        title="Convertir el vídeo para que se reproduzca en todos los navegadores"
+                      >
+                        🔄 Reprocesar
+                      </button>
+                    )}
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => exportVideo(v)}
+                  >
+                    ⬇️ Exportar limpio
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

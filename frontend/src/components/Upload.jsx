@@ -9,6 +9,11 @@ const FILTERS = [
   { id: 'cool', label: 'Frío' },
 ];
 
+// La conversión a HLS corre en segundo plano tras publicar. Estos son los
+// estados que puede devolver `/videos/:id/status`.
+const OPTIMIZE_POLL_MS = 3000;
+const OPTIMIZE_MAX_TRIES = 100; // ~5 minutos
+
 export default function Upload({ onUploaded }) {
   const videoRef = useRef(null);
   const recorderRef = useRef(null);
@@ -28,6 +33,9 @@ export default function Upload({ onUploaded }) {
   const [sources, setSources] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Tras publicar, se sigue el estado de la conversión hasta que termina.
+  const [optimizing, setOptimizing] = useState(null); // { id, status, error }
+  const pollRef = useRef(null);
 
   // Only verified newsrooms are offered, because claiming any other source
   // could never earn the badge.
@@ -45,6 +53,42 @@ export default function Upload({ onUploaded }) {
     },
     []
   );
+
+  // Un sondeo pendiente debe morir con la pantalla; si no, sigue consultando
+  // por un vídeo que ya no se está mirando.
+  useEffect(() => () => clearTimeout(pollRef.current), []);
+
+  // Sondea el estado hasta que el vídeo queda optimizado o falla. Se para en
+  // cuanto hay respuesta terminal, así que no se queda consultando en bucle.
+  function watchOptimization(id) {
+    let tries = 0;
+
+    async function tick() {
+      tries += 1;
+      try {
+        const { data } = await api.get(`/videos/${id}/status`);
+        if (data.transcodeStatus === 'ready') {
+          setOptimizing({ id, status: 'ready' });
+          return;
+        }
+        if (data.transcodeStatus === 'failed') {
+          setOptimizing({ id, status: 'failed', error: data.transcodeError });
+          return;
+        }
+      } catch {
+        // Un fallo de red puntual no debe cancelar el seguimiento: se reintenta
+        // en el siguiente tick.
+      }
+
+      if (tries >= OPTIMIZE_MAX_TRIES) {
+        setOptimizing({ id, status: 'timeout' });
+        return;
+      }
+      pollRef.current = setTimeout(tick, OPTIMIZE_POLL_MS);
+    }
+
+    pollRef.current = setTimeout(tick, OPTIMIZE_POLL_MS);
+  }
 
   async function startCamera() {
     setError('');
@@ -130,10 +174,14 @@ export default function Upload({ onUploaded }) {
         body.append('sourceUrl', sourceUrl);
       }
 
-      await api.post('/videos/upload', body, {
+      const { data } = await api.post('/videos/upload', body, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      onUploaded?.();
+      // No se navega todavía: se muestra "optimizando" y se sigue el estado. Si
+      // el navegador no puede reproducir el original (H.265 de iPhone), este es
+      // el momento en que se convierte en algo reproducible.
+      setOptimizing({ id: data.video._id, status: 'processing' });
+      watchOptimization(data.video._id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -145,6 +193,159 @@ export default function Upload({ onUploaded }) {
     <div className="upload-card">
       <h2>Crear contenido</h2>
 
+      {optimizing ? (
+        <OptimizePanel
+          state={optimizing}
+          onGoToFeed={() => onUploaded?.()}
+          onRetry={() => {
+            setOptimizing({ id: optimizing.id, status: 'processing' });
+            api
+              .post(`/videos/${optimizing.id}/retranscode`)
+              .then(() => watchOptimization(optimizing.id))
+              .catch((err) => setOptimizing({ id: optimizing.id, status: 'failed', error: err.message }));
+          }}
+          onNew={() => setOptimizing(null)}
+        />
+      ) : (
+        <UploadForm
+          mode={mode}
+          setMode={setMode}
+          file={file}
+          preview={preview}
+          cameraReady={cameraReady}
+          recording={recording}
+          filter={filter}
+          setFilter={setFilter}
+          form={form}
+          update={update}
+          isNSFW={isNSFW}
+          setIsNSFW={setIsNSFW}
+          sources={sources}
+          newsSource={newsSource}
+          setNewsSource={setNewsSource}
+          sourceUrl={sourceUrl}
+          setSourceUrl={setSourceUrl}
+          error={error}
+          busy={busy}
+          onPickFile={pickFile}
+          onStartCamera={startCamera}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
+          onSubmit={handleSubmit}
+          videoRef={videoRef}
+        />
+      )}
+    </div>
+  );
+}
+
+// Aviso de progreso tras publicar. La conversión a HLS decide si el vídeo se
+// podrá ver y oír en el navegador, así que el resultado se muestra aquí en vez
+// de dejar al creador con un vídeo que "no suena" y sin explicación.
+function OptimizePanel({ state, onGoToFeed, onRetry, onNew }) {
+  const { status, error } = state;
+
+  if (status === 'processing') {
+    return (
+      <div className="optimize-panel">
+        <p className="optimize-title">⏳ Optimizando tu vídeo…</p>
+        <p className="hint">
+          Lo estamos convirtiendo para que se vea y suene en todos los móviles y
+          navegadores. Puedes esperar aquí o ir al feed; el vídeo ya está publicado.
+        </p>
+        <button type="button" className="btn-ghost" onClick={onGoToFeed}>
+          Ir al feed
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'ready') {
+    return (
+      <div className="optimize-panel">
+        <p className="optimize-title">✅ ¡Listo!</p>
+        <p className="hint">Tu vídeo ya está optimizado y se reproduce en todas partes.</p>
+        <div className="optimize-actions">
+          <button type="button" className="btn-primary" onClick={onGoToFeed}>
+            Ver en el feed
+          </button>
+          <button type="button" className="btn-ghost" onClick={onNew}>
+            Subir otro
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'failed') {
+    return (
+      <div className="optimize-panel">
+        <p className="optimize-title">⚠️ No se pudo optimizar</p>
+        <p className="hint">
+          El vídeo se publicó, pero puede que no se vea en algunos navegadores.
+          {error ? ` Detalle: ${error}` : ''}
+        </p>
+        <div className="optimize-actions">
+          <button type="button" className="btn-primary" onClick={onRetry}>
+            🔄 Reintentar
+          </button>
+          <button type="button" className="btn-ghost" onClick={onGoToFeed}>
+            Ir al feed
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // timeout: el servidor sigue trabajando o se quedó atascado. No es un error
+  // definitivo, así que se ofrece reintentar y volver al feed.
+  return (
+    <div className="optimize-panel">
+      <p className="optimize-title">⏳ Sigue optimizándose</p>
+      <p className="hint">
+        Está tardando más de lo esperado. Puedes volver al feed: se actualizará solo.
+      </p>
+      <div className="optimize-actions">
+        <button type="button" className="btn-primary" onClick={onRetry}>
+          🔄 Reintentar
+        </button>
+        <button type="button" className="btn-ghost" onClick={onGoToFeed}>
+          Ir al feed
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UploadForm({
+  mode,
+  setMode,
+  file,
+  preview,
+  cameraReady,
+  recording,
+  filter,
+  setFilter,
+  form,
+  update,
+  isNSFW,
+  setIsNSFW,
+  sources,
+  newsSource,
+  setNewsSource,
+  sourceUrl,
+  setSourceUrl,
+  error,
+  busy,
+  onPickFile,
+  onStartCamera,
+  onStartRecording,
+  onStopRecording,
+  onSubmit,
+  videoRef,
+}) {
+  return (
+    <>
       <div className="mode-switch">
         <button
           type="button"
@@ -158,7 +359,7 @@ export default function Upload({ onUploaded }) {
           className={mode === 'camera' ? 'btn-primary' : 'btn-ghost'}
           onClick={() => {
             setMode('camera');
-            startCamera();
+            onStartCamera();
           }}
         >
           🎥 Grabar con cámara
@@ -191,13 +392,13 @@ export default function Upload({ onUploaded }) {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={startRecording}
+                onClick={onStartRecording}
                 disabled={!cameraReady}
               >
                 🔴 Grabar
               </button>
             ) : (
-              <button type="button" className="btn-danger" onClick={stopRecording}>
+              <button type="button" className="btn-danger" onClick={onStopRecording}>
                 ⏹️ Detener
               </button>
             )}
@@ -209,14 +410,14 @@ export default function Upload({ onUploaded }) {
       )}
 
       {mode === 'file' && (
-        <input type="file" accept="video/*" onChange={pickFile} />
+        <input type="file" accept="video/*" onChange={onPickFile} />
       )}
 
       {preview && (
         <video className="preview-video" src={preview} controls playsInline />
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={onSubmit}>
         <input
           type="text"
           placeholder="Título"
@@ -280,6 +481,6 @@ export default function Upload({ onUploaded }) {
           {busy ? 'Publicando…' : '🚀 Publicar'}
         </button>
       </form>
-    </div>
+    </>
   );
 }
