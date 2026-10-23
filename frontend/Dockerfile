@@ -19,7 +19,8 @@ COPY templates /etc/nginx/templates
 # Valores por defecto para Compose. En Render se sobrescriben con las variables
 # del servicio.
 ENV PORT=80 \
-    BACKEND_URL=backend:4000
+    BACKEND_URL=http://backend:4000 \
+    RESOLVER=127.0.0.11
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

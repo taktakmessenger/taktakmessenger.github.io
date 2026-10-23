@@ -8,6 +8,9 @@
 #
 # Variables marcadas con sync: false no se leen del repo: se rellenan en el
 # panel de Render (secrets) y no se sincronizan en cada despliegue.
+#
+# Plan gratuito: los servicios se duermen tras 15 minutos sin tráfico y tardan
+# cerca de un minuto en despertar. La primera visita del día siempre es lenta.
 
 services:
   # --- API ---
@@ -17,7 +20,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     region: oregon
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -50,8 +53,6 @@ services:
       # el modo malla es el único disponible.
       - key: SFU_ENABLED
         value: false
-      - key: PAYMENT_WEBHOOK_SECRET
-        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY
@@ -62,10 +63,6 @@ services:
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
-    disk:
-      name: uploads
-      mountPath: /app/uploads
-      sizeGB: 5
 
   # --- Frontend (nginx + build de Vite) ---
   - type: web
@@ -74,14 +71,19 @@ services:
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     region: oregon
-    plan: starter
+    plan: free
     envVars:
       - key: PORT
         value: 10000
-      # nginx recibe host:puerto sin esquema y le añade http:// en la plantilla.
-      # Se apunta al host privado de la API: el tráfico no sale a internet.
+      # nginx resuelve este nombre en cada petición, así que tiene que ser un
+      # nombre que el DNS público conozca. El host interno de Render solo lo
+      # resuelve su DNS privado, y aquí se usa el público (1.1.1.1), por eso se
+      # apunta a la URL pública de la API y no a su host privado.
       - key: BACKEND_URL
         fromService:
           name: taktak-api
           type: web
-          property: hostport
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: RESOLVER
+        value: 1.1.1.1
+

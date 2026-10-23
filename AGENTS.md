@@ -947,3 +947,50 @@ redirigirlo. Frontend: `frontend/test/stripe.test.js` sobre la lógica de
 `saveCardWithStripe`, que recibe el cliente de Stripe por parámetro para poder
 probarla sin descargar Stripe.js.
 
+
+## Despliegue (Docker y Render)
+
+Las imagenes de `backend/` y `frontend/` construyen y arrancan. Trampas que ya
+costaron tiempo, por si reaparecen al tocar los Dockerfiles:
+
+- La base del backend es Debian (`node:20-slim`), no Alpine. `mediasoup` no
+  publica binario para musl, asi que npm intentaba compilarlo desde fuente y el
+  build moria con `python: not found`.
+- Los `COPY` llevan `--chown=node:node`. El repo deja los fuentes en 660 y el
+  usuario `node` no podia leerlos (`EACCES` al abrir `src/index.js`).
+- `/app/uploads` se crea y se cede a `node` antes de bajar privilegios, o el
+  disco persistente no es escribible.
+
+nginx usa plantilla (`envsubst`) para que la misma imagen sirva en Compose y en
+Render. `PORT` es el puerto de escucha, `BACKEND_URL` la URL completa del
+backend y `RESOLVER` el DNS que resuelve ese nombre: `127.0.0.11` en Docker (el
+unico que conoce el nombre del servicio) y `1.1.1.1` en Render. El destino se
+guarda en una variable (`$backend_upstream`) para que nginx lo resuelva en cada
+peticion; con la forma directa lo resuelve al arrancar y, si la API aun no
+existe, el frontend no levanta. Al usar variable hay que declarar `resolver`, y
+si el DNS no conoce el nombre el proxy devuelve 502.
+
+Render se define en `render.yaml` (dos servicios, plan gratuito). La base de
+datos no esta ahi: la app usa transacciones y eso exige un replica set, asi que
+Mongo va en Atlas y su cadena se pasa en `MONGODB_URI`. En el plan gratuito no
+hay disco persistente, por eso no se declara: los videos subidos se pierden en
+cada despliegue. Con `SFU_ENABLED=false` (Render no da UDP) las llamadas usan el
+modo malla. El frontend apunta a la URL publica de la API porque su nginx
+resuelve con DNS publico.
+
+### GitHub Pages no puede ejecutar esta app
+
+`taktakmessenger.github.io` sirve la rama `gh-pages`, que es solo el build
+estatico. No hay servidor: las llamadas a `/api` no tienen a quien llegar, asi
+que la pantalla de entrada se queda parada. No es un fallo que se arregle ahi,
+es que Pages no ejecuta backend. La app necesita un servicio como el de Render.
+
+### Metodos de entrada
+
+`GET /api/auth/providers` decide que botones funcionan. Con todo apagado
+(`google:false`, `sms:false`, `email:false`) la pantalla de entrada sigue
+ofreciendo correo y telefono: el registro por correo funciona y el codigo de
+verificacion se imprime en consola (`MAIL:dev`) y se muestra en pantalla si no
+hay proveedor de SMS. Para activarlos: `GOOGLE_CLIENT_ID`, `SMS_PROVIDER=twilio`
+con `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`, y el correo
+con las variables SMTP.
