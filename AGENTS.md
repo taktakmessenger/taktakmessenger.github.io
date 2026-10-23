@@ -1053,3 +1053,25 @@ Pruebas: `backend/test/serve-frontend.test.js` levanta la app en un proceso hijo
 por caso, porque `config/env` lee `PUBLIC_DIR` al importarse. Usa archivos de
 verdad en disco: un doble de `express.static` no diria nada sobre cabeceras ni
 sobre el comodin, que es donde estaban los fallos.
+
+## AVISO: el repositorio remoto tiene dos versiones distintas de TAK TAK
+
+`main` en `taktakmessenger/taktakmessenger.github.io` y esta rama de trabajo **no
+comparten ni un commit**. Son dos proyectos separados, no dos ramas del mismo:
+
+- `main` (267 archivos): app React con `src/` y `server/`, Capacitor y Android,
+  Firebase, su propio `render.yaml`. Sin `backend/` ni `frontend/`.
+- Esta rama (186 archivos): `backend/` (Express, Socket.IO, Mongo, mediasoup) y
+  `frontend/` (Vite + React). Es la que sirve la web y la API en un solo proceso.
+
+Consecuencia practica: **no hacer `git push --force` a `main`**. Un push directo
+falla por historias no relacionadas, y forzarlo borra la otra app. Antes de
+tocar `main` hay que decidir cual de las dos es TAK TAK. Lo mismo con
+`git merge origin/main`: intentaria fusionar dos arboles de archivos sin
+relacion y saldria un desastre.
+
+El token de GitHub del entorno es de una GitHub App con permiso **solo de
+lectura** (`Resource not accessible by integration` en cualquier escritura, y
+403 al hacer push). La API miente en `permissions` y reporta `admin: true`; el
+permiso real de la instalacion manda. Para desbloquearlo hay que dar a la App
+`Contents: Read and write`, o usar un token con permiso `repo`.

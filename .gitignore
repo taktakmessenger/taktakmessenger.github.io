@@ -40,3 +40,6 @@ backend/uploads/
 taktak-*.patch
 taktak-*.stat.txt
 INFORME-SEGURIDAD-TAKTAK.md
+
+# Parche regenerable con git format-patch.
+CAMBIOS-TAKTAK.patch
