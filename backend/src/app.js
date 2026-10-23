@@ -5,6 +5,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const env = require('./config/env');
+const db = require('./config/db');
 const serveFrontend = require('./middleware/serveFrontend');
 
 const authRoutes = require('./routes/auth');
@@ -67,9 +68,13 @@ function createApp() {
   }
 
   app.get('/health', (req, res) => {
+    // El proceso está en pie (por eso responde 200), pero el estado de la base
+    // de datos se informa aparte: así un despliegue puede distinguir "la API no
+    // arrancó" de "la API está bien pero aún no encuentra Mongo".
     res.json({
       status: 'OK',
       service: 'TAK TAK API',
+      db: db.isConnected() ? 'connected' : 'disconnected',
       timestamp: new Date().toISOString(),
     });
   });

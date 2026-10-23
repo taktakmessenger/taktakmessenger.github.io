@@ -6,15 +6,13 @@ const { initLiveSockets } = require('./services/liveSockets');
 const sfu = require('./services/sfuService');
 
 async function main() {
-  await db.connect();
-  console.log('✅ Conectado a MongoDB');
-
-  // The gift catalogue is required for server-side pricing; without it every
-  // gift sent by name would be rejected.
-  const seeded = await seedGifts();
-  if (seeded > 0) console.log(`🎁 Catálogo de regalos: ${seeded} nuevos`);
-
   const app = createApp();
+
+  // El puerto se abre antes de tener base de datos, a propósito. El health check
+  // del despliegue mide que el proceso esté en pie, y Mongo puede ser un servicio
+  // externo que todavía no acepta conexiones. Conectar primero y morir si falla
+  // dejaba el despliegue caído en bucle y sin puerto que comprobar; así la API
+  // arranca, responde y se conecta sola en cuanto el servidor aparezca.
   const server = app.listen(env.port, () => {
     console.log(`🚀 TAK TAK API corriendo en puerto ${env.port}`);
   });
@@ -22,6 +20,23 @@ async function main() {
   // Live chat/gift transport. Uses the same HTTP server and port.
   initLiveSockets(server);
   console.log('📡 Sockets en vivo activos');
+
+  db.connectWithRetry({
+    onError: (error, attempt) =>
+      console.warn(
+        `[db] sin conexión (intento ${attempt}): ${error.message}. Reintento en 5 s`
+      ),
+  })
+    .then(async (connected) => {
+      if (!connected) return;
+      console.log('✅ Conectado a MongoDB');
+
+      // The gift catalogue is required for server-side pricing; without it every
+      // gift sent by name would be rejected.
+      const seeded = await seedGifts();
+      if (seeded > 0) console.log(`🎁 Catálogo de regalos: ${seeded} nuevos`);
+    })
+    .catch((err) => console.error('[db] fallo al preparar la base de datos:', err.message));
 
   // El SFU se arranca en segundo plano, sin bloquear el servidor: si tarda (o
   // falla), la API ya está sirviendo y las salas de voz caen a malla hasta que

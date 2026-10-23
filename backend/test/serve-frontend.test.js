@@ -169,3 +169,28 @@ test('un PUBLIC_DIR sin index.html no tumba la API', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('/health informa del estado de la base de datos sin bloquear la respuesta', async () => {
+  // El proceso de prueba arranca sin Mongo. Antes, la API conectaba primero y
+  // moría si fallaba: el puerto no se abría y el health check del despliegue
+  // fallaba en bucle. Ahora la API responde igual y el estado de la base va en su
+  // propio campo, para poder distinguir "no arrancó" de "arrancó sin Mongo".
+  const dir = buildPublicDir();
+  try {
+    await withServer(dir, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/health`);
+      assert.equal(res.status, 200, 'debe responder aunque no haya base de datos');
+
+      const body = await res.json();
+      assert.equal(body.status, 'OK');
+      assert.equal(body.service, 'TAK TAK API');
+      assert.equal(
+        body.db,
+        'disconnected',
+        'sin Mongo conectado debe informar disconnected'
+      );
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
