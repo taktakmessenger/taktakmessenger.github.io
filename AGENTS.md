@@ -1075,3 +1075,48 @@ lectura** (`Resource not accessible by integration` en cualquier escritura, y
 403 al hacer push). La API miente en `permissions` y reporta `admin: true`; el
 permiso real de la instalacion manda. Para desbloquearlo hay que dar a la App
 `Contents: Read and write`, o usar un token con permiso `repo`.
+
+## La economia de monedas: por que un regalo con bono NO da diamantes
+
+Hay tres saldos y confundirlos lleva a "arreglar" lo que ya esta bien:
+
+- `ttcC` (coins): monedas **pagadas** con dinero real.
+- `bonusC` (bonusCoins): monedas de regalo (bienvenida, promos). Se gastan en
+  regalos, pero **nunca** se convierten en dinero.
+- `ttcR` (diamonds): diamantes **retirables**. Solo nacen de monedas pagadas.
+
+Un regalo paga primero `ttcC` y luego `bonusC`. Si se paga con `bonusC`, el
+creador recibe `bonusC` (monedas de bono), **no** diamantes. Es deliberado: sin
+ese corte, N cuentas gratis se regalan entre si y retiran dinero que la
+plataforma nunca recibio. Cualquier prueba que espere diamantes de un regalo con
+el bono de bienvenida esta midiendo la economia vieja.
+
+Para probar el 60/40 de verdad hace falta saldo pagado. En local, la via sin
+pasarela es `POST /api/admin/users/:id/credit` con `{"amount":1000,"bucket":"ttcC"}`
+y un token de admin. Comprobado: regalo de 300 pagado -> creador recibe 180
+diamantes (60% exacto).
+
+## Los limitadores de peticiones son la causa de "fallos" fantasma
+
+`authLimiter` permite **20 intentos cada 15 minutos** por IP, y hay un limite
+base de 300 req/min en `/api`. Al ejecutar `scripts/smoke-api.sh` varias veces
+seguidas, las llamadas empiezan a devolver 401 "Token de autenticacion
+requerido" y parece que el login o la mensajeria se han roto. No se han roto:
+es el limitador. Se arregla reiniciando el backend (el contador vive en memoria)
+y ejecutando el smoke **una sola vez**.
+
+## smoke-api.sh necesita SMOKE_ADMIN_TOKEN para probar el dinero
+
+El reparto 60/40 requiere monedas pagadas, que en local solo concede un admin.
+Sin el token, esa seccion se omite con un aviso en vez de fallar. Para
+ejecutarla entera:
+
+```bash
+ADM=$(curl -s -X POST http://127.0.0.1:4000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"<admin>@example.com","password":"<clave>"}' | \
+  python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+SMOKE_ADMIN_TOKEN="$ADM" bash scripts/smoke-api.sh
+```
+
+Ultima ejecucion: **51/51 en verde** (backend 308/308, frontend 48/48).

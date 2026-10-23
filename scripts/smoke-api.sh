@@ -35,7 +35,7 @@ A=$(curl -s -X POST "$API/auth/register" -H 'Content-Type: application/json' \
 TA=$(echo "$A" | jget "['token']")
 IDA=$(echo "$A" | jget "['user']['id']")
 [ -n "$TA" ] && ok "registro devuelve token" || bad "registro sin token: $A"
-check "registro da saldo inicial de 100 monedas" "$(curl -s "$API/wallet" -H "Authorization: Bearer $TA")" "d['coins']==100"
+check "registro da 100 monedas de bienvenida" "$(curl -s "$API/wallet" -H "Authorization: Bearer $TA")" "d['bonusCoins']==100"
 
 B=$(curl -s -X POST "$API/auth/register" -H 'Content-Type: application/json' \
   -d "{\"username\":\"bruno_$SUFFIX\",\"email\":\"bruno_$SUFFIX@example.com\",\"password\":\"secret123\"}")
@@ -113,9 +113,9 @@ check "editar perfil" "$(curl -s -X PATCH "$API/users/me" -H "Authorization: Bea
 
 # --- Wallet -----------------------------------------------------------------
 say "Wallet: saldos, regalo y retiro"
-check "wallet muestra saldos" "$(curl -s "$API/wallet" -H "Authorization: Bearer $TB")" "'coins' in d and 'diamonds' in d"
-# Bruno envía una rosa (300 monedas) a Ana: supera las 100 iniciales, así que
-# primero comprobamos que el rechazo por saldo insuficiente es correcto.
+check "wallet muestra saldos" "$(curl -s "$API/wallet" -H "Authorization: Bearer $TB")" "'coins' in d and 'bonusCoins' in d and 'diamonds' in d"
+# Bruno intenta una rosa de 300 con sus 100 monedas de bienvenida: primero se
+# comprueba que el rechazo por saldo insuficiente es correcto.
 GIFT=$(curl -s -X POST "$API/wallet/gift" -H "Authorization: Bearer $TB" -H 'Content-Type: application/json' \
   -d "{\"recipientId\":\"$IDA\",\"giftName\":\"Rosa\",\"giftCost\":300}")
 check "regalo sin saldo se rechaza con claridad" "$GIFT" "'insuficiente' in d.get('error','').lower() or d.get('error')"
@@ -123,7 +123,11 @@ check "regalo sin saldo se rechaza con claridad" "$GIFT" "'insuficiente' in d.ge
 GOK=$(curl -s -X POST "$API/wallet/gift" -H "Authorization: Bearer $TB" -H 'Content-Type: application/json' \
   -d "{\"recipientId\":\"$IDA\",\"giftName\":\"Rosa\",\"giftCost\":50}")
 check "regalo pagable se acepta" "$GOK" "d.get('transaction',{}).get('amount')==50"
-check "Ana recibe diamantes (60%)" "$(curl -s "$API/wallet" -H "Authorization: Bearer $TA")" "d['diamonds']>=30"
+# El regalo lo paga Bruno con monedas de bienvenida, que no son retirables: Ana
+# recibe monedas de bono, NO diamantes. Es la salvaguarda que impide blanquear
+# dinero regalando monedas gratis entre cuentas propias.
+check "el regalo con monedas de bono no genera diamantes retirables" \
+  "$(curl -s "$API/wallet" -H "Authorization: Bearer $TA")" "d['diamonds']==0 and d['bonusCoins']>=130"
 TXS=$(curl -s "$API/wallet/transactions" -H "Authorization: Bearer $TB")
 check "historial de transacciones del emisor" "$TXS" "isinstance(d, list) and len(d)>=1"
 
@@ -131,11 +135,32 @@ say "Wallet: monetización abierta"
 MON=$(curl -s "$API/wallet/monetization" -H "Authorization: Bearer $TA")
 check "monetización abierta sin requisitos" "$MON" "d['eligible'] is True and d['requirements']['minFollowers']==0"
 
-say "Wallet: retiro"
-# Ana tiene diamantes del regalo; retira una parte.
-W1=$(curl -s -X POST "$API/wallet/withdraw" -H "Authorization: Bearer $TA" -H 'Content-Type: application/json' \
-  -d '{"amount":10,"method":"paypal","details":"ana@example.com"}')
-check "retiro dentro del saldo se acepta" "$W1" "'amount' in d or 'message' in d"
+say "Wallet: reparto 60/40 con monedas pagadas"
+# Las monedas de bienvenida no producen diamantes, así que para probar el
+# reparto real hace falta el camino de las monedas pagadas. Se concede saldo
+# pagado por la vía de admin (no hay pasarela en las pruebas) y se comprueba
+# que el creador recibe exactamente el 60% en diamantes retirables.
+ADM="${SMOKE_ADMIN_TOKEN:-}"
+if [ -n "$ADM" ]; then
+  IDC=$(curl -s "$API/auth/register" -X POST -H 'Content-Type: application/json' \
+    -d "{\"username\":\"creadora_$SUFFIX\",\"email\":\"creadora_$SUFFIX@example.com\",\"password\":\"secret123\"}" | jget "['user']['id']")
+  TC=$(curl -s -X POST "$API/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"email\":\"creadora_$SUFFIX@example.com\",\"password\":\"secret123\"}" | jget "['token']")
+  curl -s -o /dev/null -X POST "$API/admin/users/$IDB/credit" -H "Authorization: Bearer $ADM" \
+    -H 'Content-Type: application/json' -d '{"amount":1000,"bucket":"ttcC"}'
+  PG=$(curl -s -X POST "$API/wallet/gift" -H "Authorization: Bearer $TB" -H 'Content-Type: application/json' \
+    -d "{\"recipientId\":\"$IDC\",\"giftName\":\"Rosa\",\"giftCost\":300}")
+  check "regalo pagado se acepta" "$PG" "d.get('transaction',{}).get('amount')==300"
+  check "el creador recibe el 60% en diamantes retirables (300 -> 180)" \
+    "$(curl -s "$API/wallet" -H "Authorization: Bearer $TC")" "d['diamonds']==180"
+  W1=$(curl -s -X POST "$API/wallet/withdraw" -H "Authorization: Bearer $TC" -H 'Content-Type: application/json' \
+    -d '{"amount":100,"method":"paypal","details":"carla@example.com"}')
+  check "retiro dentro del saldo se acepta" "$W1" "'amount' in d or 'message' in d"
+  check "el retiro descuenta del saldo" "$(curl -s "$API/wallet" -H "Authorization: Bearer $TC")" "d['diamonds']==80"
+else
+  printf '\033[1;33m  ⚠ reparto 60/40 omitido: exporta SMOKE_ADMIN_TOKEN para probarlo\033[0m\n'
+fi
+
 W2=$(curl -s -X POST "$API/wallet/withdraw" -H "Authorization: Bearer $TA" -H 'Content-Type: application/json' \
   -d '{"amount":99999,"method":"paypal"}')
 check "retiro por encima del saldo se rechaza" "$W2" "d.get('error')"
