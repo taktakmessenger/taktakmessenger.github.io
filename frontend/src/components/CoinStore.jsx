@@ -11,12 +11,15 @@ import api from '../api/client';
 // configurada. Ofrecer "Pagar con tarjeta" sin claves sería mandar al usuario a
 // una pantalla de pago que no existe.
 
-export default function CoinStore({ onBack, onPurchased }) {
+export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
   const [packages, setPackages] = useState([]);
   const [providers, setProviders] = useState({ stripe: false, paypal: false });
+  // Métodos guardados: si hay alguno, se ofrece pagar en un toque con él.
+  const [methods, setMethods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -26,6 +29,15 @@ export default function CoinStore({ onBack, onPurchased }) {
       ]);
       setPackages(pkgRes.data.packages);
       setProviders(configRes.data.providers);
+
+      // La lista de métodos exige sesión. Si falla (visitante sin cuenta), la
+      // tienda sigue funcionando: simplemente no hay pago rápido.
+      try {
+        const methodsRes = await api.get('/payments/methods');
+        setMethods(methodsRes.data.methods);
+      } catch {
+        setMethods([]);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -39,6 +51,7 @@ export default function CoinStore({ onBack, onPurchased }) {
 
   async function buy(provider, packageId) {
     setError('');
+    setNotice('');
     setBusy(`${provider}:${packageId}`);
     try {
       const { data } = await api.post('/payments/checkout', { provider, packageId });
@@ -47,6 +60,30 @@ export default function CoinStore({ onBack, onPurchased }) {
       window.location.href = data.url;
     } catch (err) {
       setError(err.message);
+      setBusy('');
+    }
+  }
+
+  /**
+   * Paga con un método guardado.
+   *
+   * No lleva a ninguna parte: el cobro se hace contra la tarjeta o la cuenta ya
+   * registrada. Las monedas no se acreditan aquí, sino cuando la pasarela
+   * confirma el cobro, así que se avisa de que pueden tardar unos segundos.
+   */
+  async function payWithMethod(methodId, packageId) {
+    setError('');
+    setNotice('');
+    setBusy(`saved:${methodId}:${packageId}`);
+    try {
+      await api.post(`/payments/methods/${methodId}/pay`, { packageId });
+      setNotice(
+        'Pago enviado con tu método guardado. Las monedas aparecerán en tu monedero en unos segundos.'
+      );
+      onPurchased?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setBusy('');
     }
   }
@@ -65,6 +102,7 @@ export default function CoinStore({ onBack, onPurchased }) {
       </div>
 
       {error && <p className="error" role="alert">{error}</p>}
+      {notice && <p className="notice" role="status">{notice}</p>}
 
       <p className="store-hint">
         Las monedas sirven para enviar regalos. El creador recibe el 60% en
@@ -99,6 +137,22 @@ export default function CoinStore({ onBack, onPurchased }) {
               </div>
 
               <div className="package-actions">
+                {/* Pago rápido: si el usuario ya guardó una tarjeta o su PayPal,
+                    se ofrece cobrarla en un toque. Va primero porque es lo que
+                    menos fricción tiene para quien vuelve a comprar. */}
+                {methods.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className="btn-primary saved-pay"
+                    disabled={busy === `saved:${m.id}:${pkg.id}`}
+                    onClick={() => payWithMethod(m.id, pkg.id)}
+                  >
+                    {busy === `saved:${m.id}:${pkg.id}`
+                      ? 'Cobrando…'
+                      : `Pagar con ${m.display}`}
+                  </button>
+                ))}
                 {providers.stripe && (
                   <button
                     type="button"
@@ -134,6 +188,12 @@ export default function CoinStore({ onBack, onPurchased }) {
         Al comprar aceptas que las monedas no son reembolsables una vez enviadas
         como regalo. La compra en sí sí se puede reembolsar si el pago falla.
       </p>
+
+      {anyProvider && (
+        <button type="button" className="btn-link" onClick={onManageMethods}>
+          💳 Guardar una tarjeta o vincular PayPal
+        </button>
+      )}
     </div>
   );
 }

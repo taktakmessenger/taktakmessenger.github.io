@@ -23,6 +23,7 @@ import VoiceRoomBar from './components/VoiceRoomBar';
 import Activity from './components/Activity';
 import CoinStore from './components/CoinStore';
 import PaymentResult from './components/PaymentResult';
+import PaymentMethods from './components/PaymentMethods';
 import api from './api/client';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
@@ -134,6 +135,8 @@ function Shell() {
   const [authOpen, setAuthOpen] = useState(false);
   const [giftTarget, setGiftTarget] = useState(null);
   const [paymentProvider, setPaymentProvider] = useState('stripe');
+  // Orden de PayPal que hay que confirmar al volver de la aprobación.
+  const [paypalLinkOrder, setPaypalLinkOrder] = useState(null);
   // Usuario con el que se quiere abrir un chat desde el feed. Se pasa a
   // Mensajes para que abra el hilo directamente en vez de dejar al usuario
   // buscándolo a mano en la bandeja.
@@ -175,6 +178,14 @@ function Shell() {
       setPaymentProvider(params.get('provider') || 'stripe');
       setView('pago-exito');
     }
+    // Vuelta de la vinculación de PayPal: PayPal añade `token=<orden>` a la URL
+    // de retorno. Ese token es el id de la orden, y hay que confirmarlo para
+    // guardar el método. Se guarda aquí y la pantalla lo confirma al montarse.
+    if (params.get('link') === '1' && params.get('token')) {
+      setPaypalLinkOrder(params.get('token'));
+      setView('metodos-pago');
+    }
+    if (target === 'metodos-pago') setView('metodos-pago');
   }, []);
 
   function dismissPhonePrompt() {
@@ -269,9 +280,23 @@ function Shell() {
       case 'wallet':
         return <Wallet onBack={() => setView('settings')} onNavigate={setView} />;
       case 'tienda':
-        return <CoinStore onBack={() => setView('wallet')} onPurchased={() => setView('wallet')} />;
+        return (
+          <CoinStore
+            onBack={() => setView('wallet')}
+            onPurchased={() => setView('wallet')}
+            onManageMethods={() => setView('metodos-pago')}
+          />
+        );
       case 'pago-exito':
         return <PaymentResult provider={paymentProvider} onDone={() => setView('wallet')} />;
+      case 'metodos-pago':
+        return (
+          <PaymentMethods
+            onBack={() => setView('wallet')}
+            paypalOrderId={paypalLinkOrder}
+            onPaypalConfirmed={() => setPaypalLinkOrder(null)}
+          />
+        );
       case 'profile':
         return <Profile onNavigate={setView} />;
       case 'settings':

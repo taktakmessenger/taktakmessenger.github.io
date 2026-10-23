@@ -230,7 +230,17 @@ doble gasto con peticiones concurrentes) y squads.
 | GET | `/api/gifts` | — | Catálogo de regalos (precios del servidor) |
 | GET | `/api/sounds` | — | Sonidos reutilizables |
 | GET | `/api/payments/packages` | — | Paquetes de monedas |
+| GET | `/api/payments/config` | — | Pasarelas activas y clave publicable |
+| POST | `/api/payments/checkout` | ✅ | Abrir pago (Stripe Checkout / PayPal) |
 | POST | `/api/payments/webhook` | 🔑 | Webhook de compra (firma + idempotencia) |
+| GET | `/api/payments/methods` | ✅ | Métodos de pago guardados |
+| POST | `/api/payments/methods/card/setup` | ✅ | Abrir alta de tarjeta (SetupIntent) |
+| POST | `/api/payments/methods/card` | ✅ | Guardar tarjeta tokenizada |
+| POST | `/api/payments/methods/paypal/link` | ✅ | Abrir vinculación de PayPal |
+| POST | `/api/payments/methods/paypal/confirm` | ✅ | Confirmar vinculación de PayPal |
+| POST | `/api/payments/methods/:id/default` | ✅ | Marcar método predeterminado |
+| DELETE | `/api/payments/methods/:id` | ✅ | Borrar método guardado |
+| POST | `/api/payments/methods/:id/pay` | ✅ | Cobrar paquete con método guardado |
 | GET | `/api/wallet` | ✅ | Saldos |
 | GET | `/api/wallet/transactions` | ✅ | Historial |
 | GET | `/api/wallet/monetization` | ✅ | Monetización abierta |
@@ -250,6 +260,35 @@ doble gasto con peticiones concurrentes) y squads.
 | POST | `/api/admin/users/:id/credit` | 🛡️ | Ajustar saldo |
 
 ## Mejoras sobre el prototipo
+
+### Métodos de pago guardados (tarjeta y PayPal)
+
+El prototipo solo sabía cobrar de una vez: cada compra obligaba a escribir la
+tarjeta otra vez o a pasar por la pantalla de PayPal. Ahora el usuario registra
+sus métodos una vez, en **Ajustes → Monedero → Métodos de pago**, y después paga
+en un toque desde la tienda.
+
+La decisión que ordena todo esto: **el número de tarjeta nunca entra en TAK TAK**.
+El formulario lo pinta Stripe con la clave publicable y el número va del navegador
+directo a Stripe; a nuestro servidor solo llega un identificador (`pm_...`).
+Guardar el número nos haría depositarios de datos de tarjeta (PCI-DSS) y
+convertiría un vuelco de la base en un lote de tarjetas usables. De la tarjeta
+solo guardamos lo que hace falta para pintarla: marca, últimos cuatro dígitos y
+caducidad, y siempre leídos de Stripe, nunca aceptados del cliente.
+
+En PayPal no hay tarjeta que tokenizar: lo que se guarda es la aprobación del
+usuario sobre su cuenta y un `vault_id` con el que se cobra después sin volver a
+pasar por su pantalla. Ese identificador es un secreto de cobro y no sale nunca en
+una respuesta de la API.
+
+Dos reglas más que se sostienen en los tests:
+
+- **Cobrar y acreditar están separados.** Pagar con un método guardado lanza el
+  cargo, pero las monedas las acredita el webhook del proveedor. Acreditar en la
+  respuesta dejaría monedas regaladas si el banco rechaza el cargo después.
+- **Un método pertenece a su dueño.** Todas las consultas filtran por usuario:
+  conocer el identificador de la tarjeta de otro no permite verla, cobrarla ni
+  borrarla.
 
 ### Fase 4: modelo de recomendación
 

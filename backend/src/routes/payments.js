@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('../services/paymentService');
+const paymentMethodService = require('../services/paymentMethodService');
 const stripeService = require('../services/stripeService');
 const paypalService = require('../services/paypalService');
 const { auth } = require('../middleware/auth');
@@ -45,7 +46,13 @@ function secretMatches(provided) {
 router.get(
   '/config',
   asyncHandler(async (_req, res) => {
-    res.json({ providers: paymentService.availableProviders() });
+    res.json({
+      providers: paymentService.availableProviders(),
+      // Clave publicable de Stripe. No es un secreto: es la que usa el navegador
+      // para tokenizar la tarjeta. Se sirve desde aquí para que la tienda no
+      // dependa de una variable de compilación del frontend.
+      publishableKey: stripeService.publishableKey(),
+    });
   })
 );
 
@@ -218,6 +225,151 @@ router.get(
   '/packages',
   asyncHandler(async (_req, res) => {
     res.json({ packages: env.coinPackages, currency: 'USD' });
+  })
+);
+
+// --- Métodos de pago guardados --------------------------------------------
+//
+// Todo este bloque va detrás de `auth`: un método de pago pertenece a una cuenta
+// y solo su dueño puede verlo, usarlo o borrarlo. Las consultas del servicio
+// filtran siempre por `userId`, así que conocer el id de una tarjeta ajena no
+// sirve de nada.
+
+const methodLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones' },
+});
+
+// Lista los métodos guardados del usuario.
+router.get(
+  '/methods',
+  auth,
+  asyncHandler(async (req, res) => {
+    const methods = await paymentMethodService.listMethods({ userId: req.user.userId });
+    res.json({
+      methods,
+      providers: paymentService.availableProviders(),
+    });
+  })
+);
+
+/**
+ * Abre el alta de una tarjeta.
+ *
+ * Devuelve el `client_secret` con el que el navegador guarda la tarjeta contra
+ * Stripe. El número no pasa por aquí en ningún momento.
+ */
+router.post(
+  '/methods/card/setup',
+  auth,
+  methodLimiter,
+  asyncHandler(async (req, res) => {
+    const setup = await paymentMethodService.startCardSetup({ userId: req.user.userId });
+    res.status(201).json(setup);
+  })
+);
+
+// Guarda una tarjeta ya tokenizada por Stripe.js.
+router.post(
+  '/methods/card',
+  auth,
+  methodLimiter,
+  [body('paymentMethodId').isString().notEmpty().withMessage('Falta la tarjeta')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const method = await paymentMethodService.saveCard({
+      userId: req.user.userId,
+      paymentMethodId: req.body.paymentMethodId,
+      label: req.body.label,
+    });
+    res.status(201).json({ method });
+  })
+);
+
+// Abre el alta de una cuenta de PayPal y devuelve la URL de aprobación.
+router.post(
+  '/methods/paypal/link',
+  auth,
+  methodLimiter,
+  asyncHandler(async (req, res) => {
+    const order = await paymentMethodService.startPaypalLink({ userId: req.user.userId });
+    res.status(201).json(order);
+  })
+);
+
+// Confirma el alta de PayPal cuando el usuario vuelve de aprobarla.
+router.post(
+  '/methods/paypal/confirm',
+  auth,
+  methodLimiter,
+  [body('orderId').isString().notEmpty().withMessage('Falta la orden de PayPal')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const method = await paymentMethodService.confirmPaypalLink({
+      userId: req.user.userId,
+      orderId: req.body.orderId,
+    });
+    res.status(201).json({ method });
+  })
+);
+
+// Marca un método como predeterminado.
+router.post(
+  '/methods/:id/default',
+  auth,
+  methodLimiter,
+  asyncHandler(async (req, res) => {
+    const method = await paymentMethodService.setDefault({
+      userId: req.user.userId,
+      methodId: req.params.id,
+    });
+    res.json({ method });
+  })
+);
+
+// Borra un método guardado.
+router.delete(
+  '/methods/:id',
+  auth,
+  methodLimiter,
+  asyncHandler(async (req, res) => {
+    const result = await paymentMethodService.removeMethod({
+      userId: req.user.userId,
+      methodId: req.params.id,
+    });
+    res.json(result);
+  })
+);
+
+/**
+ * Cobra un paquete con un método guardado.
+ *
+ * El cobro se hace aquí, pero las monedas las acredita el webhook del proveedor:
+ * es la única fuente que prueba que el dinero entró de verdad. Acreditar en esta
+ * respuesta dejaría monedas regaladas si el banco rechaza el cargo después.
+ */
+router.post(
+  '/methods/:id/pay',
+  auth,
+  checkoutLimiter,
+  [
+    body('packageId').isString().notEmpty().withMessage('Falta el paquete'),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await paymentMethodService.chargeWithSavedMethod({
+      userId: req.user.userId,
+      methodId: req.params.id,
+      packageId: req.body.packageId,
+    });
+    res.status(201).json({
+      ...result,
+      message:
+        'Pago enviado. Las monedas aparecerán en tu monedero en unos segundos.',
+    });
   })
 );
 

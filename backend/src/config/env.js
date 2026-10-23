@@ -253,6 +253,12 @@ const env = {
   // clave secreta vive solo en el servidor: el navegador nunca la ve, y la
   // sesión de pago se crea aquí, no en el cliente.
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || null,
+  // Clave publicable (`pk_...`). La usa el navegador para tokenizar la tarjeta
+  // contra Stripe; el número nunca pasa por nuestro servidor.
+  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+  // Base de la API de Stripe. Configurable para poder apuntar los tests a un
+  // servidor local y ejercitar las rutas reales sin tocar la red de Stripe.
+  stripeApiBase: process.env.STRIPE_API_BASE || 'https://api.stripe.com/v1',
   // Firma del webhook. Es lo único que impide que cualquiera con la URL se
   // invente un "pago completado" y se regale monedas.
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,

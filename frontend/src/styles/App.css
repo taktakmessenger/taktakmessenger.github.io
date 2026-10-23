@@ -3159,11 +3159,157 @@
   flex-wrap: wrap;
 }
 
+/* El pago rápido se distingue de "Tarjeta" porque no lleva a ninguna parte: se
+   cobra en el sitio. El filo turquesa lo separa de los botones que abren una
+   pantalla externa. */
+.saved-pay {
+  border: 1px solid var(--accent);
+}
+
 .store-legal {
   margin-top: 1.5rem;
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------
+   Métodos de pago guardados
+   ------------------------------------------------------------------ */
+.payment-methods {
+  padding: 1rem 1rem 6rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.method-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.method-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* El predeterminado se distingue por el filo, no solo por la etiqueta: es el
+   que se va a cobrar sin preguntar, y eso tiene que verse de un vistazo. */
+.method-card.is-default {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 247, 212, 0.25), var(--shadow);
+}
+
+.method-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.method-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.method-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.method-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.method-badge {
+  align-self: flex-start;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #06121a;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
+.method-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-end;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0.15rem 0;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.btn-link.danger {
+  color: var(--pink);
+}
+
+.btn-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.method-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.card-form h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* El campo de tarjeta lo pinta Stripe dentro de este contenedor. Se le da el
+   mismo aspecto que al resto de los inputs para que no desentone. */
+.card-element {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: rgba(8, 6, 18, 0.6);
+}
+
+.card-form input[type='text'] {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: rgba(8, 6, 18, 0.6);
+  color: var(--text);
 }
 
 /* ------------------------------------------------------------------

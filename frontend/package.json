@@ -10,6 +10,7 @@
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
+    "@stripe/stripe-js": "^4.10.0",
     "@twilio/voice-sdk": "^2.18.5",
     "axios": "^1.7.7",
     "hls.js": "^1.7.3",

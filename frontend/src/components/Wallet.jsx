@@ -131,6 +131,9 @@ export default function Wallet({ onBack, onNavigate }) {
         <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(true)}>
           💸 Retirar Diamantes
         </button>
+        <button type="button" className="btn-secondary" onClick={() => onNavigate?.('metodos-pago')}>
+          💳 Métodos de pago
+        </button>
       </div>
 
       {showGift && (
