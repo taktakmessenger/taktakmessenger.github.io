@@ -1,0 +1,87 @@
+# TAK TAK en Render: dos servicios web (API y frontend) que se hablan por la
+# red privada de Render.
+#
+# No hay servicio de MongoDB aquí a propósito. La app necesita un replica set
+# (usa transacciones en los regalos y en la cartera) y el contenedor de Mongo
+# no se puede levantar como servicio normal en Render. La base de datos va en
+# MongoDB Atlas, y su cadena se pone en MONGODB_URI.
+#
+# Variables marcadas con sync: false no se leen del repo: se rellenan en el
+# panel de Render (secrets) y no se sincronizan en cada despliegue.
+
+services:
+  # --- API ---
+  - type: web
+    name: taktak-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render inyecta PORT en el contenedor y espera que escuche ahí.
+      - key: PORT
+        value: 10000
+      # Cadena de MongoDB Atlas, con ?replicaSet=... incluido.
+      - key: MONGODB_URI
+        sync: false
+      # Firma de los JWT. Render genera un valor aleatorio y lo mantiene.
+      - key: JWT_SECRET
+        generateValue: true
+      # Origen permitido para CORS y para los enlaces absolutos que se envían
+      # por correo (reset de contraseña). Es la URL del frontend.
+      - key: CORS_ORIGIN
+        fromService:
+          name: taktak-web
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: APP_URL
+        fromService:
+          name: taktak-web
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      # La imagen no incluye ffmpeg, así que la transcodificación queda apagada.
+      - key: TRANSCODE_ENABLED
+        value: false
+      # Render no ofrece puertos UDP: el SFU de mediasoup no puede funcionar y
+      # el modo malla es el único disponible.
+      - key: SFU_ENABLED
+        value: false
+      - key: PAYMENT_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+    disk:
+      name: uploads
+      mountPath: /app/uploads
+      sizeGB: 5
+
+  # --- Frontend (nginx + build de Vite) ---
+  - type: web
+    name: taktak-web
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    region: oregon
+    plan: starter
+    envVars:
+      - key: PORT
+        value: 10000
+      # nginx recibe host:puerto sin esquema y le añade http:// en la plantilla.
+      # Se apunta al host privado de la API: el tráfico no sale a internet.
+      - key: BACKEND_URL
+        fromService:
+          name: taktak-api
+          type: web
+          property: hostport

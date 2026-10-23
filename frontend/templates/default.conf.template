@@ -1,0 +1,58 @@
+server {
+  # El puerto es configurable porque cada plataforma impone el suyo: Compose
+  # publica el 80 y Render inyecta PORT (10000 por defecto). Fijarlo obligaría
+  # a mantener dos imágenes distintas.
+  listen ${PORT};
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # SPA routing: unknown paths fall back to the app shell.
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  # nginx defaults to 1 MB, which rejects every video upload with a 413 before
+  # the request ever reaches the backend. The backend allows 50 MB
+  # (MAX_VIDEO_BYTES), so the proxy must accept at least that.
+  client_max_body_size 60m;
+
+  # El destino del backend también es configurable: en Compose es el nombre del
+  # servicio (http://backend:4000) y en Render la URL del servicio de la API.
+  location /api/ {
+    proxy_pass http://${BACKEND_URL};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Socket.IO shares the backend HTTP server. Without the upgrade headers the
+  # handshake fails and the live chat and calls never connect.
+  location /socket.io/ {
+    proxy_pass http://${BACKEND_URL};
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # El chat y las llamadas mantienen la conexión abierta. El timeout por
+    # defecto (60 s) echa a quien no hable durante un minuto.
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  # Uploaded originals and HLS renditions are served by the backend, which is
+  # the only service with the storage mounted.
+  location /uploads/ {
+    proxy_pass http://${BACKEND_URL};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
