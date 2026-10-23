@@ -34,3 +34,9 @@ backend/uploads/
 # Datos de MongoDB en desarrollo (scripts/dev-up.sh). Vive aquí, y no en
 # /var/lib/docker, porque /workspace es lo único persistente del contenedor.
 .data/
+
+# Artefactos locales generados (parches de revision e informe de seguridad).
+# Siguen en disco; no son parte de la aplicacion.
+taktak-*.patch
+taktak-*.stat.txt
+INFORME-SEGURIDAD-TAKTAK.md

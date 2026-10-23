@@ -1,0 +1,12 @@
+# El contexto de build del backend es la raiz del repositorio: la imagen
+# construye el frontend desde frontend/ y necesita backend/ y frontend/.
+# frontend/dist no se copia del disco (se compila dentro de la imagen), asi que
+# se excluye para no enviar al demonio un artefacto que no se usa.
+.git
+**/node_modules
+**/dist
+.data
+*.log
+taktak-*.patch
+taktak-*.stat.txt
+INFORME-SEGURIDAD-TAKTAK.md

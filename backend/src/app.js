@@ -5,6 +5,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const env = require('./config/env');
+const serveFrontend = require('./middleware/serveFrontend');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
@@ -94,6 +95,10 @@ function createApp() {
 
   // Uploaded originals and their HLS renditions. Read-only.
   app.use('/uploads', express.static(env.uploadsDir, { index: false, dotfiles: 'deny' }));
+
+  // El frontend construido, cuando va en este mismo proceso. Se monta después
+  // de las rutas de la API para no pisarlas, y antes del 404.
+  serveFrontend(app);
 
   app.use(notFound);
   app.use(errorHandler);

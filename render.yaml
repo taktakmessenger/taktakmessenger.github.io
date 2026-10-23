@@ -1,24 +1,39 @@
-# TAK TAK en Render: dos servicios web (API y frontend) que se hablan por la
-# red privada de Render.
+# TAK TAK en Render: un servicio web (la web y la API juntas) y un worker que
+# lo mantiene despierto.
 #
-# No hay servicio de MongoDB aquí a propósito. La app necesita un replica set
-# (usa transacciones en los regalos y en la cartera) y el contenedor de Mongo
-# no se puede levantar como servicio normal en Render. La base de datos va en
-# MongoDB Atlas, y su cadena se pone en MONGODB_URI.
+# Por qué un solo servicio web:
+#
+#  - El frontend llama a `/api` y a Socket.IO con rutas relativas, así que todo
+#    tiene que salir del mismo origen. Con dos servicios habría que proxear.
+#  - El plan gratuito da 750 horas de instancia al mes por espacio de trabajo.
+#    Dos servicios encendidos 24/7 son unas 1440 horas: se agotan hacia el día
+#    15 y Render suspende los dos hasta el mes siguiente. Con uno solo hay
+#    margen para el mes entero.
+#
+# Por qué el keep-alive va como worker y no como un temporizador dentro de la
+# API: Render apaga la instancia que duerme, y un `setInterval` dentro de ese
+# proceso muere con él. El worker vive aparte, así que sigue haciendo peticiones
+# y es él quien la despierta. Un worker gratuito no se duerme.
+#
+# El keep-alive cuesta ~1 hora de instancia al mes, así que cabe de sobra.
+#
+# La base de datos no está aquí a propósito: la app usa transacciones y eso
+# exige un replica set, así que Mongo va en Atlas y su cadena llega en
+# MONGODB_URI.
 #
 # Variables marcadas con sync: false no se leen del repo: se rellenan en el
 # panel de Render (secrets) y no se sincronizan en cada despliegue.
-#
-# Plan gratuito: los servicios se duermen tras 15 minutos sin tráfico y tardan
-# cerca de un minuto en despertar. La primera visita del día siempre es lenta.
 
 services:
-  # --- API ---
+  # --- Web y API, en el mismo proceso ---
   - type: web
-    name: taktak-api
+    name: taktak
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    # El contexto es la raíz porque la imagen construye el frontend y necesita
+    # backend/ y frontend/. El build del frontend ocurre dentro de la imagen, en
+    # una etapa aparte: no hay que compilarlo a mano antes de desplegar.
+    dockerContext: .
     region: oregon
     plan: free
     healthCheckPath: /health
@@ -34,16 +49,16 @@ services:
       # Firma de los JWT. Render genera un valor aleatorio y lo mantiene.
       - key: JWT_SECRET
         generateValue: true
-      # Origen permitido para CORS y para los enlaces absolutos que se envían
-      # por correo (reset de contraseña). Es la URL del frontend.
+      # La web y la API comparten origen, así que CORS y los enlaces absolutos
+      # que se envían por correo apuntan a la propia URL del servicio.
       - key: CORS_ORIGIN
         fromService:
-          name: taktak-web
+          name: taktak
           type: web
           envVarKey: RENDER_EXTERNAL_URL
       - key: APP_URL
         fromService:
-          name: taktak-web
+          name: taktak
           type: web
           envVarKey: RENDER_EXTERNAL_URL
       # La imagen no incluye ffmpeg, así que la transcodificación queda apagada.
@@ -64,26 +79,20 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
 
-  # --- Frontend (nginx + build de Vite) ---
-  - type: web
-    name: taktak-web
+  # --- Keep-alive: pide la app cada 10 minutos para que no se duerma ---
+  - type: worker
+    name: taktak-keepalive
     runtime: docker
-    dockerfilePath: ./frontend/Dockerfile
-    dockerContext: ./frontend
+    dockerfilePath: ./scripts/keepalive.Dockerfile
+    dockerContext: ./scripts
     region: oregon
     plan: free
     envVars:
-      - key: PORT
-        value: 10000
-      # nginx resuelve este nombre en cada petición, así que tiene que ser un
-      # nombre que el DNS público conozca. El host interno de Render solo lo
-      # resuelve su DNS privado, y aquí se usa el público (1.1.1.1), por eso se
-      # apunta a la URL pública de la API y no a su host privado.
-      - key: BACKEND_URL
-        fromService:
-          name: taktak-api
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: RESOLVER
-        value: 1.1.1.1
+      # Se apunta al health de la API. Cualquier petición de entrada cuenta como
+      # actividad; el health además confirma que el servicio responde de verdad.
+      - key: KEEPALIVE_URL
+        value: https://taktak.onrender.com/health
+      - key: KEEPALIVE_INTERVAL_MS
+        value: 600000
+
 

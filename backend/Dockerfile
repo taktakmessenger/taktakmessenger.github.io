@@ -1,3 +1,18 @@
+# El frontend se construye aquí dentro, en una etapa aparte, para que un clon
+# recién bajado compile sin tener que ejecutar antes `npm run build` a mano.
+# Node en Debian, no Alpine, para no arrastrar dos bases distintas: el backend ya
+# necesita Debian por mediasoup.
+FROM node:20-slim AS web
+
+WORKDIR /web
+
+# Cachea la capa de dependencias aparte de los fuentes.
+COPY frontend/package*.json ./
+RUN npm ci || npm install
+
+COPY frontend/ ./
+RUN npm run build
+
 FROM node:20-slim
 
 WORKDIR /app
@@ -10,16 +25,22 @@ WORKDIR /app
 # "/bin/sh: python: not found". On Debian the prebuilt binary is used as is and
 # the install finishes in seconds. Do not switch back to alpine without
 # installing python3, make and g++ in the image.
-COPY package*.json ./
+COPY backend/package*.json ./
 RUN npm ci --omit=dev || npm install --omit=dev
 
 # --chown no es cosmético: COPY conserva los permisos del repo, que deja los
 # fuentes en 660 (lectura solo para el grupo). Con el usuario `node` (uid 1000)
 # el proceso moría al arrancar con EACCES al abrir src/index.js. Los ficheros
 # tienen que ser legibles por node.
-COPY --chown=node:node src ./src
+COPY --chown=node:node backend/src ./src
+
+# El frontend ya construido, para que un solo servicio sirva la web y la API.
+# Se copia de la etapa `web`, no del disco: así el build no depende de que
+# alguien haya ejecutado `npm run build` antes de desplegar.
+COPY --from=web --chown=node:node /web/dist ./public
 
 ENV NODE_ENV=production
+ENV PUBLIC_DIR=/app/public
 EXPOSE 4000
 
 # Uploads live here. A persistent disk is mounted over this path in production,

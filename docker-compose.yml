@@ -34,7 +34,9 @@ services:
       "
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -61,6 +63,19 @@ services:
     build: ./frontend
     ports:
       - "3000:80"
+    depends_on:
+      - backend
+
+  # Mantiene despierto el servicio gratuito de Render. En local no hace falta
+  # (nada se duerme), pero sirve para probar el script.
+  keepalive:
+    build:
+      context: ./scripts
+      dockerfile: keepalive.Dockerfile
+    environment:
+      KEEPALIVE_URL: ${KEEPALIVE_URL:-http://backend:4000/health}
+      KEEPALIVE_INTERVAL_MS: ${KEEPALIVE_INTERVAL_MS:-600000}
+    restart: unless-stopped
     depends_on:
       - backend
 

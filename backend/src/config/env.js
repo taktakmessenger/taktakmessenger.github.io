@@ -231,6 +231,9 @@ const env = {
   // Where uploaded originals and their HLS renditions are written. Served
   // read-only at /uploads.
   uploadsDir: process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads'),
+  // Built frontend to serve from the same process. Empty means "API only", so
+  // the development setup and the test suite are unaffected.
+  publicDir: process.env.PUBLIC_DIR || null,
   // Master switch for transcoding. Tests and small deployments leave it off so
   // they do not depend on a system ffmpeg binary.
   transcodeEnabled: process.env.TRANSCODE_ENABLED === 'true',

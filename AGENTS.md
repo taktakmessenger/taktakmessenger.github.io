@@ -994,3 +994,62 @@ verificacion se imprime en consola (`MAIL:dev`) y se muestra en pantalla si no
 hay proveedor de SMS. Para activarlos: `GOOGLE_CLIENT_ID`, `SMS_PROVIDER=twilio`
 con `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`, y el correo
 con las variables SMTP.
+
+## Keep-alive: por que el servicio no se duerme
+
+Render duerme un servicio web gratuito tras 15 minutos sin trafico de entrada y
+la siguiente visita espera cerca de un minuto. `scripts/keepalive.js` pide la
+aplicacion cada 10 minutos para que cuente actividad.
+
+Va como **worker aparte**, no como un temporizador dentro de la API, y la razon
+es que Render apaga la instancia que duerme: un `setInterval` dentro de ese
+proceso muere con el y jamas podria despertarlo. El worker vive en otro
+contenedor, sigue haciendo peticiones y es quien la despierta. Un worker
+gratuito no se duerme.
+
+### El limite de 750 horas decide la arquitectura
+
+El plan gratuito da 750 horas de instancia al mes por espacio de trabajo. Dos
+servicios encendidos 24/7 son unas 1440 horas: se agotan hacia el dia 15 y
+Render suspende **todos** los servicios gratuitos hasta el mes siguiente. Por
+eso hay **un solo servicio web** que sirve la web y la API juntas (unas 720
+horas al mes) y no dos. El keep-alive cuesta ademas cerca de 1 hora al mes.
+
+Consecuencia: el frontend y la API comparten origen. Encaja con como esta
+escrito el frontend, que llama a `/api` y a Socket.IO con rutas relativas.
+
+### Un solo servicio sirve la web y la API
+
+`backend/src/middleware/serveFrontend.js` monta el build del frontend desde el
+mismo proceso. Se activa con `PUBLIC_DIR` y sin esa variable no hace nada, asi
+que el desarrollo y las pruebas siguen igual.
+
+El comodin del SPA tiene dos exclusiones que costaron un fallo cada una:
+
+- `/api`, `/socket.io`, `/uploads` y `/assets` no lo usan. Si lo hicieran, una
+  ruta inexistente devolveria la pagina con un 200. En `/uploads` el
+  reproductor intentaba leer HTML como video.
+- Cualquier ruta con extension tampoco lo usa. Sin esto un asset que falta se
+  servia como la pagina con un 200 y el navegador intentaba ejecutar el HTML
+  como JavaScript.
+
+El `index.html` y `sw.js` se sirven con `max-age=0`, que obliga a revalidar en
+cada visita: un service worker cacheado deja al navegador pegado a una version
+vieja de la app. Los assets llevan hash en el nombre, asi que se cachean un ano
+con `immutable`.
+
+El contexto de build del backend es la **raiz del repositorio**, no `./backend`,
+porque la imagen construye y copia el frontend. Por eso `backend/Dockerfile`
+referencia `backend/package.json`, `backend/src` y `frontend/`, y por eso el
+`.dockerignore` que se aplica es el de la raiz.
+
+El frontend se compila **dentro de la imagen**, en una etapa `web` aparte, y el
+`dist` se copia de ahi con `COPY --from=web`. Asi un clon recien bajado compila
+con un solo `docker build`, sin ejecutar `npm run build` a mano antes. La etapa
+usa `node:20-slim` y no Alpine para no arrastrar dos bases distintas, ya que el
+backend necesita Debian por mediasoup.
+
+Pruebas: `backend/test/serve-frontend.test.js` levanta la app en un proceso hijo
+por caso, porque `config/env` lee `PUBLIC_DIR` al importarse. Usa archivos de
+verdad en disco: un doble de `express.static` no diria nada sobre cabeceras ni
+sobre el comodin, que es donde estaban los fallos.
