@@ -13,7 +13,18 @@
 //
 // Es un aviso en la primera pasada si la app tarda en responder (arranque en
 // frío) y luego solo registra los fallos, para no llenar el log.
-const url = process.env.KEEPALIVE_URL || 'http://localhost:4000/health';
+// La URL se puede dar entera (KEEPALIVE_URL) o como base más ruta. Preferir la
+// base es más robusto: en Render se rellena sola desde la URL del servicio web
+// (fromService), así que renombrar el servicio no deja el keep-alive apuntando a
+// un host que ya no existe, que es un fallo silencioso: el servicio se dormiría
+// y nadie se enteraría.
+const base = (
+  process.env.KEEPALIVE_BASE_URL ||
+  process.env.RENDER_EXTERNAL_URL ||
+  'http://localhost:4000'
+).replace(/\/+$/, '');
+const path = process.env.KEEPALIVE_PATH || '/health';
+const url = process.env.KEEPALIVE_URL || `${base}${path}`;
 const intervalMs = Number(process.env.KEEPALIVE_INTERVAL_MS || 10 * 60 * 1000);
 const timeoutMs = Number(process.env.KEEPALIVE_TIMEOUT_MS || 30000);
 

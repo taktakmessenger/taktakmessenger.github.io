@@ -88,10 +88,15 @@ services:
     region: oregon
     plan: free
     envVars:
-      # Se apunta al health de la API. Cualquier petición de entrada cuenta como
+      # La base se rellena sola desde la URL del servicio web, así que renombrar
+      # el servicio no deja el keep-alive apuntando a un host inexistente. El
+      # script le añade /health. Cualquier petición de entrada cuenta como
       # actividad; el health además confirma que el servicio responde de verdad.
-      - key: KEEPALIVE_URL
-        value: https://taktak.onrender.com/health
+      - key: KEEPALIVE_BASE_URL
+        fromService:
+          name: taktak
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: KEEPALIVE_INTERVAL_MS
         value: 600000
 
