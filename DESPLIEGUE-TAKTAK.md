@@ -80,6 +80,30 @@ git am CAMBIOS-TAKTAK.patch
 git push origin mejoras-mensajeria-taktak
 ```
 
+## El enlace https://taktakmessenger.github.io/ no es la app funcional
+
+Ese enlace está vivo, pero sirve **la versión de `main`**, y es una **maqueta
+visual**: un único archivo HTML de ~106 KB, sin ninguna etiqueta `<script>` y sin
+una sola llamada a una API o a Firebase. Se ve la interfaz (feed, perfiles,
+monedas), pero **no hay backend detrás**: no se puede crear una cuenta de verdad,
+ni subir un vídeo, ni enviar un regalo, ni retirar TTC. Es una demostración del
+aspecto, no la app.
+
+Dos consecuencias prácticas:
+
+1. **GitHub Pages no puede ejecutar esta versión.** Pages solo sirve archivos
+   estáticos: no hay Node, ni Mongo, ni Socket.IO. La app real (auth, feed,
+   wallet, regalos, llamadas) necesita un proceso en marcha, así que necesita
+   Render o un servidor equivalente. Subir esta versión a Pages no la haría
+   funcionar; solo cambiaría una maqueta por otra.
+2. **El enlace que se ve bonito y el que funciona son cosas distintas.** Si
+   alguien prueba `taktakmessenger.github.io` esperando registrarse, no podrá. No
+   es un fallo del código: es que ese sitio nunca tuvo servidor.
+
+Para abrir TAK TAK de verdad hace falta desplegar el backend, que es lo que hace
+`render.yaml`. Ese paso está bloqueado por el permiso de escritura de GitHub
+(ver arriba).
+
 ## Despliegue en Render, paso a paso
 
 1. Entra en `https://dashboard.render.com` y pulsa `New` → `Blueprint`.
