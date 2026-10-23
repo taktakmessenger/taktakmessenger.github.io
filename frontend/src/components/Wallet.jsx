@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 
-export default function Wallet({ onBack }) {
+export default function Wallet({ onBack, onNavigate }) {
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [monetization, setMonetization] = useState(null);
@@ -93,6 +93,13 @@ export default function Wallet({ onBack }) {
           <span className="amount">{wallet.coins.toFixed(2)}</span>
           <small>Para enviar regalos</small>
         </div>
+        {wallet.bonusCoins > 0 && (
+          <div className="stat-card bonus">
+            <h3>Monedas de regalo</h3>
+            <span className="amount">{wallet.bonusCoins.toFixed(2)}</span>
+            <small>De bienvenida · se gastan primero tras las compradas</small>
+          </div>
+        )}
         <div className="stat-card ttc-r">
           <h3>Diamantes</h3>
           <span className="amount">{wallet.diamonds.toFixed(2)}</span>
@@ -115,7 +122,10 @@ export default function Wallet({ onBack }) {
       )}
 
       <div className="wallet-actions">
-        <button type="button" className="btn-primary" onClick={() => setShowGift(true)}>
+        <button type="button" className="btn-primary" onClick={() => onNavigate?.('tienda')}>
+          🪙 Comprar monedas
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => setShowGift(true)}>
           🎁 Enviar regalo
         </button>
         <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(true)}>
@@ -151,7 +161,7 @@ export default function Wallet({ onBack }) {
                 onChange={(e) => setGift({ ...gift, giftName: e.target.value })}
                 maxLength={40}
               />
-              <small>El creador recibe el 75% del valor en Diamantes.</small>
+              <small>El creador recibe el 60% del valor: en Diamantes si pagas con Monedas compradas, o en Monedas de regalo si usas el bono.</small>
               <div className="modal-buttons">
                 <button type="submit" className="btn-primary">Enviar</button>
                 <button type="button" className="btn-secondary" onClick={() => setShowGift(false)}>
@@ -211,8 +221,21 @@ export default function Wallet({ onBack }) {
             {transactions.map((tx) => (
               <li key={tx._id} className={`transaction ${tx.type}`}>
                 <span>
-                  {tx.type === 'gift' ? '🎁' : tx.type === 'withdraw' ? '💸' : '⛏️'}{' '}
+                  {tx.type === 'gift'
+                    ? '🎁'
+                    : tx.type === 'gift_bonus'
+                      ? '🎀'
+                      : tx.type === 'withdraw'
+                        ? '💸'
+                        : tx.type === 'purchase'
+                          ? '🪙'
+                          : tx.type === 'bonus'
+                            ? '✨'
+                            : '📘'}{' '}
                   {tx.amount} TTC
+                  {tx.type === 'purchase' && tx.amountPaid != null && (
+                    <small className="tx-paid"> · {tx.amountPaid.toFixed(2)} {tx.currency || 'USD'}</small>
+                  )}
                 </span>
                 <small>{new Date(tx.createdAt).toLocaleString()}</small>
               </li>

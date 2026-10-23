@@ -7,7 +7,19 @@ const transactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 0 },
     type: {
       type: String,
-      enum: ['gift', 'withdraw', 'purchase', 'convert', 'platform'],
+      // `gift` and `gift_bonus` are the two faces of a gift: the paid path
+      // credits withdrawable Diamonds, the promotional path credits spend-only
+      // coins. Keeping them apart is what makes the money trail auditable.
+      enum: [
+        'gift',
+        'gift_bonus',
+        'withdraw',
+        'purchase',
+        'convert',
+        'platform',
+        'platform_bonus',
+        'bonus',
+      ],
       required: true,
     },
     ttcType: { type: String, enum: ['ttcC', 'ttcR'], default: 'ttcC' },

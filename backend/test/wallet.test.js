@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { connectTestDb, resetDb, disconnectTestDb, app, registerUser } = require('./helpers');
+const { connectTestDb, resetDb, disconnectTestDb, app, registerUser, setWallet } = require('./helpers');
 
 test.before(async () => connectTestDb());
 test.beforeEach(async () => resetDb());
@@ -10,6 +10,7 @@ test('gift moves TTC-C to the recipient as TTC-R minus the platform share', asyn
   const agent = app();
   const sender = await registerUser(agent);
   const recipient = await registerUser(agent);
+  await setWallet(sender.user.id, { ttcC: 100, bonusC: 0 });
 
   const res = await agent
     .post('/api/wallet/gift')
@@ -17,8 +18,8 @@ test('gift moves TTC-C to the recipient as TTC-R minus the platform share', asyn
     .send({ recipientId: recipient.user.id, amount: 50 });
 
   assert.equal(res.status, 200);
-  assert.equal(res.body.transaction.creatorAmount, 37); // floor(50 * 0.75)
-  assert.equal(res.body.transaction.platformAmount, 13); // 25% remainder
+  assert.equal(res.body.transaction.creatorAmount, 30); // floor(50 * 0.6)
+  assert.equal(res.body.transaction.platformAmount, 20); // 40% remainder
 
   const senderWallet = await agent
     .get('/api/wallet')
@@ -28,13 +29,14 @@ test('gift moves TTC-C to the recipient as TTC-R minus the platform share', asyn
   const recipientWallet = await agent
     .get('/api/wallet')
     .set('Authorization', `Bearer ${recipient.token}`);
-  assert.equal(recipientWallet.body.ttcR, 37);
+  assert.equal(recipientWallet.body.ttcR, 30);
 });
 
 test('concurrent gifts cannot overdraw the balance', async () => {
   const agent = app();
   const sender = await registerUser(agent);
   const recipient = await registerUser(agent);
+  await setWallet(sender.user.id, { ttcC: 100, bonusC: 0 });
 
   // Sender starts with 100. Fire five concurrent 30-TTC gifts: only three can
   // ever succeed (90 <= 100), regardless of interleaving.
@@ -86,6 +88,7 @@ test('withdraw debits TTC-R and records a pending transaction', async () => {
   const agent = app();
   const sender = await registerUser(agent);
   const recipient = await registerUser(agent);
+  await setWallet(sender.user.id, { ttcC: 100, bonusC: 0 });
 
   await agent
     .post('/api/wallet/gift')
@@ -102,7 +105,7 @@ test('withdraw debits TTC-R and records a pending transaction', async () => {
   const wallet = await agent
     .get('/api/wallet')
     .set('Authorization', `Bearer ${recipient.token}`);
-  assert.equal(wallet.body.ttcR, 45); // 75 credited, 30 withdrawn
+  assert.equal(wallet.body.ttcR, 30); // 60 credited, 30 withdrawn
 
   const txs = await agent
     .get('/api/wallet/transactions')

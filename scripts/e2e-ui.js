@@ -58,6 +58,18 @@ async function waitText(page, text, timeout = 20000) {
   );
 }
 
+// Igual que `waitText`, pero devuelve si apareció en vez de lanzar. Para las
+// comprobaciones que se registran con `check`: si no apareciera, hay que seguir
+// con el resto de la prueba y reportar el fallo, no abortar la ejecución.
+async function sawText(page, text, timeout = 20000) {
+  try {
+    await waitText(page, text, timeout);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Diagnóstico: cuando una espera falla, deja ver qué había en pantalla.
 async function dump(page, label) {
   const txt = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 400)).catch(() => '');
@@ -66,6 +78,15 @@ async function dump(page, label) {
 
 async function gotoApp(page) {
   await page.goto(APP, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+  // Sin sesión, la app abre en la portada de acceso. El feed es la vista de
+  // invitado, así que hay que entrar por "Explorar sin cuenta".
+  const guest = await page.$('xpath/.//button[contains(., "Explorar sin cuenta")]');
+  if (guest) {
+    await guest.click();
+    await sleep(300);
+  }
+
   // El feed monta cuando al menos un reel existe (o el aviso de vacío).
   await page.waitForFunction(
     () => document.querySelector('video.reel-video') || /no hay videos|cargando videos/i.test(document.body.innerText),
@@ -170,14 +191,35 @@ async function gotoApp(page) {
     await page.type('input[placeholder="Nombre de usuario"]', user);
     await page.type('input[placeholder="Correo"]', `${user}@example.com`);
     await page.type('input[placeholder="Contraseña (mínimo 6 caracteres)"]', 'secret123');
+    await page.type('input[placeholder="Repite la contraseña"]', 'secret123');
+    // La casilla de términos es obligatoria en el alta.
+    await page.click('.terms-check input[type=checkbox]');
     await clickByText(page, 'Registrarme');
-    await sleep(2500);
+
+    // El alta termina en la pantalla de verificación de correo (la cuenta ya
+    // funciona). Aquí no hay proveedor de correo, así que se sale con "Lo
+    // verificaré más tarde"; lo que importa es que la sesión quede abierta.
+    const onVerify = await sawText(page, 'Verifica tu correo', 15000);
+    check(onVerify, 'tras el alta se pide verificar el correo');
+    const devCode = await page.evaluate(() => {
+      const el = document.querySelector('.dev-code-value');
+      return el ? el.textContent.trim() : null;
+    });
+    check(devCode && /^\d{6}$/.test(devCode), 'sin proveedor de correo se muestra el código de verificación');
+    await clickByText(page, 'Lo verificaré más tarde');
+    await sleep(1500);
+
     const sess = await page.evaluate(() => ({
       token: !!localStorage.getItem('taktak_token'),
-      body: document.body.innerText,
+      user: localStorage.getItem('taktak_user') || '',
     }));
     check(sess.token, 'el registro guarda el token de sesión');
-    check(sess.body.includes('@' + 'ui') || sess.body.includes('Seguidores'), 'la sesión se refleja en la UI');
+    check(sess.user.includes(user), 'el registro guarda el usuario en la sesión');
+
+    // La sesión debe verse en la app: el perfil muestra el propio arroba.
+    await clickByText(page, 'Perfil');
+    const profileShowsUser = await sawText(page, '@' + user, 10000);
+    check(profileShowsUser, 'el perfil muestra la cuenta recién creada');
 
     // --- Like y comentario --------------------------------------------------
     console.log('\n▸ Like y comentario');

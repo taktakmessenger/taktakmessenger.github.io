@@ -46,11 +46,23 @@ async function registerUser(agent, overrides = {}) {
   return { ...payload, token: res.body.token, user: res.body.user };
 }
 
+// Pins a wallet's buckets exactly. Tests that exercise the cashable path need
+// paid coins, and the welcome bonus would otherwise be spent first and mask it.
+async function setWallet(userId, { ttcC, bonusC, ttcR } = {}) {
+  const User = require('../src/models/User');
+  const set = {};
+  if (ttcC !== undefined) set['wallet.ttcC'] = ttcC;
+  if (bonusC !== undefined) set['wallet.bonusC'] = bonusC;
+  if (ttcR !== undefined) set['wallet.ttcR'] = ttcR;
+  await User.updateOne({ _id: userId }, { $set: set });
+}
+
 module.exports = {
   connectTestDb,
   resetDb,
   disconnectTestDb,
   app,
   registerUser,
+  setWallet,
   TEST_URI,
 };

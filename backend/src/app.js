@@ -37,7 +37,17 @@ function createApp() {
   if (env.nodeEnv !== 'test') {
     app.use(morgan('combined'));
   }
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({
+    limit: '1mb',
+    // Stripe firma el cuerpo CRUDO del webhook. Si se verifica la firma contra
+    // el objeto ya parseado y reserializado, los espacios y el orden de las
+    // claves cambian y la firma no cuadra jamás. Guardar el búfer aquí, en el
+    // único punto por el que pasa el cuerpo, evita tener que reordenar el
+    // middleware o montar un parser aparte solo para esa ruta.
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }));
   app.use(express.urlencoded({ extended: true }));
 
   // Baseline limiter for the whole API; auth and money routes add stricter

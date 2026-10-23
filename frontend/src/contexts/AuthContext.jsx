@@ -77,6 +77,25 @@ export function AuthProvider({ children }) {
     return data;
   }
 
+  // Confirmar el correo con el código que llegó por email. El backend ya tenía
+  // la ruta, pero el frontend no la llamaba en ningún sitio: verificar la
+  // cuenta era imposible desde la app.
+  async function verifyEmail({ email, code }) {
+    const { data } = await api.post('/auth/verify-email', { email, code });
+    if (data.user) {
+      setUser(data.user);
+      localStorage.setItem('taktak_user', JSON.stringify(data.user));
+    }
+    return data;
+  }
+
+  // Reenviar el código de verificación. La respuesta no distingue si el correo
+  // existe (sería un oráculo de membresía), así que siempre se dice lo mismo.
+  async function resendVerification(email) {
+    const { data } = await api.post('/auth/resend-verification', { email });
+    return data;
+  }
+
   // Google returns an ID token from the browser SDK; the server verifies its
   // signature before creating the session.
   async function loginWithGoogle(idToken) {
@@ -152,6 +171,8 @@ export function AuthProvider({ children }) {
       loading,
       login,
       register,
+      verifyEmail,
+      resendVerification,
       loginWithGoogle,
       startPhoneSignup,
       verifyPhoneSignup,

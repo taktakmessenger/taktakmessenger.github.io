@@ -81,9 +81,18 @@ const userSchema = new mongoose.Schema(
       providerRef: { type: String, default: null, select: false },
     },
 
-    // Two token buckets: ttcC is spendable on gifts, ttcR is withdrawable.
+    // Coin and Diamond buckets. `ttcC` and `bonusC` are both spendable on
+    // gifts; only `ttcC` (paid) produces withdrawable `ttcR` Diamonds.
     wallet: {
+      // Paid coins: bought with real money. Gifted, they pay the creator
+      // withdrawable Diamonds.
       ttcC: { type: Number, default: 0, min: 0 },
+      // Promotional coins (welcome bonus, support credits). Spendable on gifts
+      // but never redeemable for cash: a gift paid with them credits the creator
+      // in this same bucket, so free coins can only ever recirculate as free
+      // coins. Without this split, N free accounts could gift to one account and
+      // withdraw real money the platform never received.
+      bonusC: { type: Number, default: 0, min: 0 },
       ttcR: { type: Number, default: 0, min: 0 },
     },
     stats: {

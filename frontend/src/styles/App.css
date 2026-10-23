@@ -395,6 +395,9 @@
 .stat-card.ttc-r::after {
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
 }
+.stat-card.bonus::after {
+  background: linear-gradient(90deg, var(--primary), var(--accent-strong));
+}
 .stat-card.total::after {
   background: linear-gradient(90deg, var(--primary), var(--accent));
 }
@@ -404,6 +407,9 @@
 }
 .stat-card.ttc-r .amount {
   color: var(--accent);
+}
+.stat-card.bonus .amount {
+  color: var(--primary);
 }
 
 .wallet-actions {
@@ -3068,5 +3074,392 @@
   display: flex;
   justify-content: center;
   padding-bottom: 0.5rem;
+}
+
+/* ------------------------------------------------------------------
+   Tienda de monedas
+   ------------------------------------------------------------------ */
+.coin-store {
+  padding: 1rem 1rem 6rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.store-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 1rem;
+}
+
+/* Sin pasarela configurada la tienda no finge: lo dice. Un botón que no lleva a
+   ninguna parte es peor que un aviso honesto. */
+.store-closed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.store-closed small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.package-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.package-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.package-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.package-coins {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.package-price {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.package-rate {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.package-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.store-legal {
+  margin-top: 1.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------
+   Resultado del pago
+   ------------------------------------------------------------------ */
+.payment-result {
+  padding: 1rem 1rem 6rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.payment-provider {
+  color: var(--text);
+}
+
+.payment-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 1rem 0;
+}
+
+/* Saldo dentro del modal de regalos: el dato que hace falta para elegir. */
+.gift-balance {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.gift-balance strong {
+  color: var(--accent);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.gift-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------
+   Pantalla de acceso (portada)
+   ------------------------------------------------------------------ */
+.auth-landing {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 2rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+/* Las luces moradas y turquesas del fondo. Van en un elemento propio y con
+   `pointer-events: none` para que no intercepten los pulsados. */
+.auth-landing-glow {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(620px 520px at 50% 22%, rgba(176, 75, 251, 0.3), transparent 62%),
+    radial-gradient(520px 460px at 86% 78%, rgba(255, 45, 141, 0.24), transparent 62%),
+    radial-gradient(560px 480px at 12% 86%, rgba(0, 247, 212, 0.18), transparent 62%);
+  filter: blur(6px);
+}
+
+.auth-landing-inner {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  text-align: center;
+}
+
+.auth-landing-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.auth-landing-logo {
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  border-radius: 30px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.72);
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: 0 24px 70px -24px var(--glow-purple);
+  animation: splash-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-landing-word {
+  margin: 1rem 0 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(2.2rem, 10vw, 3.2rem);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  background: linear-gradient(120deg, var(--accent), var(--primary) 45%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 22px var(--glow-purple));
+}
+
+.auth-landing-tagline {
+  margin: 0;
+  max-width: 22rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.auth-landing-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.auth-landing-google {
+  display: flex;
+  justify-content: center;
+  padding: 0.2rem 0;
+}
+
+/* Botones grandes y redondeados, pensados para el pulgar en un móvil. El
+   `min-height` es lo que garantiza que sigan siendo cómodos aunque el texto
+   ocupe dos líneas. */
+.btn-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.85rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(28, 16, 48, 0.66);
+  backdrop-filter: blur(10px);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-provider:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 30px -14px var(--glow-cyan);
+}
+
+.btn-provider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-provider small {
+  display: block;
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.auth-landing-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.auth-landing-legal {
+  margin: 0;
+  max-width: 22rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* Enlaces dentro de una frase: sin subrayado propio, heredan el color. */
+.btn-link.inline {
+  display: inline;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.auth-back {
+  align-self: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+/* ------------------------------------------------------------------
+   Campo de contraseña con mostrar/ocultar
+   ------------------------------------------------------------------ */
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  padding-right: 3rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.35rem;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.password-toggle:hover {
+  opacity: 1;
+  background: rgba(176, 75, 251, 0.16);
+}
+
+/* ------------------------------------------------------------------
+   Términos y privacidad
+   ------------------------------------------------------------------ */
+.terms-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: left;
+}
+
+.terms-check input[type='checkbox'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+
+.legal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--muted);
+  text-align: left;
+}
+
+.legal-body p {
+  margin: 0;
+}
+
+/* En un móvil bajo, la portada debe poder desplazarse en vez de recortarse. */
+@media (max-height: 720px) {
+  .auth-landing {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .auth-landing-inner {
+    gap: 1.4rem;
+  }
+
+  .auth-landing-logo {
+    width: 96px;
+    height: 96px;
+  }
 }
 

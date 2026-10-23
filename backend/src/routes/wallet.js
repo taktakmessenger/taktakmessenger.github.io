@@ -96,6 +96,7 @@ router.post(
         : 'Regalo enviado exitosamente',
       transaction: result,
       remainingCoins: result.remainingCoins,
+      remainingBonusCoins: result.remainingBonusCoins,
     });
   })
 );

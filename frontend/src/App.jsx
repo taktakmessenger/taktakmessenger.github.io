@@ -21,15 +21,18 @@ import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
 import VoiceRoomBar from './components/VoiceRoomBar';
 import Activity from './components/Activity';
+import CoinStore from './components/CoinStore';
+import PaymentResult from './components/PaymentResult';
 import api from './api/client';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
 
 // Sending a gift straight from the feed, priced by the server catalogue so the
 // client never chooses what a gift costs.
-function GiftModal({ video, onClose, onSent }) {
+function GiftModal({ video, onClose, onSent, onBuyCoins }) {
   const [gifts, setGifts] = useState([]);
   const [selected, setSelected] = useState('');
+  const [coins, setCoins] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -38,6 +41,15 @@ function GiftModal({ video, onClose, onSent }) {
       .get('/gifts')
       .then(({ data }) => setGifts(data.gifts))
       .catch((err) => setError(err.message));
+    // El saldo se enseña aquí porque es justo el dato que hace falta para
+    // elegir un regalo. Sin él, el usuario solo descubre que no le llega
+    // cuando el envío falla.
+    // El saldo gastable suma monedas compradas y de regalo: un usuario nuevo
+    // con bono debe poder regalar sin ver los regalos bloqueados.
+    api
+      .get('/wallet')
+      .then(({ data }) => setCoins(data.spendable ?? data.coins))
+      .catch(() => setCoins(null));
   }, []);
 
   async function send() {
@@ -50,16 +62,36 @@ function GiftModal({ video, onClose, onSent }) {
       onClose();
     } catch (err) {
       setError(err.message);
+      // El saldo pudo cambiar en otro dispositivo: se relee para que la lista
+      // refleje lo que de verdad queda.
+      api
+        .get('/wallet')
+        .then(({ data }) => setCoins(data.spendable ?? data.coins))
+        .catch(() => {});
     } finally {
       setBusy(false);
     }
   }
 
+  const affordable = coins == null ? null : coins;
+  const tooExpensive = (cost) => affordable != null && cost > affordable;
+
   return (
     <div className="modal" role="dialog" aria-modal="true">
       <div className="modal-content">
         <h3>Enviar regalo a @{video.creator?.username}</h3>
+
+        {coins != null && (
+          <p className="gift-balance">
+            Tienes <strong>{coins}</strong> monedas
+            <button type="button" className="btn-link" onClick={onBuyCoins}>
+              Comprar más
+            </button>
+          </p>
+        )}
+
         {error && <p className="error" role="alert">{error}</p>}
+
         <div className="gift-grid">
           {gifts.map((g) => (
             <button
@@ -67,6 +99,8 @@ function GiftModal({ video, onClose, onSent }) {
               type="button"
               className={`gift-option ${selected === g._id ? 'selected' : ''}`}
               onClick={() => setSelected(g._id)}
+              disabled={tooExpensive(g.coinCost)}
+              title={tooExpensive(g.coinCost) ? 'No te llegan las monedas' : undefined}
             >
               <span aria-hidden="true">🎁</span>
               <strong>{g.name}</strong>
@@ -74,6 +108,7 @@ function GiftModal({ video, onClose, onSent }) {
             </button>
           ))}
         </div>
+
         <div className="modal-buttons">
           <button type="button" className="btn-primary" onClick={send} disabled={busy || !selected}>
             {busy ? 'Enviando…' : 'Enviar'}
@@ -88,8 +123,17 @@ function GiftModal({ video, onClose, onSent }) {
 }
 
 function Shell() {
-  const [view, setView] = useState('feed');
+  // La portada de acceso es la entrada de quien no tiene sesión. A quien ya la
+  // tiene se le deja en el feed: obligarle a pasar por el acceso sería un paso
+  // de más en cada arranque.
+  const [view, setView] = useState(() => (localStorage.getItem('taktak_token') ? 'feed' : 'acceso'));
+  // El alta inicia sesión en el acto (el backend devuelve token al crear la
+  // cuenta). Sin este pestillo, en cuanto `user` existe el formulario se
+  // desmontaría y la pantalla de verificación del correo, que vive dentro del
+  // formulario, no llegaría a verse nunca. Se baja al terminar el flujo.
+  const [authOpen, setAuthOpen] = useState(false);
   const [giftTarget, setGiftTarget] = useState(null);
+  const [paymentProvider, setPaymentProvider] = useState('stripe');
   // Usuario con el que se quiere abrir un chat desde el feed. Se pasa a
   // Mensajes para que abra el hilo directamente en vez de dejar al usuario
   // buscándolo a mano en la bandeja.
@@ -102,18 +146,35 @@ function Shell() {
   const { user, loading } = useAuth();
   const { startCall } = useCall();
 
+  // Anything other than the feed needs a session.
+  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'pago-exito'].includes(view);
+
   useEffect(() => {
     if (!user || user.phoneVerified) return;
     const seen = localStorage.getItem(`taktak_phone_prompt_${user.id}`);
     if (!seen) setPhonePrompt(true);
   }, [user]);
 
-  // Abrir la actividad directamente cuando se llega desde el push de un aviso
-  // (`/?view=activity`). Se lee una sola vez, al arrancar: a partir de ahí manda
-  // el estado, no la URL.
+  // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
+  // hasta que el flujo termina. Sin levantarlo aquí, el alta que acaba de crear
+  // la sesión cerraría el formulario en el acto y se perdería la pantalla de
+  // verificación del correo.
+  useEffect(() => {
+    if (needsAuth && !user) setAuthOpen(true);
+  }, [needsAuth, user]);
+
+  // Abrir una pantalla directamente cuando se llega desde fuera: el push de un
+  // aviso (`/?view=activity`) o la vuelta de una pasarela de pago
+  // (`/?view=pago-exito`). Se lee una sola vez, al arrancar: a partir de ahí
+  // manda el estado, no la URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'activity') setView('activity');
+    const target = params.get('view');
+    if (target === 'activity') setView('activity');
+    if (target === 'pago-exito') {
+      setPaymentProvider(params.get('provider') || 'stripe');
+      setView('pago-exito');
+    }
   }, []);
 
   function dismissPhonePrompt() {
@@ -167,17 +228,50 @@ function Shell() {
     return <Splash />;
   }
 
-  // Anything other than the feed needs a session.
-  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity'].includes(view);
-
   function renderView() {
-    if (needsAuth && !user) return <AuthForm onDone={() => setView('feed')} />;
+    // Pedir una vista protegida sin sesión abre el formulario de acceso ya
+    // desplegado: la portada de bienvenida es para la entrada a la app, no para
+    // volver a verla cada vez que se pulsa una pestaña que pide cuenta.
+    //
+    // `authOpen` mantiene el formulario en pantalla mientras el flujo de alta
+    // sigue (verificación del correo), aunque la sesión ya exista.
+    if ((needsAuth && !user) || authOpen) {
+      return (
+        <AuthForm
+          initialView="login"
+          onDone={() => {
+            setAuthOpen(false);
+            setView('feed');
+          }}
+          // Sin salida a invitado, quien llegó aquí pulsando una pestaña
+          // protegida no tendría forma de volver al feed sin crear cuenta.
+          onGuest={() => {
+            setAuthOpen(false);
+            setView('feed');
+          }}
+        />
+      );
+    }
+
+    if (view === 'acceso') {
+      return (
+        <AuthForm
+          initialView="welcome"
+          onDone={() => setView('feed')}
+          onGuest={() => setView('feed')}
+        />
+      );
+    }
 
     switch (view) {
       case 'upload':
         return <Upload onUploaded={() => setView('feed')} />;
       case 'wallet':
-        return <Wallet onBack={() => setView('settings')} />;
+        return <Wallet onBack={() => setView('settings')} onNavigate={setView} />;
+      case 'tienda':
+        return <CoinStore onBack={() => setView('wallet')} onPurchased={() => setView('wallet')} />;
+      case 'pago-exito':
+        return <PaymentResult provider={paymentProvider} onDone={() => setView('wallet')} />;
       case 'profile':
         return <Profile onNavigate={setView} />;
       case 'settings':
@@ -224,13 +318,20 @@ function Shell() {
   return (
     <div className={`app ${view === 'feed' ? 'app-feed' : ''}`}>
       <main className="main-content">{renderView()}</main>
-      <Navigation currentView={view} setCurrentView={setView} />
+
+      {/* La barra inferior no se muestra en la portada: no hay a dónde ir
+          todavía y las pestañas ofrecerían pantallas que piden sesión. */}
+      {view !== 'acceso' && <Navigation currentView={view} setCurrentView={setView} />}
 
       {giftTarget && user && (
         <GiftModal
           video={giftTarget}
           onClose={() => setGiftTarget(null)}
           onSent={() => setView('wallet')}
+          onBuyCoins={() => {
+            setGiftTarget(null);
+            setView('tienda');
+          }}
         />
       )}
 

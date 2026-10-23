@@ -31,7 +31,7 @@ router.get(
       videos,
       pendingVideos,
       transactions,
-      // Revenue booked from the 25% platform cut on gifts.
+      // Revenue booked from the 40% platform cut on gifts.
       platformEarnings: earnings.total,
       giftsProcessed: earnings.gifts,
     });
@@ -87,19 +87,38 @@ router.patch(
   })
 );
 
-// Adjust a user's spendable balance (e.g. support credit or refund).
+// Adjust a user's balance (e.g. support credit or refund).
+//
+// Defaults to the promotional bucket: an admin credit is not revenue, so it
+// must not become withdrawable Diamonds unless the admin says so explicitly.
+// Every adjustment leaves a ledger entry, so a balance can never be minted
+// without a matching, auditable record.
 router.post(
   '/users/:id/credit',
-  [param('id').isMongoId(), body('amount').isFloat().toFloat(), body('bucket').optional().isIn(['ttcC', 'ttcR'])],
+  [
+    param('id').isMongoId(),
+    body('amount').isFloat().toFloat(),
+    body('bucket').optional().isIn(['bonusC', 'ttcC', 'ttcR']),
+  ],
   validate,
   asyncHandler(async (req, res) => {
-    const bucket = req.body.bucket === 'ttcR' ? 'ttcR' : 'ttcC';
+    const bucket = req.body.bucket || 'bonusC';
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { $inc: { [`wallet.${bucket}`]: req.body.amount } },
       { new: true }
     );
     if (!user) throw new HttpError(404, 'Usuario no encontrado');
+
+    await Transaction.create({
+      from: req.user.userId,
+      to: user._id,
+      amount: Math.abs(req.body.amount),
+      type: 'bonus',
+      ttcType: bucket === 'ttcR' ? 'ttcR' : 'ttcC',
+      details: `Ajuste manual de admin (${bucket})`,
+    });
+
     res.json({ user });
   })
 );

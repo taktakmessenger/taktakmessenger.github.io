@@ -16,10 +16,10 @@ function requiredInProduction(name) {
   return null;
 }
 
-// Revenue split for every gift. The creator keeps 75% and the platform 25%,
+// Revenue split for every gift. The creator keeps 60% and the platform 40%,
 // versus the 30-50% creators get on TikTok. Both values must add up to 1.
 function resolveShares() {
-  const creatorShare = Number(process.env.CREATOR_SHARE ?? 0.75);
+  const creatorShare = Number(process.env.CREATOR_SHARE ?? 0.6);
   const platformShare = Number(process.env.PLATFORM_SHARE ?? 1 - creatorShare);
 
   if (!Number.isFinite(creatorShare) || creatorShare <= 0 || creatorShare >= 1) {
@@ -35,6 +35,17 @@ function resolveShares() {
 }
 
 const shares = resolveShares();
+
+// Valor de referencia de 1 TTC al retirar o convertir, en dólares. Es el techo
+// de lo que la plataforma puede llegar a pagar por una moneda, así que fija el
+// suelo de los precios de venta: si un paquete vende el TTC por debajo de esta
+// cifra, cualquiera puede comprar, convertir a Diamantes y retirar más de lo que
+// pagó. El NAV de la empresa (base del precio de la acción) se hundiría con el
+// uso, y el agujero crecería con cada venta.
+const ttcUsdRate = Number(process.env.TTC_USD_RATE ?? 0.01);
+if (!Number.isFinite(ttcUsdRate) || ttcUsdRate <= 0) {
+  throw new Error('TTC_USD_RATE must be a positive number');
+}
 
 // STUN público por defecto: descubre la dirección propia y basta para llamar
 // dentro de la misma red. TURN es lo que permite cruzar NAT estricto, y se
@@ -92,16 +103,21 @@ function resolveIceServers() {
 
 // Coin packages are defined server-side. The purchase webhook looks the amount
 // up by id, so a forged request cannot mint coins it did not pay for.
+//
+// Prices must clear `ttcUsdRate` (the withdrawal rate), not just the creator
+// payout: a coin that can be bought below what it is redeemed for is free money
+// the moment a C→R conversion exists. The ladder therefore descends from
+// $0,01398 to $0,01100 per TTC, always above the $0,01 floor, and never
+// inverts (a bigger pack is always cheaper per coin).
 const DEFAULT_COIN_PACKAGES = [
-  { id: 'starter', coins: 70, priceUsd: 0.99 },
-  { id: 'popular', coins: 350, priceUsd: 4.99 },
-  { id: 'value', coins: 1400, priceUsd: 19.99 },
-  { id: 'mega', coins: 7000, priceUsd: 99.99 },
+  { id: 'starter', coins: 500, priceUsd: 6.99 },
+  { id: 'popular', coins: 1000, priceUsd: 12.99 },
+  { id: 'value', coins: 5000, priceUsd: 59.99 },
+  { id: 'mega', coins: 20000, priceUsd: 219.99 },
 ];
 
 function resolveCoinPackages() {
-  if (!process.env.COIN_PACKAGES) return DEFAULT_COIN_PACKAGES;
-
+  if (!process.env.COIN_PACKAGES) return assertPackagesCoverPayout(DEFAULT_COIN_PACKAGES);
   let parsed;
   try {
     parsed = JSON.parse(process.env.COIN_PACKAGES);
@@ -114,7 +130,7 @@ function resolveCoinPackages() {
   }
 
   const seen = new Set();
-  return parsed.map((pkg) => {
+  const packages = parsed.map((pkg) => {
     if (!pkg?.id || !Number.isFinite(pkg.coins) || pkg.coins <= 0) {
       throw new Error('Each coin package needs an id and a positive coin count');
     }
@@ -125,6 +141,35 @@ function resolveCoinPackages() {
     seen.add(pkg.id);
     return { id: pkg.id, coins: pkg.coins, priceUsd: pkg.priceUsd };
   });
+
+  return assertPackagesCoverPayout(packages);
+}
+
+/**
+ * Ningún paquete puede venderse por debajo del valor al que la moneda se
+ * redime. El suelo es `ttcUsdRate` (la tasa de retiro), no
+ * `creatorShare × ttcUsdRate`: el regalo solo paga el 60%, pero el retiro paga
+ * el 100%, y es el retiro el que marca el techo de lo que la plataforma puede
+ * desembolsar por una moneda.
+ *
+ * Con el suelo en el regalo (lo que se hacía antes), un paquete podía venderse
+ * a $0,0085 — por encima del pago al creador pero por debajo del retiro. Mientras
+ * no exista conversión Monedas→Diamantes la fuga está latente; en cuanto se
+ * añada, comprar y retirar da beneficio y el NAV se hunde. Es un fallo de
+ * configuración, no de operación, así que se detecta al arrancar.
+ */
+function assertPackagesCoverPayout(packages) {
+  const payoutPerTtc = ttcUsdRate;
+  for (const pkg of packages) {
+    const salePerTtc = pkg.priceUsd / pkg.coins;
+    if (salePerTtc < payoutPerTtc) {
+      throw new Error(
+        `El paquete "${pkg.id}" vende el TTC a $${salePerTtc.toFixed(6)}, por debajo de lo que ` +
+          `se paga al retirar ($${payoutPerTtc.toFixed(6)}). Comprar y retirar daría beneficio.`
+      );
+    }
+  }
+  return packages;
 }
 
 const env = {
@@ -171,6 +216,16 @@ const env = {
   // TTC economy split, expressed as a fraction of every gift.
   creatorShare: shares.creatorShare,
   platformShare: shares.platformShare,
+  // Cuánto vale 1 TTC al retirar o convertir, en dólares. Junto con
+  // `creatorShare` marca el suelo por debajo del cual ningún paquete puede
+  // venderse (ver `assertPackagesCoverPayout`).
+  ttcUsdRate,
+  // Monedas de bienvenida que recibe una cuenta nueva. Son de regalo: se pueden
+  // gastar en regalos, pero nunca convertirse en Diamantes retirables (ver
+  // `sendGift`). Es lo que permite invitar sin abrir una vía de extracción de
+  // dinero: por muchas cuentas que se creen, el regalo solo recircula monedas de
+  // regalo.
+  welcomeBonusCoins: Number(process.env.WELCOME_BONUS_COINS ?? 100),
   maxVideoBytes: Number(process.env.MAX_VIDEO_BYTES ?? 50 * 1024 * 1024),
 
   // Where uploaded originals and their HLS renditions are written. Served
@@ -189,6 +244,29 @@ const env = {
   // Shared secret for the payment webhook. Without it the endpoint stays
   // closed rather than trusting an unauthenticated POST.
   paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || null,
+
+  // Pasarelas de cobro. Cada una se activa sola si están sus claves; si no,
+  // la tienda enseña el paquete pero no deja pagar, en vez de aceptar un cobro
+  // que nunca se va a procesar.
+  //
+  // Stripe cubre tarjeta (y Apple/Google Pay si se activan en el panel). La
+  // clave secreta vive solo en el servidor: el navegador nunca la ve, y la
+  // sesión de pago se crea aquí, no en el cliente.
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || null,
+  // Firma del webhook. Es lo único que impide que cualquiera con la URL se
+  // invente un "pago completado" y se regale monedas.
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
+
+  // PayPal. `paypalApiBase` cambia entre sandbox y producción, que es la
+  // diferencia entre cobrar de verdad y no cobrar nada.
+  paypalClientId: process.env.PAYPAL_CLIENT_ID || null,
+  paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET || null,
+  // Identificador del webhook en PayPal. Sin él no se puede verificar la firma,
+  // así que el webhook se cierra.
+  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || null,
+  paypalApiBase:
+    process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com',
+  paypalCurrency: (process.env.PAYPAL_CURRENCY || 'USD').toUpperCase(),
 
   // CORS origin used for the Socket.IO handshake, which does not go through
   // the Express CORS middleware.

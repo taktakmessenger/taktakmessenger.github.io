@@ -136,7 +136,7 @@ router.post(
       password,
       profile: { displayName: username },
       // A small starter balance lets a new account try gifts immediately.
-      wallet: { ttcC: 100, ttcR: 0 },
+      wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
     });
 
     // Verification mail is best-effort: a mail outage must not fail the
@@ -445,7 +445,7 @@ router.post(
           phone,
           phoneVerified: true,
           profile: { displayName: finalUsername },
-          wallet: { ttcC: 100, ttcR: 0 },
+          wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
         });
         if (pending.passwordHash) user.$locals.passwordAlreadyHashed = true;
         await user.save();
@@ -618,7 +618,7 @@ router.post(
         googleId: claims.googleId,
         emailVerified: Boolean(claims.emailVerified),
         profile: { displayName: claims.name || username, avatar: claims.picture || undefined },
-        wallet: { ttcC: 100, ttcR: 0 },
+        wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
       });
     }
 

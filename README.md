@@ -19,27 +19,79 @@ corrección y seguridad (ver [Mejoras sobre el prototipo](#mejoras-sobre-el-prot
 
 ## Economía TTC
 
-Dos saldos por usuario:
+Tres saldos por usuario:
 
-- **Monedas (TTC-C)** — gastables. Se usan para enviar regalos.
+- **Monedas (TTC-C)** — compradas con dinero real. Gastables en regalos.
+- **Monedas de regalo (bonusC)** — promocionales: bono de bienvenida y créditos
+  de soporte. Gastables en regalos, **nunca retirables**.
 - **Diamantes (TTC-R)** — retirables. Los creadores los ganan con regalos.
 
 En la API se exponen ambos nombres: `coins`/`diamonds` (de cara al usuario) y
-`ttcC`/`ttcR` (los buckets internos), para no romper clientes existentes.
+`ttcC`/`ttcR` (los buckets internos), para no romper clientes existentes. Se
+añade `bonusCoins` y `spendable` (la suma gastable de `coins + bonusCoins`).
 
 Flujo de un regalo:
 
 ```
-emisor Monedas  --(débito atómico)-->  se divide:
-                                       75% -> Diamantes del creador
-                                       25% -> plataforma
+emisor Monedas compradas --(débito atómico)--> 60% -> Diamantes del creador
+                                               40% -> plataforma
+emisor Monedas de regalo --(débito atómico)--> 60% -> Monedas de regalo
+                                               40% -> plataforma (bonus)
 ```
+
+La diferencia entre las dos filas es la que protege el dinero. Un regalo pagado
+con el bono acredita al creador **más bono**, no Diamantes, así que las monedas
+gratis solo pueden recircular como monedas gratis. Sin esa frontera, N cuentas
+gratis regalando a una sola convertían el bono en dinero real que la plataforma
+nunca recibió (100 cuentas ≈ $300 retirables). El bucle cerrado corta la fuga sin
+quitarle nada al usuario: el bono sigue sirviendo para regalar.
+
+Dentro del saldo del emisor, **lo comprado se gasta antes que el bono**, para que
+un usuario que paga nunca vea su regalo degradado a no-retirable para el creador.
 
 El reparto es configurable con `CREATOR_SHARE` / `PLATFORM_SHARE`, pero ambos
 deben sumar 1 o el proceso se niega a arrancar (un desajuste crearía o destruiría
-tokens). El 25% de la plataforma se registra como asiento contable propio
+tokens). El 40% de la plataforma se registra como asiento contable propio
 (`Transaction.type = 'platform'`), así los ingresos son auditables, y se agregan
-en `GET /api/admin/stats` como `platformEarnings`.
+en `GET /api/admin/stats` como `platformEarnings`. El corte de un regalo pagado
+con bono se registra aparte (`platform_bonus`) y **no** cuenta como ingreso: es
+moneda promocional, no dinero cobrado.
+
+### Precios y tasa de retiro
+
+`TTC_USD_RATE` es lo que vale 1 TTC al retirar o convertir ($0,01 por defecto).
+Es el techo de lo que la plataforma puede desembolsar por una moneda, y por eso
+fija el suelo de los precios: **ningún paquete puede vender el TTC por debajo de
+esa tasa**. Si lo hiciera, comprar monedas, convertirlas a Diamantes y retirar
+daría beneficio, y el NAV de la empresa (base del precio de la acción) se hundiría
+con el uso.
+
+El suelo es `TTC_USD_RATE` entero, no `CREATOR_SHARE × TTC_USD_RATE`. El regalo
+solo paga el 60%, pero el retiro paga el 100%, y es el retiro el que marca el
+techo del desembolso.
+
+El proceso lo comprueba al arrancar (`assertPackagesCoverPayout`). El catálogo
+por defecto, con el precio por TTC bajando al subir de paquete:
+
+| Paquete | TTC | Precio | $/TTC | Margen sobre retiro |
+|---|---|---|---|---|
+| starter | 500 | $6,99 | $0,013980 | 28,5% |
+| popular | 1.000 | $12,99 | $0,012990 | 23,0% |
+| value | 5.000 | $59,99 | $0,011998 | 16,7% |
+| mega | 20.000 | $219,99 | $0,011500 | 13,0% |
+
+Se cambian con `COIN_PACKAGES` (JSON). Si algún paquete queda por debajo del
+suelo, el arranque falla con un mensaje que dice cuál y por qué.
+
+Cada paquete deja además un colchón sobre el retiro, así que ninguna operación
+—ni regalar ni convertir— puede dar pérdida:
+
+| Paquete | Pagas | Si lo retiras | Resultado |
+|---|---|---|---|
+| starter | $6,99 | $5,00 | −$1,99 |
+| popular | $12,99 | $10,00 | −$2,99 |
+| value | $59,99 | $50,00 | −$9,99 |
+| mega | $219,99 | $200,00 | −$19,99 |
 
 ## Funciones diferenciales frente a TikTok
 

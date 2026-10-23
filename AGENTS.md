@@ -117,6 +117,34 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   `read -> check in JS -> save` sobre `wallet`: usa `$inc` con condición
   (`findOneAndUpdate({ _id, 'wallet.ttcC': { $gte: amount } }, { $inc: ... })`).
   El test "concurrent gifts cannot overdraw the balance" cubre esta regresión.
+  Con dos cubos, `debitSpendable` lee ambos, calcula el reparto y aplica un
+  `$gte` **por cada cubo que toca**, reintentando si otro regalo se adelantó.
+  Añade la condición solo al cubo que se gasta: un documento sin `bonusC` no
+  debe dejar de coincidir.
+- **Hay tres cubos, y la frontera entre ellos es la que impide acuñar dinero.**
+  - `wallet.ttcC` (Monedas compradas): solo entra por compra real. Al regalar,
+    produce Diamantes retirables.
+  - `wallet.bonusC` (Monedas de regalo): bono de bienvenida y créditos de admin.
+    Se gasta en regalos, pero al regalar produce **más `bonusC`**, nunca `ttcR`.
+  - `wallet.ttcR` (Diamantes): lo único retirable.
+  El bono de bienvenida es `bonusC`, no `ttcC`. Antes eran 100 `ttcC` gratis por
+  cuenta: con N cuentas gratis regalando a una sola, esa cuenta retiraba dinero
+  real que la plataforma nunca recibió (100 cuentas = ~$300). El bucle cerrado lo
+  corta: el bono solo puede recircular como bono. El test
+  "a cash-out from a pure bonus loop yields nothing" lo fija.
+- **Lo comprado se gasta antes que el bono.** Un usuario que paga no debe ver su
+  regalo degradado a no-retirable para el creador solo porque aún le quedaba
+  bono. `debitSpendable` gasta `ttcC` primero y `bonusC` después; como una cuenta
+  gratis no tiene `ttcC`, sus regalos son siempre de bono.
+- **Un regalo se clasifica por cómo se pagó, no por el resultado.**
+  `Transaction.type` es `gift`/`platform` si el emisor usó monedas compradas, y
+  `gift_bonus`/`platform_bonus` si usó bono. `getPlatformEarnings` solo suma
+  `platform`: el corte de un regalo de bono no es dinero que nadie pagó, y
+  contarlo inflaría los ingresos y el NAV. Un regalo pagado de 1 moneda que
+  redondea a 0 Diamantes sigue siendo `gift`.
+- **Los créditos de admin van a `bonusC` por defecto** y dejan un asiento
+  `type: 'bonus'`. Es el único punto que puede acuñar saldo: por defecto no debe
+  crear dinero retirable, y nunca debe moverse sin registro.
 - **Transacciones:** `walletService` detecta si el servidor soporta
   transacciones (replica set) antes de usarlas. No vuelvas a intentar
   `withTransaction` con un `catch` de fallback: en un servidor standalone las
@@ -130,7 +158,7 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
 - **Nunca** pongas un `JWT_SECRET` por defecto que se use en producción; `env.js`
   falla a propósito si falta.
 - Las rutas `/api/admin/*` requieren `auth` + `requireAdmin`.
-- **El reparto de ingresos es 75/25 y debe sumar 1.** `CREATOR_SHARE` y
+- **El reparto de ingresos es 60/40 y debe sumar 1.** `CREATOR_SHARE` y
   `PLATFORM_SHARE` se validan al arrancar; un desajuste crearía o destruiría
   tokens. El share del creador se redondea hacia abajo (`Math.floor`) porque los
   Diamantes son enteros, y el resto va a la plataforma para que ambos lados
@@ -138,9 +166,19 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
 - El corte de plataforma se registra como `Transaction` con
   `type: 'platform'`. No lo omitas: sin ese asiento los ingresos de la casa no
   son auditables.
+- **Ningún paquete puede vender el TTC por debajo de `TTC_USD_RATE`** (hoy
+  $0,01). Ese es el suelo, y es la tasa de retiro entera, no
+  `CREATOR_SHARE × TTC_USD_RATE`: el regalo solo paga el 60%, pero el retiro
+  paga el 100%, y es el retiro el que marca el techo del desembolso. Por debajo
+  de esa cifra, comprar monedas, convertirlas a Diamantes y retirar daría
+  beneficio, y el NAV —base del precio de la acción— se iría a cero con el uso.
+  `assertPackagesCoverPayout()` lo comprueba al arrancar y aborta con el
+  paquete culpable. Si bajas `TTC_USD_RATE`, revisa los precios a la vez.
 - El vocabulario de cara al usuario es **Monedas (`coins`)** y **Diamantes
   (`diamonds`)**; `ttcC`/`ttcR` son los nombres internos. Mantén ambos en las
-  respuestas.
+  respuestas. El saldo gastable total se expone como `spendable`
+  (`coins + bonusCoins`): la UI debe usarlo para habilitar regalos, porque un
+  usuario nuevo con bono no tiene `coins` pero sí puede regalar.
 - Los `joinCode` de TAK Creators (internamente `squads`) nunca se devuelven al cliente.
 - **Cambiar de pestaña no debe cambiar de vista.** En `AuthForm`, las pestañas
   Correo/Teléfono llamaban a `reset('login')`, que además de limpiar el estado
@@ -561,6 +599,15 @@ navegadores con cámara y micrófono falsos** y hacer una llamada real entre ell
   - `node scripts/e2e-ui.js` recorre feed (comprueba que el `<video>` se
     reproduce, `readystate` y `paused`), registro, like, comentario, wallet
     (incluido enviar un regalo y ver bajar el saldo), squads, salud y perfil.
+    Sin sesión la app abre en la **portada de acceso**, así que el harness
+    entra por "Explorar sin cuenta" antes de esperar el feed; el alta exige
+    repetir la contraseña y aceptar los términos, y termina en la pantalla de
+    verificación del correo (se sale con "Lo verificaré más tarde").
+    `waitText` **lanza** al agotar el tiempo: para comprobaciones que se
+    registran con `check` hay que usar `sawText`, que devuelve booleano; si no,
+    el `check` sale siempre en falso aunque la pantalla sea la correcta.
+    Los tres fallos de `e2e-upload-optimize.js` en este contenedor son
+    ambientales: sin `ffmpeg` no hay HLS (`TRANSCODE_ENABLED`), no son de la UI.
   - `node scripts/e2e-calls.js` lanza **dos navegadores** y hace una llamada de
     voz y otra de vídeo reales entre ellos, comprobando que llegan pistas
     remotas de audio (y vídeo) y que colgar cierra la llamada en el otro lado.
