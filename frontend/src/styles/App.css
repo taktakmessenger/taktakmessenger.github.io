@@ -1341,6 +1341,183 @@
   padding: 0.7rem;
   border-top: 1px solid var(--border);
   background: rgba(13, 10, 26, 0.6);
+  /* El compositor admite una fila de vista previa encima; con `wrap`, el botón
+     de adjuntar y el campo no se aprietan cuando hay un adjunto elegido. */
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Botón de adjuntar, redondo y con el acento de la marca. */
+.composer-attach {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.composer-attach:hover:not(:disabled) {
+  border-color: var(--turquoise, var(--primary));
+}
+
+.composer-attach:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.composer-attach:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Vista previa del adjunto antes de enviarlo. Ocupa toda la fila, encima del
+   campo de texto. */
+.composer-preview {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.preview-thumb {
+  width: 2.6rem;
+  height: 2.6rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.preview-icon {
+  font-size: 1.4rem;
+}
+
+.preview-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-remove {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.preview-remove:hover {
+  color: var(--pink, var(--primary));
+}
+
+/* El campo de texto se queda con el espacio sobrante. */
+.thread-composer > input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Adjuntos dentro de la burbuja --- */
+.bubble.has-attachment {
+  padding: 0.35rem 0.35rem 0.35rem;
+}
+
+.bubble-attachment {
+  display: block;
+  max-width: 100%;
+}
+
+.bubble-image img,
+.bubble-video {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.bubble-audio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+
+.bubble-audio audio {
+  height: 2rem;
+  max-width: 200px;
+}
+
+/* Archivo genérico: icono, nombre y tamaño, en una fila. */
+.bubble-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  text-decoration: none;
+}
+
+.bubble-file-icon {
+  font-size: 1.3rem;
+}
+
+.bubble-file-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bubble-file-name {
+  font-size: 0.86rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.bubble-file-size {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+/* El texto que acompaña a un adjunto (pie de foto) necesita su propio margen. */
+.bubble.has-attachment .bubble-text {
+  padding: 0.15rem 0.4rem 0;
+}
+
+/* Oculta a la vista pero sigue disponible para lectores de pantalla: el input
+   de archivo real, que dispara el botón. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ------------------------------------------------------------------

@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const compression = require('compression');
@@ -7,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const env = require('./config/env');
 const db = require('./config/db');
 const serveFrontend = require('./middleware/serveFrontend');
+const attachmentKinds = require('./lib/attachments');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
@@ -99,7 +101,35 @@ function createApp() {
   app.use('/api/notifications', notificationRoutes);
 
   // Uploaded originals and their HLS renditions. Read-only.
-  app.use('/uploads', express.static(env.uploadsDir, { index: false, dotfiles: 'deny' }));
+  //
+  // `setHeaders` refuerza dos cosas en cada respuesta. `nosniff` impide que el
+  // navegador adivine el tipo por el contenido: sin él, un archivo con
+  // extensión inofensiva pero contenido HTML se ejecutaría. `Content-Disposition`
+  // separa lo que se puede mostrar en línea (imagen, vídeo, audio) de lo que se
+  // descarga, y de paso neutraliza el nombre para que no rompa la cabecera.
+  app.use(
+    '/uploads',
+    express.static(env.uploadsDir, {
+      index: false,
+      dotfiles: 'deny',
+      setHeaders: (res, filePath) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        const ext = path.extname(filePath).toLowerCase();
+        const kind = attachmentKinds.kindOfExtension(ext);
+        // Los segmentos de HLS no son adjuntos del chat y deben poder
+        // reproducirse: se sirven en línea siempre.
+        const isStream = ['.m3u8', '.ts', '.m4s'].includes(ext);
+        if (isStream) {
+          res.setHeader('Content-Disposition', 'inline');
+          return;
+        }
+        res.setHeader(
+          'Content-Disposition',
+          attachmentKinds.attachmentDisposition(kind || 'file', path.basename(filePath))
+        );
+      },
+    })
+  );
 
   // El frontend construido, cuando va en este mismo proceso. Se monta después
   // de las rutas de la API para no pisarlas, y antes del 404.

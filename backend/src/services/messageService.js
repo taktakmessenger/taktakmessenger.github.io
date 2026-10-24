@@ -128,6 +128,15 @@ function serializeMessage(m) {
           durationSeconds: m.call.durationSeconds || 0,
         }
       : null,
+    attachment: m.attachment
+      ? {
+          kind: m.attachment.kind,
+          url: m.attachment.url,
+          name: m.attachment.name,
+          size: m.attachment.size || 0,
+          durationSeconds: m.attachment.durationSeconds || 0,
+        }
+      : null,
     text: m.deletedAt ? '' : m.text || '',
     deleted: Boolean(m.deletedAt),
     status,
@@ -135,19 +144,36 @@ function serializeMessage(m) {
   };
 }
 
+// Texto que se ve en la lista de chats para un mensaje con adjunto. Sin esto,
+// la conversación aparecería vacía en la vista previa aunque el mensaje llevara
+// una foto.
+function attachmentPreview(attachment) {
+  if (!attachment) return '';
+  const labels = { image: '📷 Foto', video: '🎥 Vídeo', audio: '🎤 Audio', file: '📎 Archivo' };
+  const label = labels[attachment.kind] || '📎 Archivo';
+  return attachment.name ? `${label}: ${attachment.name}` : label;
+}
+
 // Persists a message and updates the conversation's denormalised preview and
 // unread counters in one place, so both the REST endpoint and the websocket
 // produce identical state.
-async function sendMessage({ conversationId, senderId, text }) {
+//
+// Un mensaje puede llevar solo texto, solo adjunto, o las dos cosas (el pie de
+// foto). Debe haber al menos una de las dos: un mensaje vacío no tiene sentido.
+async function sendMessage({ conversationId, senderId, text, attachment }) {
   const body = String(text || '').trim();
-  if (!body) throw new HttpError(400, 'El mensaje no puede estar vacío');
+  if (!body && !attachment) {
+    throw new HttpError(400, 'El mensaje no puede estar vacío');
+  }
 
   const conversation = await loadForParticipant(conversationId, senderId);
 
   const message = await Message.create({
     conversation: conversation._id,
     sender: senderId,
+    kind: attachment ? 'attachment' : 'text',
     text: body,
+    attachment: attachment || undefined,
   });
 
   const unread = new Map(conversation.unread || []);
@@ -159,7 +185,7 @@ async function sendMessage({ conversationId, senderId, text }) {
   }
 
   conversation.lastMessageAt = message.createdAt;
-  conversation.lastMessagePreview = body.slice(0, 140);
+  conversation.lastMessagePreview = (body || attachmentPreview(attachment)).slice(0, 140);
   conversation.unread = unread;
   await conversation.save();
 

@@ -17,6 +17,23 @@ const callInfoSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Adjunto de un mensaje. Igual que `call`, vive dentro del mensaje: no tiene
+// identidad propia ni se consulta por separado.
+const attachmentSchema = new mongoose.Schema(
+  {
+    kind: { type: String, enum: ['image', 'video', 'audio', 'file'], required: true },
+    // Ruta servible, relativa al dominio (por ejemplo `/uploads/chat/...`).
+    url: { type: String, required: true },
+    // Nombre original, ya limpio. Es el que se ve en el chat y el que se usa al
+    // descargar.
+    name: { type: String, required: true },
+    size: { type: Number, default: 0, min: 0 },
+    // Solo para audio y vídeo, cuando el cliente lo conoce.
+    durationSeconds: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false }
+);
+
 const messageSchema = new mongoose.Schema(
   {
     conversation: {
@@ -33,17 +50,18 @@ const messageSchema = new mongoose.Schema(
     // Una llamada vive en el mismo flujo que el texto, como en WhatsApp. Así el
     // hilo la ordena, el contador de no leídos la cuenta y la paginación la
     // pagina sin código adicional. `kind` decide cómo se pinta.
-    kind: { type: String, enum: ['text', 'call'], default: 'text' },
+    kind: { type: String, enum: ['text', 'call', 'attachment'], default: 'text' },
     call: { type: callInfoSchema, default: undefined },
-    // Plain text only for now. Keeping the body as a string (rather than a
-    // typed union) is deliberate: attachments and voice notes can be added as
-    // optional fields without invalidating existing documents.
+    attachment: { type: attachmentSchema, default: undefined },
+    // Un mensaje puede llevar texto y adjunto a la vez (el pie de foto), por eso
+    // no son excluyentes.
     text: {
       type: String,
-      // Una entrada de llamada no lleva cuerpo; exigir texto obligaría a meter
-      // una cadena de relleno en el historial.
+      // Ni una llamada ni un adjunto exigen cuerpo: el texto es opcional en
+      // ambos casos. La validación de que hay algo que enviar vive en el
+      // servicio, que es quien conoce las dos partes.
       required: function requiredText() {
-        return this.kind !== 'call';
+        return this.kind === 'text';
       },
       trim: true,
       maxlength: 2000,

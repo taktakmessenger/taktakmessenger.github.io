@@ -1,12 +1,46 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs/promises');
+const multer = require('multer');
 const { body, param, query } = require('express-validator');
 const messages = require('../services/messageService');
 const liveSockets = require('../services/liveSockets');
+const env = require('../config/env');
+const attachments = require('../lib/attachments');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
-const { asyncHandler } = require('../utils/http');
+const { asyncHandler, HttpError } = require('../utils/http');
 
 const router = express.Router();
+
+// Los adjuntos del chat viven en su propia subcarpeta de `uploads`. Separarlos
+// de los vídeos del feed evita que un borrado o un listado de un tipo toque el
+// otro, y deja claro de dónde sale cada archivo.
+const CHAT_DIR = path.join(env.uploadsDir, 'chat');
+
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      await fs.mkdir(CHAT_DIR, { recursive: true });
+      cb(null, CHAT_DIR);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    // El nombre en disco es aleatorio; el original se guarda en el mensaje y es
+    // el que se muestra. Así dos archivos con el mismo nombre no se pisan.
+    cb(null, attachments.storedName(file.originalname));
+  },
+});
+
+// El límite de multer es el mayor de los permitidos por tipo; el límite fino
+// (imagen 10 MB, vídeo 50 MB…) lo aplica `validateAttachment` después, que es
+// quien conoce el tipo ya clasificado.
+const upload = multer({
+  storage,
+  limits: { fileSize: Math.max(...Object.values(attachments.MAX_BYTES)) },
+});
 
 // Every route here requires a session: messages are private by definition.
 router.use(auth);
@@ -55,14 +89,40 @@ router.post(
   '/conversations/:id/messages',
   [
     param('id').isMongoId().withMessage('Conversación inválida'),
-    body('text').trim().isLength({ min: 1, max: 2000 }).withMessage('Mensaje inválido'),
+    // El texto es opcional: un mensaje puede ser solo un adjunto. Se valida
+    // aquí la forma, y el servicio comprueba que hay algo que enviar (texto o
+    // adjunto).
+    body('text').optional().trim().isLength({ max: 2000 }).withMessage('Mensaje inválido'),
+    body('attachment.kind').optional().isIn(['image', 'video', 'audio', 'file']),
+    body('attachment.url').optional().isString().isLength({ max: 500 }),
+    body('attachment.name').optional().isString().isLength({ max: 200 }),
+    body('attachment.size').optional().isInt({ min: 0 }),
+    body('attachment.durationSeconds').optional().isFloat({ min: 0 }),
   ],
   validate,
   asyncHandler(async (req, res) => {
+    const { attachment } = req.body;
+
+    // Un adjunto solo puede apuntar a un archivo que este servidor acaba de
+    // aceptar. Sin esta comprobación, cualquiera podría publicar una URL
+    // externa (o interna) como si fuera un adjunto suyo.
+    if (attachment && !String(attachment.url || '').startsWith('/uploads/chat/')) {
+      throw new HttpError(400, 'Adjunto inválido');
+    }
+
     const result = await messages.sendMessage({
       conversationId: req.params.id,
       senderId: req.user.userId,
       text: req.body.text,
+      attachment: attachment
+        ? {
+            kind: attachment.kind,
+            url: attachment.url,
+            name: attachment.name,
+            size: attachment.size || 0,
+            durationSeconds: attachment.durationSeconds || 0,
+          }
+        : null,
     });
 
     // The client posts over REST, so the fan-out has to happen here too.
@@ -75,6 +135,38 @@ router.post(
     );
 
     res.status(201).json(result);
+  })
+);
+
+// Sube un archivo para adjuntarlo a un mensaje. Devuelve la referencia que
+// luego se envía en el mensaje; no crea el mensaje por sí sola, para que el
+// usuario pueda añadir un pie de foto antes de enviarlo.
+router.post(
+  '/attachments',
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    let info;
+    try {
+      info = attachments.validateAttachment(req.file);
+    } catch (err) {
+      // El archivo ya está en disco: si no se acepta, no debe quedarse ahí.
+      if (req.file?.path) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
+      throw new HttpError(400, err.message);
+    }
+
+    res.status(201).json({
+      attachment: {
+        kind: info.kind,
+        // Se sirve desde `/uploads/chat/<fichero>`; el nombre visible es el
+        // original ya limpio.
+        url: `/uploads/chat/${path.basename(req.file.path)}`,
+        name: attachments.safeName(req.file.originalname),
+        size: req.file.size,
+        durationSeconds: 0,
+      },
+    });
   })
 );
 

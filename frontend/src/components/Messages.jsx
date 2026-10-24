@@ -26,12 +26,17 @@ function userId(person) {
 function mergeMessage(prev, incoming) {
   const senderId = userId(incoming.sender);
 
+  // La copia optimista se reconoce por emisor, texto y adjunto. No basta con el
+  // texto: dos fotos enviadas seguidas sin pie de foto comparten texto vacío y
+  // la segunda borraría a la primera. El adjunto se compara por su URL, que es
+  // única por archivo subido.
   const withoutEcho = prev.filter(
     (m) =>
       !(
         m.pending &&
         String(userId(m.sender)) === String(senderId) &&
-        m.text === incoming.text
+        m.text === incoming.text &&
+        (m.attachment?.url || null) === (incoming.attachment?.url || null)
       )
   );
 
@@ -117,6 +122,12 @@ function Thread({ conversationId, onBack, onCall }) {
   const bottomRef = useRef(null);
   const typingSentAt = useRef(0);
   const typingStopTimer = useRef(null);
+  // Adjunto elegido y aún no enviado. Se sube al servidor en cuanto se elige,
+  // para que el envío del mensaje sea inmediato; aquí solo se guarda la
+  // referencia que devolvió el servidor.
+  const [attachment, setAttachment] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Carga inicial del hilo y del interlocutor.
   useEffect(() => {
@@ -219,12 +230,41 @@ function Thread({ conversationId, onBack, onCall }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
+  // Sube el archivo elegido y guarda la referencia. Se sube al elegirlo y no al
+  // enviar, para que el usuario vea una vista previa y pueda quitar el archivo
+  // antes de mandarlo, y para que el envío no dependa de una subida lenta.
+  async function pickFile(event) {
+    const file = event.target.files?.[0];
+    // Se limpia el input para poder elegir el mismo archivo otra vez.
+    event.target.value = '';
+    if (!file) return;
+
+    setError('');
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post('/messages/attachments', form);
+      setAttachment(data.attachment);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function clearAttachment() {
+    setAttachment(null);
+  }
+
   function send(event) {
     event.preventDefault();
     const body = text.trim();
-    if (!body) return;
+    // Sin texto ni adjunto no hay nada que enviar.
+    if (!body && !attachment) return;
 
     setText('');
+    setAttachment(null);
     // Se deja de escribir al enviar, para que el otro no siga viendo los puntos.
     setPeerTyping(false);
     clearTimeout(typingStopTimer.current);
@@ -236,7 +276,9 @@ function Thread({ conversationId, onBack, onCall }) {
       id: `local-${Date.now()}`,
       conversation: conversationId,
       sender: { id: userId(user), username: user.username },
+      kind: attachment ? 'attachment' : 'text',
       text: body,
+      attachment: attachment || null,
       status: 'pending',
       createdAt: new Date().toISOString(),
       pending: true,
@@ -244,7 +286,10 @@ function Thread({ conversationId, onBack, onCall }) {
     setMessages((prev) => [...prev, optimistic]);
 
     api
-      .post(`/messages/conversations/${conversationId}/messages`, { text: body })
+      .post(`/messages/conversations/${conversationId}/messages`, {
+        text: body,
+        attachment: attachment || undefined,
+      })
       .then(({ data }) => {
         // `mergeMessage` retira la copia pendiente y, si el eco del socket ya
         // añadió el mensaje, no lo repite.
@@ -253,7 +298,10 @@ function Thread({ conversationId, onBack, onCall }) {
       .catch((err) => {
         setError(err.message);
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+        // Se devuelven texto y adjunto para que el usuario no tenga que
+        // volver a subir el archivo.
         setText(body);
+        setAttachment(optimistic.attachment);
       });
   }
 
@@ -350,8 +398,9 @@ function Thread({ conversationId, onBack, onCall }) {
             <div key={m.id}>
               {showDay && <div className="day-sep"><span>{dayLabel(m.createdAt)}</span></div>}
               <div className={`bubble-row ${mine ? 'mine' : 'theirs'}`}>
-                <div className={`bubble ${m.pending ? 'pending' : ''}`}>
-                  <span className="bubble-text">{m.text}</span>
+                <div className={`bubble ${m.pending ? 'pending' : ''} ${m.attachment ? 'has-attachment' : ''}`}>
+                  <Attachment attachment={m.attachment} pending={m.pending} />
+                  {m.text && <span className="bubble-text">{m.text}</span>}
                   <span className="bubble-meta">
                     <span className="bubble-time">{clock(m.createdAt)}</span>
                     {mine && <Ticks status={m.pending ? 'pending' : m.status} />}
@@ -375,6 +424,49 @@ function Thread({ conversationId, onBack, onCall }) {
       </div>
 
       <form className="thread-composer" onSubmit={send}>
+        {/* Input oculto: el botón visible solo lo dispara. `accept` filtra el
+            selector del sistema, y el servidor vuelve a validar de todas formas:
+            lo que el usuario pueda forzar en el navegador no es de fiar. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="visually-hidden"
+          onChange={pickFile}
+          accept="image/*,video/*,audio/*,.pdf,.txt,.csv,.md,.json,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+          aria-label="Adjuntar archivo"
+        />
+        <button
+          type="button"
+          className="composer-attach"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          aria-label="Adjuntar archivo"
+          title="Adjuntar archivo"
+        >
+          {uploading ? '⏳' : '📎'}
+        </button>
+
+        {attachment && (
+          <div className="composer-preview">
+            {attachment.kind === 'image' ? (
+              <img src={attachment.url} alt="" className="preview-thumb" />
+            ) : (
+              <span className="preview-icon" aria-hidden="true">
+                {attachment.kind === 'video' ? '🎥' : attachment.kind === 'audio' ? '🎤' : '📎'}
+              </span>
+            )}
+            <span className="preview-name">{attachment.name}</span>
+            <button
+              type="button"
+              className="preview-remove"
+              onClick={clearAttachment}
+              aria-label="Quitar adjunto"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <input
           type="text"
           placeholder="Escribe un mensaje…"
@@ -386,12 +478,85 @@ function Thread({ conversationId, onBack, onCall }) {
           maxLength={2000}
           aria-label="Mensaje"
         />
-        <button type="submit" className="btn-primary" disabled={!text.trim()}>
+        <button type="submit" className="btn-primary" disabled={(!text.trim() && !attachment) || uploading}>
           Enviar
         </button>
       </form>
     </div>
   );
+}
+
+// Adjunto dentro de una burbuja. Cada tipo se pinta como se espera en un chat:
+// la imagen se ve, el vídeo y el audio se reproducen ahí mismo, y el resto se
+// ofrece como descarga con su nombre y tamaño.
+function Attachment({ attachment, pending }) {
+  if (!attachment) return null;
+
+  const url = attachment.url;
+  const size = formatSize(attachment.size);
+
+  if (attachment.kind === 'image') {
+    return (
+      <a
+        className="bubble-attachment bubble-image"
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img src={url} alt={attachment.name || 'Imagen'} loading="lazy" />
+      </a>
+    );
+  }
+
+  if (attachment.kind === 'video') {
+    return (
+      <video
+        className="bubble-attachment bubble-video"
+        src={url}
+        controls
+        preload="metadata"
+        // Sin esto, en móvil el vídeo se abre a pantalla completa al tocarlo.
+        playsInline
+      />
+    );
+  }
+
+  if (attachment.kind === 'audio') {
+    return (
+      <div className="bubble-attachment bubble-audio">
+        <span aria-hidden="true">🎤</span>
+        <audio src={url} controls preload="metadata" />
+      </div>
+    );
+  }
+
+  // Archivo genérico: se descarga. Se muestra el icono, el nombre y el tamaño.
+  return (
+    <a
+      className="bubble-attachment bubble-file"
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={attachment.name || undefined}
+    >
+      <span className="bubble-file-icon" aria-hidden="true">
+        📎
+      </span>
+      <span className="bubble-file-info">
+        <span className="bubble-file-name">{attachment.name || 'Archivo'}</span>
+        {size && <span className="bubble-file-size">{size}</span>}
+      </span>
+    </a>
+  );
+}
+
+// Tamaño legible. Se redondea a una cifra: "1,2 MB" es lo que se quiere leer,
+// no "1,1876 MB".
+function formatSize(bytes) {
+  if (!bytes || bytes < 1024) return bytes ? `${bytes} B` : '';
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
 }
 
 export default function Messages({ onCall, initialUser, onConsumeInitialUser, onOpenChat }) {
