@@ -5,7 +5,7 @@ import { CallProvider, useCall } from './contexts/CallContext';
 import { VoiceRoomProvider } from './contexts/VoiceRoomContext';
 import Navigation from './components/Navigation';
 import Splash from './components/Splash';
-import Feed from './components/Feed';
+import Home from './components/Home';
 import Upload from './components/Upload';
 import Wallet from './components/Wallet';
 import Profile from './components/Profile';
@@ -338,10 +338,11 @@ function Shell() {
         );
       default:
         return (
-          <Feed
+          <Home
             onGiftRequest={openGift}
             onCall={callPeer}
             onMessage={messageCreator}
+            onOpenProfile={() => setView('profile')}
           />
         );
     }

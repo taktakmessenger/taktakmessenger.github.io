@@ -229,7 +229,7 @@ function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGi
   );
 }
 
-export default function Feed({ onGiftRequest, onCall, onMessage }) {
+export default function Feed({ onGiftRequest, onCall, onMessage, paused = false }) {
   const { user } = useAuth();
   const [videos, setVideos] = useState([]);
   const [likedIds, setLikedIds] = useState([]);
@@ -397,7 +397,7 @@ export default function Feed({ onGiftRequest, onCall, onMessage }) {
           <VideoCard
             key={video._id}
             video={video}
-            active={index === activeIndex}
+            active={index === activeIndex && !paused}
             soundOn={soundOn}
             onSoundBlocked={() => setSoundBlocked(true)}
             liked={likedIds.includes(video._id)}

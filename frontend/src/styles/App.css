@@ -4110,3 +4110,65 @@
     padding-top: 1.5rem;
   }
 }
+
+/* ------------------------------------------------------------------
+   Inicio: el feed de vídeos y las publicaciones del muro en un mismo sitio
+   ------------------------------------------------------------------ */
+
+.home {
+  position: relative;
+  height: 100%;
+}
+
+/* El selector flota sobre el vídeo, como el "Para ti / Siguiendo" de TikTok.
+   No empuja el reel: si le restara altura, cada tarjeta dejaría de encajar en
+   la pantalla y el snap se descuadraría. */
+.home-switch {
+  position: absolute;
+  top: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(7, 7, 13, 0.55);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+}
+
+.home-switch-btn {
+  padding: 0.35rem 0.9rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.home-switch-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* El panel de vídeo ocupa todo el alto disponible bajo la barra. */
+.home-pane {
+  height: 100%;
+}
+
+/* Las publicaciones no son a pantalla completa: van en una columna con scroll
+   normal, así que este panel sí scrollea por su cuenta. */
+.home-pane-posts {
+  overflow-y: auto;
+  padding-top: 3.2rem;
+}
+
+/* Dentro de Inicio la cabecera del muro sobra: ya está el selector. */
+.wall-embedded {
+  padding-top: 0.5rem;
+}

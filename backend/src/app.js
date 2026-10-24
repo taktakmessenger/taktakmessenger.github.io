@@ -36,7 +36,52 @@ function createApp() {
   const app = express();
 
   app.set('trust proxy', 1);
-  app.use(helmet());
+  // CSP a medida. La de helmet por defecto trae `default-src 'self'` sin
+  // excepciones, y eso rompe dos cosas que la app sí necesita:
+  //
+  //  - `media-src`: hls.js no reproduce HLS con un `<video src="...m3u8">`, sino
+  //    que descarga los segmentos y los sirve a través de un Blob. Con
+  //    `default-src 'self'` el navegador bloquea `blob:` y **ningún vídeo
+  //    transcodificado se ve**. Es el fallo más caro de esta lista porque el
+  //    feed entero es vídeo.
+  //  - `script-src`: Stripe y el botón de Google cargan sus scripts desde sus
+  //    dominios; sin ellos no hay compra de monedas ni alta con Google.
+  //
+  // El resto se queda tan cerrado como lo deja helmet: nada de `unsafe-eval`,
+  // `object-src 'none'` y `frame-ancestors 'self'`. Los datos (`data:`) solo se
+  // permiten para imágenes y fuentes, no para scripts.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'self'"],
+          objectSrc: ["'none'"],
+          // hls.js adjunta los segmentos por Blob, y las previews de subida son
+          // object URLs del propio archivo elegido.
+          mediaSrc: ["'self'", 'blob:', 'data:'],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          fontSrc: ["'self'", 'https:', 'data:'],
+          styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+          scriptSrc: ["'self'", 'https://js.stripe.com', 'https://accounts.google.com'],
+          scriptSrcAttr: ["'none'"],
+          // Stripe monta sus campos en un iframe propio.
+          frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
+          connectSrc: [
+            "'self'",
+            'https://api.stripe.com',
+            'https://accounts.google.com',
+            'wss:',
+          ],
+          workerSrc: ["'self'", 'blob:'],
+          upgradeInsecureRequests: [],
+        },
+      },
+    })
+  );
   app.use(cors({ origin: env.corsOrigin }));
   app.use(compression());
   if (env.nodeEnv !== 'test') {

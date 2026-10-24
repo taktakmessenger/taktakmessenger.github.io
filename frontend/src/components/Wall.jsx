@@ -350,7 +350,10 @@ function PostCard({ post, currentUser, onOpenProfile }) {
 
 // El muro: la sección estilo Facebook de TAK TAK. Muestra las publicaciones de
 // todo el mundo, con caja de publicar, me gusta y comentarios.
-export default function Wall({ onOpenProfile }) {
+//
+// `embedded` es cuando se pinta dentro de Inicio, en la pestaña Publicaciones:
+// ahí manda el selector de Inicio y la cabecera grande sobra.
+export default function Wall({ onOpenProfile, embedded = false }) {
   const { user } = useAuth();
   const [posts, setPosts] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -392,11 +395,13 @@ export default function Wall({ onOpenProfile }) {
   }
 
   return (
-    <div className="wall">
-      <header className="wall-header">
-        <h1>Muro</h1>
-        <p className="muted">Lo que comparte la comunidad TAK TAK</p>
-      </header>
+    <div className={`wall ${embedded ? 'wall-embedded' : ''}`}>
+      {!embedded && (
+        <header className="wall-header">
+          <h1>Muro</h1>
+          <p className="muted">Lo que comparte la comunidad TAK TAK</p>
+        </header>
+      )}
 
       {user ? (
         <Composer onPublished={(post) => setPosts((prev) => [post, ...prev])} />

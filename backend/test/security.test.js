@@ -496,3 +496,34 @@ test('a proposed source cannot be verified without an admin', async () => {
     .send({ status: 'verified' });
   assert.equal(res.status, 403);
 });
+
+// La CSP se endurece por defecto en helmet, y con ella se cae la reproducción
+// de vídeo sin que ninguna otra prueba se entere: hls.js adjunta los segmentos
+// por un Blob y el navegador lo bloquea. Estas comprobaciones fijan las
+// excepciones que la app necesita de verdad, para que nadie las quite sin
+// darse cuenta de que está dejando el feed sin vídeo.
+test('la CSP permite Blob en media para que hls.js pueda reproducir', async () => {
+  const res = await app().get('/health');
+  const csp = res.headers['content-security-policy'];
+  assert.ok(csp, 'debe haber cabecera CSP');
+  const media = csp.split(';').find((d) => d.trim().startsWith('media-src'));
+  assert.ok(media, 'debe declarar media-src');
+  assert.match(media, /blob:/, 'sin blob: el HLS no se reproduce');
+});
+
+test('la CSP permite los scripts de Stripe y Google', async () => {
+  const res = await app().get('/health');
+  const csp = res.headers['content-security-policy'];
+  const script = csp.split(';').find((d) => d.trim().startsWith('script-src '));
+  assert.ok(script, 'debe declarar script-src');
+  assert.match(script, /js\.stripe\.com/);
+  assert.match(script, /accounts\.google\.com/);
+});
+
+test('la CSP no afloja unsafe-eval ni object-src', async () => {
+  const res = await app().get('/health');
+  const csp = res.headers['content-security-policy'];
+  assert.doesNotMatch(csp, /unsafe-eval/);
+  const object = csp.split(';').find((d) => d.trim().startsWith('object-src'));
+  assert.match(object, /'none'/);
+});

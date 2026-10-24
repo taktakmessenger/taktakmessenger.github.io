@@ -796,6 +796,17 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
   regalo pasaría desapercibido, que es justo el fallo que se corrigió. Si añades
   otra cosa a la barra, pregúntate si de verdad necesita estar siempre a la
   vista; si no, va al perfil.
+- **Inicio tiene dos pestañas por dentro**, no una: `Vídeos | Publicaciones`
+  (`Home.jsx`, selector flotante `.home-switch`). El feed de vídeo manda y va
+  primero; Publicaciones pinta el muro ahí mismo, sin cambiar de pestaña en la
+  barra. El selector flota **sobre** el vídeo en vez de empujarlo hacia abajo a
+  propósito: `.reels` mide `calc(100dvh - var(--tabbar-h))` y restarle altura
+  descuadraría el encaje de cada tarjeta con el snap. Es el mismo recurso que
+  usa TikTok con su "Para ti / Siguiendo".
+- Al cambiar a Publicaciones el feed **no se desmonta, se pausa** (`Feed` acepta
+  `paused`): si se desmontara, el vídeo seguiría sonando por detrás y al volver
+  cada uno habría perdido su sitio. Con `paused`, `active` se apaga en todas las
+  tarjetas y el efecto de reproducción pausa y rebobina la que estaba puesta.
 - La barra es `position: fixed`. El alto vive en la variable `--tabbar-h`
   (`index.css`) y tanto `.app` como `.reels`/`.reel` lo descuentan para que el
   feed no quede tapado. Si cambias el padding de `.tabbar`, actualiza
@@ -1037,6 +1048,33 @@ redirigirlo. Frontend: `frontend/test/stripe.test.js` sobre la lógica de
 `saveCardWithStripe`, que recibe el cliente de Stripe por parámetro para poder
 probarla sin descargar Stripe.js.
 
+
+## La CSP no puede quedarse en la de helmet por defecto
+
+`app.js` monta `helmet()` con una CSP a medida y `useDefaults: false`. **No la
+cambies por `helmet()` a secas**: la CSP por defecto trae `default-src 'self'`
+sin excepciones y eso rompe dos cosas que la app sí usa.
+
+- **`media-src` necesita `blob:`.** hls.js no reproduce HLS con un
+  `<video src="algo.m3u8">`: descarga los segmentos y los inyecta en el elemento
+  mediante un Blob (MSE). Con la CSP por defecto el navegador bloquea `blob:` y
+  **ningún vídeo transcodificado se ve**, aunque el `.m3u8` y los segmentos se
+  sirvan con un 200. El síntoma engaña: el reproductor queda mudo en
+  `readyState 0` y `error.code 4` sin ningún error de red, porque la petición
+  sí llegó bien; lo que se bloquea es el Blob.
+- **`script-src` necesita `js.stripe.com` y `accounts.google.com`.** Sin eso no
+  se carga Stripe (comprar monedas) ni el botón de alta con Google. Se veía en
+  consola como "Failed to load Stripe.js".
+- `connectSrc` lleva `wss:` porque el chat y las llamadas van por WebSocket.
+
+Lo que **no** se relaja: nada de `unsafe-eval`, `object-src 'none'`,
+`frame-ancestors 'self'` y `data:` solo para imágenes y fuentes, nunca para
+scripts. Tres pruebas en `security.test.js` fijan esto; si alguien vuelve a la
+CSP por defecto, fallan y explican por qué.
+
+Esto no se detectó durante mucho tiempo porque los vídeos de prueba eran
+archivos falsos de un byte: sin un vídeo real, el reproductor fallaba igual con
+CSP y sin ella y la causa quedaba tapada.
 
 ## Despliegue (Docker y Render)
 
