@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCall } from '../contexts/CallContext';
 import { listAudioOutputs, applySink } from '../lib/sound';
-import { dragTo, nearestCorner, cornerPosition } from '../lib/pipPosition';
+import { dragTo, cornerOf, cornerPosition } from '../lib/pipPosition';
 
 // Texto del estado actual, en lenguaje llano.
 const LABELS = {
@@ -43,101 +43,123 @@ export default function CallOverlay() {
 
   // --- Cuadro propio arrastrable -------------------------------------------
   // Como en WhatsApp: el recuadro donde te ves se puede mover por la pantalla y
-  // al soltarlo se pega a la esquina más cercana. La posición se guarda en
-  // píxeles relativos al área de llamada; `null` significa "aún sin decidir",
-  // y entonces se coloca en la esquina por defecto (abajo a la derecha).
+  // al soltarlo se pega a la esquina más cercana.
+  //
+  // La fuente de verdad es la ESQUINA, no los píxeles. Guardar píxeles obliga a
+  // medir el área en el momento justo, y en un móvil que aún está colocando el
+  // diseño esa medida todavía es provisional: el cuadro acababa anclado al
+  // borde equivocado. Guardando la esquina, la posición se recalcula cuando las
+  // medidas son de fiar y sigue siendo correcta al girar el móvil.
   const stageRef = useRef(null);
+  const [corner, setCorner] = useState('bottom-right');
+  // Posición en píxeles que se pinta. Se deriva de la esquina y de las medidas
+  // reales; se guarda en estado para no medir en cada render.
   const [localPos, setLocalPos] = useState(null);
   // Datos del arrastre en curso. Van en un ref y no en estado porque cambian en
   // cada movimiento del puntero y no deben provocar un render por sí solos.
   const dragRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
-  // Coloca el cuadro en su esquina. Se recalcula cuando cambia el tamaño del
-  // área (al girar el móvil o redimensionar la ventana), porque una posición
-  // guardada en píxeles deja de ser válida y el cuadro podría salirse.
+  // Medidas del área y del cuadro, o `null` si aún no son fiables (elemento
+  // todavía sin altura). Se exige un mínimo para no colocar el cuadro con una
+  // medida a medio calcular.
+  const measure = useCallback(() => {
+    const stage = stageRef.current;
+    const box = localVideoRef.current;
+    if (!stage || !box) return null;
+
+    const area = { width: stage.clientWidth, height: stage.clientHeight };
+    const size = { width: box.offsetWidth, height: box.offsetHeight };
+    if (area.width < 40 || area.height < 40 || size.width < 10 || size.height < 10) {
+      return null;
+    }
+    return { area, size };
+  }, []);
+
+  // Recalcula los píxeles a partir de la esquina vigente.
   const placeLocal = useCallback(
-    (position) => {
-      const stage = stageRef.current;
-      const box = localVideoRef.current;
-      if (!stage || !box) return;
-
-      const area = { width: stage.clientWidth, height: stage.clientHeight };
-      const size = { width: box.offsetWidth, height: box.offsetHeight };
-
-      setLocalPos(
-        position
-          ? nearestCorner(position, area, size)
-          : cornerPosition('bottom-right', area, size)
-      );
+    (which = corner) => {
+      const m = measure();
+      if (!m) return;
+      setLocalPos(cornerPosition(which, m.area, m.size));
     },
-    []
+    [corner, measure]
   );
 
-  // Al montar el vídeo propio se le da una posición. También al pasar de la
-  // pantalla completa a la burbuja, porque el elemento se vuelve a crear.
+  // Al aparecer el cuadro se le da su posición. Se reintenta unos frames porque
+  // el vídeo puede tardar en tener tamaño, y con una medida provisional el
+  // cuadro quedaría mal anclado.
   useEffect(() => {
     if (status === 'idle' || kind !== 'video' || camOff) return undefined;
 
-    // Un frame de margen para que el navegador ya tenga medidas del `<video>`.
-    const raf = requestAnimationFrame(() => placeLocal(localPos));
+    let raf;
+    let tries = 0;
+    const tick = () => {
+      const m = measure();
+      if (m) {
+        setLocalPos(cornerPosition(corner, m.area, m.size));
+        return;
+      }
+      tries += 1;
+      if (tries < 30) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-    // `localPos` se lee pero no debe disparar el efecto: si entrara, cada
-    // arrastre recolocaría el cuadro y se pelearía con el dedo.
+    // `corner` no entra: se lee la esquina vigente al colocar, pero un cambio de
+    // esquina no debe reiniciar este bucle. Lo recoloca el efecto siguiente.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, kind, camOff, minimized, placeLocal]);
+  }, [status, kind, camOff, minimized, measure]);
 
-  // Mantiene el cuadro dentro del área al cambiar su tamaño.
+  // Al cambiar de esquina (al soltar un arrastre) se recalcula la posición.
+  useEffect(() => {
+    if (status === 'idle' || kind !== 'video' || camOff) return;
+    placeLocal(corner);
+  }, [corner, status, kind, camOff, placeLocal]);
+
+  // Mantiene el cuadro en su esquina al cambiar el tamaño del área: girar el
+  // móvil o redimensionar la ventana.
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage || typeof ResizeObserver === 'undefined') return undefined;
 
-    const observer = new ResizeObserver(() => placeLocal(localPos));
+    const observer = new ResizeObserver(() => placeLocal());
     observer.observe(stage);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeLocal, status]);
 
   const startDrag = useCallback(
     (event) => {
-      const stage = stageRef.current;
-      const box = localVideoRef.current;
-      if (!stage || !box || !localPos) return;
+      const m = measure();
+      if (!m || !localPos) return;
 
       // Se captura el puntero para seguir recibiendo movimientos aunque el dedo
-      // salga del recuadro, y para que el navegador no interprete el gesto como
-      // un desplazamiento de la página.
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      // salga del recuadro. Va en `try` a propósito: si el puntero ya no existe,
+      // esto lanza y abortaría el arrastre entero. Capturar es una mejora, no un
+      // requisito.
+      try {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      } catch {
+        // Sin captura el arrastre sigue funcionando dentro del recuadro.
+      }
       dragRef.current = {
         pointerId: event.pointerId,
         start: { x: event.clientX, y: event.clientY },
         origin: localPos,
-        moved: false,
+        area: m.area,
+        size: m.size,
+        last: localPos,
       };
       setDragging(true);
     },
-    [localPos]
+    [localPos, measure]
   );
 
   const moveDrag = useCallback((event) => {
     const drag = dragRef.current;
-    const stage = stageRef.current;
-    const box = localVideoRef.current;
-    if (!drag || !stage || !box || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== event.pointerId) return;
 
-    const area = { width: stage.clientWidth, height: stage.clientHeight };
-    const size = { width: box.offsetWidth, height: box.offsetHeight };
     const pointer = { x: event.clientX, y: event.clientY };
-
-    // Un movimiento mínimo evita que un toque (para nada) cuente como arrastre.
-    if (
-      Math.abs(pointer.x - drag.start.x) > 3 ||
-      Math.abs(pointer.y - drag.start.y) > 3
-    ) {
-      drag.moved = true;
-    }
-
-    const next = dragTo(drag.origin, drag.start, pointer, area, size);
+    const next = dragTo(drag.origin, drag.start, pointer, drag.area, drag.size);
     // Se guarda también en el ref: al soltar hay que pegar a la esquina desde la
     // última posición real, y leerla del estado podría dar el valor del render
     // anterior, que va un movimiento por detrás del dedo.
@@ -145,15 +167,23 @@ export default function CallOverlay() {
     setLocalPos(next);
   }, []);
 
-  const endDrag = useCallback((event) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+  const endDrag = useCallback(
+    (event) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
 
-    dragRef.current = null;
-    setDragging(false);
-    // Al soltar se pega a la esquina más cercana, como WhatsApp.
-    placeLocal(drag.last || drag.origin);
-  }, [placeLocal]);
+      const last = drag.last || drag.origin;
+      dragRef.current = null;
+      setDragging(false);
+      // Al soltar se pega a la esquina más cercana, como WhatsApp. Se guarda la
+      // esquina, y el efecto correspondiente recalcula los píxeles con la medida
+      // real del área en ese momento.
+      const which = cornerOf(last, drag.area, drag.size);
+      setCorner(which);
+      setLocalPos(cornerPosition(which, drag.area, drag.size));
+    },
+    []
+  );
 
   // Salidas de audio del dispositivo (altavoz, auricular, Bluetooth). `setSinkId`
   // no existe en todos los navegadores; si no está, la lista queda vacía y el

@@ -4,7 +4,7 @@ import {
   EDGE_GAP,
   clampPosition,
   dragTo,
-  nearestCorner,
+  cornerOf,
   cornerPosition,
 } from '../src/lib/pipPosition.js';
 
@@ -53,25 +53,30 @@ test('arrastrar fuera del área deja el cuadro dentro', () => {
 });
 
 test('al soltar arriba a la izquierda se pega a esa esquina', () => {
-  assert.deepEqual(nearestCorner({ x: 40, y: 60 }, AREA, BOX), {
-    x: EDGE_GAP,
-    y: EDGE_GAP,
-  });
+  assert.equal(cornerOf({ x: 40, y: 60 }, AREA, BOX), 'top-left');
 });
 
 test('al soltar abajo a la derecha se pega a esa esquina', () => {
-  assert.deepEqual(nearestCorner({ x: 320, y: 480 }, AREA, BOX), {
-    x: AREA.width - BOX.width - EDGE_GAP,
-    y: AREA.height - BOX.height - EDGE_GAP,
-  });
+  assert.equal(cornerOf({ x: 320, y: 480 }, AREA, BOX), 'bottom-right');
 });
 
-test('una posición sin arrastrar también se pega a la esquina más cercana', () => {
-  // Centro exacto: el desempate es hacia la esquina inferior derecha.
-  assert.deepEqual(nearestCorner({ x: 140, y: 220 }, AREA, BOX), {
-    x: AREA.width - BOX.width - EDGE_GAP,
-    y: AREA.height - BOX.height - EDGE_GAP,
-  });
+test('al soltar arriba a la derecha se pega a esa esquina', () => {
+  assert.equal(cornerOf({ x: 300, y: 50 }, AREA, BOX), 'top-right');
+});
+
+test('al soltar abajo a la izquierda se pega a esa esquina', () => {
+  assert.equal(cornerOf({ x: 50, y: 450 }, AREA, BOX), 'bottom-left');
+});
+
+test('cornerOf no se sale de los límites al decidir', () => {
+  // Aunque la posición esté fuera del área, la esquina se decide con la
+  // posición ya recortada.
+  assert.equal(cornerOf({ x: -500, y: -500 }, AREA, BOX), 'top-left');
+  assert.equal(cornerOf({ x: 5000, y: 5000 }, AREA, BOX), 'bottom-right');
+});
+
+test('cornerOf sin área devuelve la esquina por defecto', () => {
+  assert.equal(cornerOf({ x: 10, y: 10 }, null, BOX), 'bottom-right');
 });
 
 test('cornerPosition devuelve cada esquina', () => {

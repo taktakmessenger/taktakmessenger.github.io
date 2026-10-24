@@ -635,6 +635,27 @@ export function CallProvider({ children }) {
     ]
   );
 
+  // Señal para las pruebas de extremo a extremo: permiten iniciar y aceptar una
+  // llamada sin recorrer la interfaz. Solo en desarrollo, como el aviso del
+  // socket; en producción no se expone nada al `window`.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return undefined;
+    window.__taktakCall = {
+      status,
+      kind,
+      peer,
+      startCall,
+      acceptCall,
+      rejectCall,
+      hangUp,
+      toggleMute,
+      toggleCamera,
+    };
+    return () => {
+      delete window.__taktakCall;
+    };
+  }, [status, kind, peer, startCall, acceptCall, rejectCall, hangUp, toggleMute, toggleCamera]);
+
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }
 

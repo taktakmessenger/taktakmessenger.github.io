@@ -37,27 +37,6 @@ export function dragTo(origin, startPointer, pointer, area, box) {
   return clampPosition(x, y, area, box);
 }
 
-// Esquina más cercana a una posición libre. Al soltar el cuadro se pega a una
-// esquina, que es el comportamiento de WhatsApp: el vídeo queda siempre
-// alineado y no flotando en mitad de la pantalla.
-export function nearestCorner(position, area, box) {
-  if (!area || !box) return { x: 0, y: 0 };
-
-  const { x, y } = clampPosition(position.x, position.y, area, box);
-  const maxX = area.width - box.width - EDGE_GAP;
-  const maxY = area.height - box.height - EDGE_GAP;
-
-  // Se decide por el centro del cuadro, no por su esquina: un cuadro casi tan
-  // ancho como el área no se movería si solo se mirase el borde izquierdo.
-  const centerX = x + box.width / 2;
-  const centerY = y + box.height / 2;
-
-  return {
-    x: centerX < area.width / 2 ? EDGE_GAP : Math.max(EDGE_GAP, maxX),
-    y: centerY < area.height / 2 ? EDGE_GAP : Math.max(EDGE_GAP, maxY),
-  };
-}
-
 // Posición de esquina concreta, para las transiciones sin arrastre.
 export function cornerPosition(corner, area, box) {
   if (!area || !box) return { x: 0, y: 0 };
@@ -75,4 +54,21 @@ export function cornerPosition(corner, area, box) {
     default:
       return { x: maxX, y: maxY };
   }
+}
+
+// Nombre de la esquina más cercana a una posición. Se guarda la esquina y no
+// los píxeles: si el área cambia de tamaño (girar el móvil, redimensionar), una
+// posición en píxeles deja de ser válida y el cuadro podría quedar fuera. La
+// esquina, en cambio, siempre se puede recalcular.
+export function cornerOf(position, area, box) {
+  if (!area || !box) return 'bottom-right';
+
+  const { x, y } = clampPosition(position.x, position.y, area, box);
+  const centerX = x + box.width / 2;
+  const centerY = y + box.height / 2;
+
+  if (centerY < area.height / 2) {
+    return centerX < area.width / 2 ? 'top-left' : 'top-right';
+  }
+  return centerX < area.width / 2 ? 'bottom-left' : 'bottom-right';
 }
