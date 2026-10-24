@@ -780,10 +780,15 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
 
 ## Navegación y pantallas
 
-- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene cinco pestañas —Inicio,
-  Creators, Subir, WhaTaka, Perfil— y **cada sección es su propia pantalla**. No
-  añadas pestañas nuevas a la barra: mete el acceso dentro del perfil, que es
-  donde TikTok esconde ajustes, verificación y salud de la cuenta.
+- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene seis pestañas —Inicio,
+  Muro, Creators, Subir, WhaTaka, Perfil— y **cada sección es su propia
+  pantalla**. TAK TAK son tres apps en una: el feed vertical (TikTok), el chat
+  WhaTaka (WhatsApp) y el Muro (Facebook), así que las tres puertas de entrada
+  viven en la barra. El resto de accesos (Ajustes, Monedero, Verificación,
+  Salud de la cuenta) van dentro del perfil, que es donde TikTok los esconde.
+- No añadas más pestañas a la barra por encima de estas seis: con siete botones
+  la etiqueta ya hubo que encogerla (`font-size: 0.6rem` y `white-space:
+  nowrap` en `.tabbar-label`). Si algo nuevo no es una app en sí, va al perfil.
 - La única excepción es la **campana de Avisos**, que va la primera en la barra.
   No es una sección más sino una acción con estado (el contador), y tiene que
   estar visible desde cualquier pantalla: escondida en el perfil, un aviso de
@@ -888,6 +893,46 @@ Verificación: `backend/test/notifications.test.js` cubre los cuatro tipos, el
 filtro de uno mismo, el contador, el marcado como leído, el aislamiento entre
 cuentas, la paginación por cursor y la entrega en vivo por socket con clientes
 reales (`socket.io-client`).
+
+## El Muro: la tercera app (estilo Facebook)
+
+TAK TAK son tres apps en una: el feed vertical (TikTok), el chat WhaTaka
+(WhatsApp) y el **Muro**, una entrada social de publicaciones con adjuntos, me
+gusta y comentarios. El muro es `models/Post.js`, `models/PostComment.js`,
+`services/postService.js`, `routes/posts.js` (`/api/posts`) y, en el frontend,
+`components/Wall.jsx` con su pestaña en `Navigation.jsx`.
+
+- **El muro es de lectura pública.** `GET /api/posts` y los comentarios no piden
+  sesión: un visitante puede leer el muro sin cuenta, como el feed. Publicar,
+  dar me gusta, comentar y borrar sí requieren sesión. Sin ella, `Wall.jsx`
+  enseña el muro pero esconde la caja de publicar y muestra `.wall-login-hint`.
+- **`?view=wall` es el enlace del muro.** Los avisos del muro apuntan ahí, igual
+  que `?view=activity`. Se lee una sola vez al arrancar, en `App.jsx`.
+- **Los adjuntos se suben a `uploads/wall/`** por `POST /api/posts/attachments`
+  (multipart, campo `file`), con la misma allowlist de `lib/attachments.js` que
+  el chat: imagen o vídeo. El archivo se sube **al elegirlo**, no al publicar,
+  para poder ver la vista previa y para que publicar no dependa de una subida
+  lenta. El adjunto que se guarda en la publicación tiene que ser de nuestra
+  propia subida (`/uploads/wall/`), no una URL externa: si no, el muro sería un
+  escaparate de contenido ajeno.
+- **El me gusta es idempotente** (`$addToSet` sobre `likedBy` y `$inc` sobre
+  `likes` en la misma operación). Repetir el toque no infla el contador. Mismo
+  patrón que los me gusta de vídeo.
+- **Los avisos del muro son tipos propios**: `post_like` y `post_comment`, no
+  los `like`/`comment` del vídeo. El texto de un aviso es fijo por tipo ("le
+  gustó tu publicación"), así que reusar el del vídeo diría "le gustó tu vídeo"
+  cuando fue una publicación, que es falso. `Activity.jsx` tiene que conocer los
+  tipos nuevos o caen en el genérico "hizo algo".
+- **Al tocar un aviso del muro se abre el muro**, no el vídeo ni el perfil: la
+  publicación no tiene pantalla propia. `Activity` recibe `onOpenWall` para eso.
+- **Borrar es lógico y solo del autor o un admin**, y conserva el hueco en el
+  hilo igual que en los comentarios de vídeo.
+
+Verificación: `backend/test/posts.test.js` (publicar texto y adjunto, lectura
+pública, me gusta idempotente, comentar, avisos propios, borrado por autor y por
+admin) y `frontend/test/e2e-wall.mjs` (dos navegadores reales: publica texto y
+foto, el otro la ve, da me gusta —que no se infla al repetir—, comenta, llegan
+los avisos, el autor borra y un visitante sin cuenta no puede publicar).
 
 ## Sala de voz del creator (SFU con mediasoup, reserva a malla)
 
