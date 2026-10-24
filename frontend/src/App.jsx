@@ -327,6 +327,7 @@ function Shell() {
             onBack={() => setView('feed')}
             onOpenVideo={() => setView('feed')}
             onOpenProfile={() => setView('profile')}
+            onOpenWall={() => setView('wall')}
           />
         );
       case 'admin':

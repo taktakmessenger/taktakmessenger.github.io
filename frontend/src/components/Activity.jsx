@@ -15,6 +15,8 @@ const ICONS = {
   like: '❤️',
   comment: '💬',
   reply: '↩️',
+  post_like: '❤️',
+  post_comment: '💬',
 };
 
 function textFor(n) {
@@ -51,6 +53,19 @@ function textFor(n) {
           <strong>{who}</strong> respondió: <span className="activity-preview">{n.preview}</span>
         </>
       );
+    case 'post_like':
+      return (
+        <>
+          <strong>{who}</strong> le gustó tu publicación
+        </>
+      );
+    case 'post_comment':
+      return (
+        <>
+          <strong>{who}</strong> comentó tu publicación:{' '}
+          <span className="activity-preview">{n.preview}</span>
+        </>
+      );
     default:
       return (
         <>
@@ -77,7 +92,7 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-export default function Activity({ onBack, onOpenVideo, onOpenProfile }) {
+export default function Activity({ onBack, onOpenVideo, onOpenProfile, onOpenWall }) {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -113,6 +128,11 @@ export default function Activity({ onBack, onOpenVideo, onOpenProfile }) {
   }, [user]);
 
   function openTarget(n) {
+    // Un aviso del muro lleva al muro: la publicación no tiene pantalla propia.
+    if (n.type?.startsWith('post_') && onOpenWall) {
+      onOpenWall();
+      return;
+    }
     if (n.video?._id && onOpenVideo) {
       onOpenVideo(n.video._id);
       return;
