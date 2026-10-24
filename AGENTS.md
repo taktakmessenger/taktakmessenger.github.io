@@ -11,11 +11,15 @@ TAK TAK: plataforma de video con economía de tokens TTC.
 ## Comandos
 
 ```bash
-# Pila completa (Docker + MongoDB + backend + frontend). Idempotente.
+# Pila completa (Docker + MongoDB + web + API). Idempotente, y arranca además
+# el vigilante. Por defecto sirve todo desde un solo proceso (SERVE_MODE=single).
 bash scripts/dev-up.sh
 bash scripts/dev-down.sh
 
-# Vigilante: relanza la pila sola si se cae (contenedor que se reinicia).
+# Con recarga en caliente del frontend (dos procesos + proxy de Vite)
+SERVE_MODE=split bash scripts/dev-up.sh
+
+# Vigilante suelto (dev-up ya lo enciende solo; guarda contra duplicados)
 setsid bash scripts/dev-watch.sh > /tmp/taktak-watch.log 2>&1 < /dev/null &
 
 # Backend
@@ -653,6 +657,44 @@ Si vuelves a ver ese error, comprueba que el proxy sigue ahí.
   Para que se relance solo, el vigilante `scripts/dev-watch.sh`. Comprueba la
   pila cada `WATCH_INTERVAL` segundos (15 por defecto) y relanza `dev-up.sh` si
   el backend o el frontend no responden.
+
+### Modo de servicio: `single` (por defecto) contra `split`
+
+`dev-up.sh` sirve la web y la API **desde un solo proceso Node** por defecto
+(`SERVE_MODE=single`): el backend escucha en el puerto público y sirve además
+`frontend/dist` con `PUBLIC_DIR`. Antes eran dos procesos (Vite en el frontend
+proxeando `/api` y `/socket.io` al backend) y cada uno era una pieza más que
+resucitar tras una caída.
+
+Por qué importa: con dos procesos, si Vite muere y el backend no, el enlace
+sigue dando 502 y hay que levantar los dos. Con uno solo, o está arriba o no lo
+está, sin estados a medias. Además el frontend llama a `/api` y al socket con
+rutas relativas, así que en un solo origen no hace falta proxy ninguno.
+
+- El bundle vive en `frontend/dist`, dentro de `/workspace`, que es lo único
+  persistente: **sobrevive al reinicio** y arrancar no depende de que Vite
+  compile. `dev-up.sh` lo construye solo si falta (`REBUILD_FRONTEND=1` para
+  forzarlo).
+- Para desarrollo con recarga en caliente: `SERVE_MODE=split bash scripts/dev-up.sh`.
+  Ahí sí hacen falta los dos procesos y el proxy de Vite.
+- El vigilante entiende los dos modos: en `single` comprueba un solo puerto
+  (`/api/gifts`); en `split`, los dos.
+
+Los procesos se lanzan con `setsid ... </dev/null`, no con un `nohup` a secas.
+Un `nohup` sigue en la misma sesión, y cuando la shell que lo lanzó cierra (o el
+agente corta la herramienta por tiempo), el proceso se va con ella. `setsid` lo
+pone en su propia sesión y sobrevive. Comprobado: tras un `pkill` del servicio,
+el vigilante lo restaura en ~16 s; matando además Docker (simulacro de reinicio
+completo), la pila entera vuelve en ~12 s con los datos intactos.
+
+### Lo que NO se puede arrancar solo
+
+Tras un **reinicio del contenedor** el vigilante también muere, y no hay forma
+de relanzarlo desde dentro: PID 1 es el agente, no hay `cron`, `systemd` está
+`offline` y no existe `rc.local` ni gancho de arranque en el entorno. En ese
+caso hay que ejecutar `bash scripts/dev-up.sh` una vez (deja la app arriba y
+además enciende el vigilante). Para no depender de un contenedor que se borra,
+el camino es el push a GitHub, que sigue pendiente del permiso de escritura.
 
 ## Audio: sonido del feed y altavoz de llamadas
 

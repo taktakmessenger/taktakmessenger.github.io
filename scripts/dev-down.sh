@@ -25,6 +25,11 @@ fi
 
 # Detiene por pidfile y, como respaldo, por patrón de proceso. `ss`/`lsof` no
 # están instalados en este contenedor, así que no se usan.
+#
+# Se matan los dos conjuntos, no uno u otro: los procesos se lanzan con `setsid`,
+# así que el PID del pidfile puede ser el de la subshell que los arrancó y el
+# `node` real quedar con otro PID. Quedarse solo con el pidfile dejaba vivo el
+# servidor y el `dev-down.sh` no apagaba nada.
 stop_service() { # pidfile, patrón pgrep, etiqueta
   local pidfile="$1" pattern="$2" label="$3" pids=""
 
@@ -34,9 +39,7 @@ stop_service() { # pidfile, patrón pgrep, etiqueta
     rm -f "$pidfile"
   fi
 
-  if [ -z "$pids" ]; then
-    pids="$(pgrep -f "$pattern" 2>/dev/null | tr '\n' ' ')"
-  fi
+  pids="$pids $(pgrep -f "$pattern" 2>/dev/null | tr '\n' ' ')"
 
   if [ -z "$(echo "$pids" | tr -d '[:space:]')" ]; then
     ok "$label no estaba en marcha"
@@ -55,6 +58,18 @@ stop_service() { # pidfile, patrón pgrep, etiqueta
   for p in $pids; do kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null; done
   ok "$label detenido (pid:$pids)"
 }
+
+say "Parando el vigilante"
+# Primero el vigilante: si sigue vivo, ve la pila caída y la vuelve a levantar,
+# así que un `dev-down.sh` no llegaría a apagar nada.
+if pgrep -f "scripts/dev-watch.sh" >/dev/null 2>&1; then
+  pkill -f "scripts/dev-watch.sh" 2>/dev/null
+  sleep 1
+  pgrep -f "scripts/dev-watch.sh" >/dev/null 2>&1 \
+    && ok "el vigilante no se detuvo" || ok "vigilante detenido"
+else
+  ok "no estaba en marcha"
+fi
 
 say "Parando el frontend (:$FRONTEND_PORT)"
 stop_service "$RUN_DIR/frontend.pid" "vite --host" "frontend"
