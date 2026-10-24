@@ -7,6 +7,13 @@
 // permiso sin diálogo. Así se recorre el camino completo: getUserMedia,
 // WebRTC, señalización por socket y reproducción del audio remoto.
 //
+// La llamada se inicia y se acepta **por la interfaz**, con los mismos botones
+// que pulsa una persona (el 📞/🎥 del hilo de WhaTaka y el "Aceptar" de la
+// pantalla de llamada). Antes usaba el atajo `window.__taktakCall`, que la app
+// solo expone en desarrollo; contra el build de producción que se sirve en el
+// puerto de la app ese objeto no existe y la prueba fallaba entera aunque las
+// llamadas funcionaran. Ahora la prueba vale para lo que de verdad se despliega.
+//
 // Uso:  node test/e2e-call.mjs
 import { chromium } from 'playwright';
 
@@ -18,6 +25,31 @@ function check(label, condition, extra = '') {
   const mark = condition ? '✓' : '✗';
   if (!condition) failures += 1;
   console.log(`  ${mark} ${label}${extra ? ` — ${extra}` : ''}`);
+}
+
+// Cierra los avisos que tapan la barra de pestañas (teléfono y
+// notificaciones). Se pulsa su "Ahora no" por DOM y no con un clic simulado:
+// los dos avisos pueden solaparse y un clic normal queda interceptado por el
+// otro. La app reacciona igual, porque el manejador es el mismo.
+async function dismissPrompts(page) {
+  for (let i = 0; i < 12; i += 1) {
+    const closed = await page.evaluate(() => {
+      const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+      let count = 0;
+      for (const dialog of dialogs) {
+        const button = [...dialog.querySelectorAll('button')].find((b) =>
+          /ahora no|omitir|cerrar|no, gracias/i.test(b.textContent.trim())
+        );
+        if (button) {
+          button.click();
+          count += 1;
+        }
+      }
+      return count;
+    });
+    await page.waitForTimeout(400);
+    if (closed === 0 && (await page.locator('[role="dialog"]').count()) === 0) return;
+  }
 }
 
 async function register(context, name) {
@@ -49,7 +81,26 @@ async function register(context, name) {
   );
   await page.reload();
   await page.waitForTimeout(1200);
-  return { page, user: data.user, logs };
+  await dismissPrompts(page);
+  return { page, user: data.user, username, logs };
+}
+
+// Abre la pestaña WhaTaka y el hilo con otro usuario, por la interfaz. Es el
+// mismo camino que sigue una persona: pestaña, botón "＋", escribir el @usuario
+// y enviar. Los botones de llamada solo se habilitan cuando el interlocutor ya
+// está cargado, así que se espera a que dejen de estar `disabled`.
+async function openChatWith(me, otherUsername) {
+  await me.page.getByRole('button', { name: 'WhaTaka' }).click();
+  await me.page.waitForTimeout(600);
+  await me.page.locator('.btn-new-chat').click();
+  await me.page.waitForTimeout(300);
+  const form = me.page.locator('.start-chat');
+  await form.locator('input').fill(otherUsername);
+  await form.locator('button[type="submit"]').click();
+  await me.page.waitForTimeout(1500);
+  await me.page
+    .waitForFunction(() => !document.querySelector('.thread-call button')?.disabled, { timeout: 10000 })
+    .catch(() => {});
 }
 
 const browser = await chromium.launch({
@@ -124,48 +175,32 @@ try {
   check('hay al menos una salida de audio', outputs >= 1, `${outputs} salidas`);
 
   console.log('\n▸ Llamada completa entre los dos');
-  // Ana llama a Beto desde la interfaz real de la app.
-  await a.page.evaluate(async (peerId) => {
-    // Se usa el mismo camino que la interfaz: el botón de llamar de un perfil.
-    const btn = document.querySelector(`[data-call-user="${peerId}"]`);
-    if (btn) btn.click();
-  }, b.user.id);
+  // Ana abre el hilo con Beto y le llama con el botón de videollamada. Es el
+  // único caso en que existe el cuadro propio arrastrable, así que así se
+  // comprueba también la pista de vídeo de extremo a extremo.
+  await openChatWith(a, b.username);
+  check('el hilo de WhaTaka se abre con los botones de llamada', (await a.page.locator('.thread-call button').count()) >= 2);
 
-  // Si no hay botón accesible (el otro usuario no está en pantalla), se llama
-  // por el contexto expuesto en la app.
-  const started = await a.page.evaluate(async (peerId) => {
-    if (window.__taktakCall?.startCall) {
-      // Videollamada: es el único caso en que existe el cuadro propio que se
-      // arrastra, y así se comprueba también la pista de vídeo de extremo a
-      // extremo.
-      await window.__taktakCall.startCall({ id: peerId, username: 'beto' }, 'video');
-      return true;
-    }
-    return false;
-  }, b.user.id);
-  check('la llamada se inicia', started);
+  await a.page.getByRole('button', { name: 'Videollamada' }).click();
 
   await a.page.waitForTimeout(2500);
-  const stateA = await a.page.evaluate(() =>
-    window.__taktakCall ? { status: window.__taktakCall.status } : null
-  );
-  const stateB = await b.page.evaluate(() =>
-    window.__taktakCall ? { status: window.__taktakCall.status } : null
-  );
-  check('Ana está llamando', stateA?.status === 'ringing', JSON.stringify(stateA));
-  check('A Beto le suena', stateB?.status === 'incoming', JSON.stringify(stateB));
+  // El estado se lee de la pantalla, que es lo que ve el usuario: "Llamando…"
+  // en quien llama y "Llamada entrante" en quien recibe.
+  const ringingA = await a.page.locator('.call-overlay .call-info span').textContent().catch(() => null);
+  const incomingB = await b.page.locator('.call-overlay .call-info span').textContent().catch(() => null);
+  check('la llamada se inicia', Boolean(ringingA), String(ringingA));
+  check('Ana está llamando', ringingA === 'Llamando…', String(ringingA));
+  check('A Beto le suena', incomingB === 'Llamada entrante', String(incomingB));
 
   console.log('\n▸ Beto acepta y se comprueba el audio remoto');
-  await b.page.evaluate(async () => {
-    await window.__taktakCall?.acceptCall?.();
-  });
+  await b.page.locator('.call-btn.accept').click();
   await a.page.waitForTimeout(4000);
 
   const after = await Promise.all([
-    a.page.evaluate(() => window.__taktakCall?.status),
-    b.page.evaluate(() => window.__taktakCall?.status),
+    a.page.locator('.call-overlay .call-info span').textContent().catch(() => null),
+    b.page.locator('.call-overlay .call-info span').textContent().catch(() => null),
   ]);
-  check('los dos quedan en llamada', after[0] === 'active' && after[1] === 'active', after.join(' / '));
+  check('los dos quedan en llamada', after[0] === 'En llamada' && after[1] === 'En llamada', after.join(' / '));
 
   // El audio remoto tiene que estar sonando de verdad: el elemento <audio> con
   // el stream del otro, y con muestras que llegan.
@@ -242,10 +277,11 @@ try {
   check('al soltar se pega a la esquina más cercana', drag.ok && drag.snappedTopLeft, JSON.stringify(drag.after));
 
   console.log('\n▸ Colgar deja la llamada cerrada');
-  await a.page.evaluate(() => window.__taktakCall?.hangUp?.());
+  await a.page.locator('.call-btn.end').click();
   await a.page.waitForTimeout(1500);
-  const ended = await a.page.evaluate(() => window.__taktakCall?.status);
-  check('Ana queda fuera de la llamada', ended === 'idle', String(ended));
+  // Al colgar, la pantalla de llamada desaparece: ya no hay overlay.
+  const ended = await a.page.locator('.call-overlay').count();
+  check('Ana queda fuera de la llamada', ended === 0, `${ended} overlays`);
 
   const errors = [...a.logs, ...b.logs].filter(
     (l) =>

@@ -567,9 +567,19 @@ Reglas que no se deben romper:
 
 ### Cómo se probó de verdad
 
-No hay Playwright en el entorno, pero **sí hay Chromium en `/usr/bin/chromium`**,
-y basta con `puppeteer-core` (que no descarga navegador) para lanzar **dos
-navegadores con cámara y micrófono falsos** y hacer una llamada real entre ellos:
+Hay **dos** caminos, y conviene saber cuál se está usando:
+
+- Los harness de `scripts/e2e-*.js` usan **Chromium del sistema en
+  `/usr/bin/chromium`** con `puppeteer-core` (que no descarga navegador).
+- Los tests de `frontend/test/e2e-*.mjs` usan **Playwright**, que hay que
+  instalar una vez por entorno (`npx playwright install chromium`). Ojo: el
+  navegador de Playwright vive en `~/.cache/ms-playwright`, **fuera de
+  `/workspace`**, así que un reinicio del contenedor se lo lleva y los e2e
+  fallan con "Executable doesn't exist". No es un fallo de la app: se reinstala
+  y sigue.
+
+Con cualquiera de los dos se lanzan **dos navegadores con cámara y micrófono
+falsos** y se hace una llamada real entre ellos:
 
 - Flags imprescindibles: `--use-fake-ui-for-media-stream` (concede permisos sin
   diálogo) y `--use-fake-device-for-media-stream` (cámara y micro sintéticos).
@@ -581,9 +591,23 @@ navegadores con cámara y micrófono falsos** y hacer una llamada real entre ell
   15 minutos. Una tanda de rondas que registre cuentas nuevas se agota y falla
   por 429, no por la llamada. Reutiliza cuentas (login como respaldo) o reinicia
   el backend, que limpia el limitador en memoria.
-- La espera de socket listo en el test usa `window.__taktakSocketConnected`, una
-  señal que `SocketContext` solo expone en desarrollo (`import.meta.env.DEV`).
 - Resultado: 6/6 en voz y 4/4 en vídeo, con audio (y vídeo) remotos confirmados.
+
+#### Trampa: los enganches `window.__taktak*` solo existen en desarrollo
+
+`CallContext` y `SocketContext` exponen `window.__taktakCall` y
+`window.__taktakSocketConnected` **solo bajo `import.meta.env.DEV`**. El puerto
+de la app (`SERVE_MODE=single`, el que se despliega) sirve el **build de
+producción**, donde esos objetos no existen.
+
+Un test que los use pasa en el servidor de Vite y falla entero contra el build
+real, con un síntoma que engaña: parece que "las llamadas no funcionan" cuando
+lo único roto es el atajo del test. `frontend/test/e2e-call.mjs` cayó en esto
+—daba 11 fallos y ni una sola llamada se establecía— y se reescribió para
+iniciar y aceptar **por la interfaz** (botones `.thread-call`, `.call-btn.accept`
+y `.call-btn.end`) y leer el estado de la pantalla (`.call-overlay .call-info
+span`). Regla: **un e2e debe manejar la UI, no un enganche que solo existe en
+desarrollo**, o deja de probar lo que se despliega.
 
 ### Verificación funcional integral (prueba de humo y UI)
 
