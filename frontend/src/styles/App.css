@@ -1382,10 +1382,33 @@
   right: 0.8rem;
   bottom: 0.8rem;
   width: 120px;
+  /* Proporción fija para que la altura exista desde el primer render: si se
+     dejara al tamaño natural del vídeo, antes de cargar mediría 0 y el cuadro se
+     colocaría en el sitio equivocado. */
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   background: #000;
   transform: scaleX(-1);
+  /* Arrastrable, como en WhatsApp. `touch-action: none` es imprescindible en
+     móvil: sin él, el navegador se queda el gesto para desplazar la página y el
+     cuadro no se mueve. */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  /* Solo se anima la entrada en su sitio, no el arrastre: con transición, el
+     cuadro iría con retraso detrás del dedo. */
+  transition: box-shadow 0.15s ease;
+  /* Por encima del vídeo remoto y de la info de la llamada, o quedaría tapado
+     al arrastrarlo hacia el centro. */
+  z-index: 2;
+}
+
+.call-local.dragging {
+  cursor: grabbing;
+  transition: none;
+  box-shadow: 0 0 0 2px var(--primary), 0 10px 30px -8px rgba(0, 0, 0, 0.8);
 }
 
 .call-avatar {

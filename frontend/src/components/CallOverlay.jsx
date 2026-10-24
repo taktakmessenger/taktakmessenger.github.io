@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCall } from '../contexts/CallContext';
 import { listAudioOutputs, applySink } from '../lib/sound';
+import { dragTo, nearestCorner, cornerPosition } from '../lib/pipPosition';
 
 // Texto del estado actual, en lenguaje llano.
 const LABELS = {
@@ -39,6 +40,120 @@ export default function CallOverlay() {
   // propio elemento o la llamada conectaría en silencio: se oiría nada.
   const remoteAudioRef = useRef(null);
   const localVideoRef = useRef(null);
+
+  // --- Cuadro propio arrastrable -------------------------------------------
+  // Como en WhatsApp: el recuadro donde te ves se puede mover por la pantalla y
+  // al soltarlo se pega a la esquina más cercana. La posición se guarda en
+  // píxeles relativos al área de llamada; `null` significa "aún sin decidir",
+  // y entonces se coloca en la esquina por defecto (abajo a la derecha).
+  const stageRef = useRef(null);
+  const [localPos, setLocalPos] = useState(null);
+  // Datos del arrastre en curso. Van en un ref y no en estado porque cambian en
+  // cada movimiento del puntero y no deben provocar un render por sí solos.
+  const dragRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Coloca el cuadro en su esquina. Se recalcula cuando cambia el tamaño del
+  // área (al girar el móvil o redimensionar la ventana), porque una posición
+  // guardada en píxeles deja de ser válida y el cuadro podría salirse.
+  const placeLocal = useCallback(
+    (position) => {
+      const stage = stageRef.current;
+      const box = localVideoRef.current;
+      if (!stage || !box) return;
+
+      const area = { width: stage.clientWidth, height: stage.clientHeight };
+      const size = { width: box.offsetWidth, height: box.offsetHeight };
+
+      setLocalPos(
+        position
+          ? nearestCorner(position, area, size)
+          : cornerPosition('bottom-right', area, size)
+      );
+    },
+    []
+  );
+
+  // Al montar el vídeo propio se le da una posición. También al pasar de la
+  // pantalla completa a la burbuja, porque el elemento se vuelve a crear.
+  useEffect(() => {
+    if (status === 'idle' || kind !== 'video' || camOff) return undefined;
+
+    // Un frame de margen para que el navegador ya tenga medidas del `<video>`.
+    const raf = requestAnimationFrame(() => placeLocal(localPos));
+    return () => cancelAnimationFrame(raf);
+    // `localPos` se lee pero no debe disparar el efecto: si entrara, cada
+    // arrastre recolocaría el cuadro y se pelearía con el dedo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, kind, camOff, minimized, placeLocal]);
+
+  // Mantiene el cuadro dentro del área al cambiar su tamaño.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(() => placeLocal(localPos));
+    observer.observe(stage);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeLocal, status]);
+
+  const startDrag = useCallback(
+    (event) => {
+      const stage = stageRef.current;
+      const box = localVideoRef.current;
+      if (!stage || !box || !localPos) return;
+
+      // Se captura el puntero para seguir recibiendo movimientos aunque el dedo
+      // salga del recuadro, y para que el navegador no interprete el gesto como
+      // un desplazamiento de la página.
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      dragRef.current = {
+        pointerId: event.pointerId,
+        start: { x: event.clientX, y: event.clientY },
+        origin: localPos,
+        moved: false,
+      };
+      setDragging(true);
+    },
+    [localPos]
+  );
+
+  const moveDrag = useCallback((event) => {
+    const drag = dragRef.current;
+    const stage = stageRef.current;
+    const box = localVideoRef.current;
+    if (!drag || !stage || !box || drag.pointerId !== event.pointerId) return;
+
+    const area = { width: stage.clientWidth, height: stage.clientHeight };
+    const size = { width: box.offsetWidth, height: box.offsetHeight };
+    const pointer = { x: event.clientX, y: event.clientY };
+
+    // Un movimiento mínimo evita que un toque (para nada) cuente como arrastre.
+    if (
+      Math.abs(pointer.x - drag.start.x) > 3 ||
+      Math.abs(pointer.y - drag.start.y) > 3
+    ) {
+      drag.moved = true;
+    }
+
+    const next = dragTo(drag.origin, drag.start, pointer, area, size);
+    // Se guarda también en el ref: al soltar hay que pegar a la esquina desde la
+    // última posición real, y leerla del estado podría dar el valor del render
+    // anterior, que va un movimiento por detrás del dedo.
+    drag.last = next;
+    setLocalPos(next);
+  }, []);
+
+  const endDrag = useCallback((event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    dragRef.current = null;
+    setDragging(false);
+    // Al soltar se pega a la esquina más cercana, como WhatsApp.
+    placeLocal(drag.last || drag.origin);
+  }, [placeLocal]);
 
   // Salidas de audio del dispositivo (altavoz, auricular, Bluetooth). `setSinkId`
   // no existe en todos los navegadores; si no está, la lista queda vacía y el
@@ -145,7 +260,7 @@ export default function CallOverlay() {
 
   return (
     <div className="call-overlay" role="dialog" aria-modal="true">
-      <div className="call-stage">
+      <div className="call-stage" ref={stageRef}>
         {/* El audio remoto oyente siempre, en voz y en vídeo. Va fuera del
             bloque condicional para que exista desde el primer render de la
             llamada; si se montara y desmontara, el enganche del stream se
@@ -161,7 +276,25 @@ export default function CallOverlay() {
         )}
 
         {kind === 'video' && !camOff && (
-          <video ref={localVideoRef} className="call-local" autoPlay playsInline muted />
+          <video
+            ref={localVideoRef}
+            className={`call-local${dragging ? ' dragging' : ''}`}
+            autoPlay
+            playsInline
+            muted
+            // Arrastrable, como en WhatsApp: se mueve por la pantalla y al
+            // soltarlo se pega a la esquina más cercana. El toque no se anula
+            // para que el botón siga siendo alcanzable por teclado.
+            onPointerDown={startDrag}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            style={
+              localPos
+                ? { left: `${localPos.x}px`, top: `${localPos.y}px`, right: 'auto', bottom: 'auto' }
+                : undefined
+            }
+          />
         )}
 
         <div className="call-info">

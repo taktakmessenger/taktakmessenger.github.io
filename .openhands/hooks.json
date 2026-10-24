@@ -1,0 +1,30 @@
+{
+  "session_start": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "name": "taktak-autostart",
+          "command": "bash /workspace/project/scripts/dev-up.sh >> /tmp/taktak-hook-devup.log 2>&1",
+          "timeout": 300,
+          "async": true
+        }
+      ]
+    }
+  ],
+  "user_prompt_submit": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "name": "taktak-ensure-up",
+          "command": "bash /workspace/project/scripts/dev-up.sh >> /tmp/taktak-hook-devup.log 2>&1",
+          "timeout": 300,
+          "async": true
+        }
+      ]
+    }
+  ]
+}
