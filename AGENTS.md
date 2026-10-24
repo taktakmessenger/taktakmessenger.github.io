@@ -782,10 +782,11 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
 
 - La barra inferior (`.tabbar`, `Navigation.jsx`) tiene seis pestañas —Inicio,
   Muro, Creators, Subir, WhaTaka, Perfil— y **cada sección es su propia
-  pantalla**. TAK TAK son tres apps en una: el feed vertical (TikTok), el chat
-  WhaTaka (WhatsApp) y el Muro (Facebook), así que las tres puertas de entrada
-  viven en la barra. El resto de accesos (Ajustes, Monedero, Verificación,
-  Salud de la cuenta) van dentro del perfil, que es donde TikTok los esconde.
+  pantalla**. TAK TAK es una sola aplicación con tres secciones grandes, cada
+  una inspirada en una app conocida: el feed vertical (como TikTok), el chat
+  WhaTaka (como WhatsApp) y el Muro (como Facebook). El resto de accesos
+  (Ajustes, Monedero, Verificación, Salud de la cuenta) van dentro del perfil,
+  que es donde TikTok los esconde.
 - No añadas más pestañas a la barra por encima de estas seis: con siete botones
   la etiqueta ya hubo que encogerla (`font-size: 0.6rem` y `white-space:
   nowrap` en `.tabbar-label`). Si algo nuevo no es una app en sí, va al perfil.
@@ -894,13 +895,15 @@ filtro de uno mismo, el contador, el marcado como leído, el aislamiento entre
 cuentas, la paginación por cursor y la entrega en vivo por socket con clientes
 reales (`socket.io-client`).
 
-## El Muro: la tercera app (estilo Facebook)
+## El Muro (la sección estilo Facebook)
 
-TAK TAK son tres apps en una: el feed vertical (TikTok), el chat WhaTaka
-(WhatsApp) y el **Muro**, una entrada social de publicaciones con adjuntos, me
-gusta y comentarios. El muro es `models/Post.js`, `models/PostComment.js`,
-`services/postService.js`, `routes/posts.js` (`/api/posts`) y, en el frontend,
-`components/Wall.jsx` con su pestaña en `Navigation.jsx`.
+TAK TAK es una sola aplicación con tres secciones grandes, cada una inspirada
+en una app conocida: el feed vertical (como TikTok), el chat WhaTaka (como
+WhatsApp) y el **Muro** (como Facebook), una sección social de publicaciones con
+adjuntos, me gusta y comentarios. El muro es `models/Post.js`,
+`models/PostComment.js`, `services/postService.js`, `routes/posts.js`
+(`/api/posts`) y, en el frontend, `components/Wall.jsx` con su pestaña en
+`Navigation.jsx`.
 
 - **El muro es de lectura pública.** `GET /api/posts` y los comentarios no piden
   sesión: un visitante puede leer el muro sin cuenta, como el feed. Publicar,

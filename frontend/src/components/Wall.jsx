@@ -348,9 +348,8 @@ function PostCard({ post, currentUser, onOpenProfile }) {
   );
 }
 
-// El muro: la tercera app dentro de TAK TAK, con la entrada social de Facebook.
-// Muestra las publicaciones de todo el mundo, con caja de publicar, me gusta y
-// comentarios.
+// El muro: la sección estilo Facebook de TAK TAK. Muestra las publicaciones de
+// todo el mundo, con caja de publicar, me gusta y comentarios.
 export default function Wall({ onOpenProfile }) {
   const { user } = useAuth();
   const [posts, setPosts] = useState([]);
