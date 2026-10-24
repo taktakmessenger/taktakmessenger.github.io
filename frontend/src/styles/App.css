@@ -2956,9 +2956,12 @@
 }
 
 .tabbar-label {
-  font-size: 0.66rem;
+  /* Siete pestañas en la barra: con el tamaño anterior, "WhaTaka" y "Creators"
+     se partían en dos líneas y la barra crecía. */
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 /* El botón central (Subir) va destacado como en TikTok. */
@@ -3809,3 +3812,301 @@
   }
 }
 
+
+/* ------------------------------------------------------------------
+   Muro (la sección estilo Facebook)
+   ------------------------------------------------------------------ */
+
+.wall {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1rem 0.9rem calc(var(--tabbar-h) + 1.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.wall-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  background: linear-gradient(120deg, var(--accent), var(--primary) 55%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wall-header p {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}
+
+.wall-login-hint {
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.wall-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+/* Caja de publicar */
+.wall-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.wall-composer-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 62px;
+  padding: 0.7rem 0.8rem;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+}
+
+.wall-composer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--glow-cyan);
+}
+
+.wall-composer-preview {
+  position: relative;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.wall-composer-preview img,
+.wall-composer-preview video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+}
+
+.wall-composer-preview .btn-ghost {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  background: rgba(7, 7, 13, 0.75);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.wall-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Tarjeta de publicación */
+.wall-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.wall-post {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.wall-post-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.8rem 0.9rem 0.5rem;
+}
+
+.wall-post-author {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wall-post-author span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.wall-post-author strong {
+  font-size: 0.95rem;
+}
+
+.wall-post-author small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.wall-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.wall-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wall-post-text {
+  margin: 0;
+  padding: 0 0.9rem 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.wall-post-media {
+  display: block;
+  width: 100%;
+  max-height: 480px;
+  object-fit: cover;
+  background: #000;
+}
+
+.wall-post-actions {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.wall-action {
+  flex: 1;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.wall-action:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.wall-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wall-action.liked {
+  color: var(--pink);
+}
+
+/* Comentarios */
+.wall-comments {
+  padding: 0.6rem 0.9rem 0.9rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.wall-comment-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.wall-comment-form input {
+  flex: 1;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+}
+
+.wall-comment-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.wall-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.wall-comment {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.wall-comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.wall-comment-body strong {
+  font-size: 0.85rem;
+}
+
+.wall-comment-body p {
+  margin: 0.1rem 0 0.25rem;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.wall-comment-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.wall-more {
+  align-self: center;
+}
+
+@media (min-width: 900px) {
+  .wall {
+    padding-top: 1.5rem;
+  }
+}

@@ -47,6 +47,7 @@ async function notify({
   type,
   video = null,
   comment = null,
+  post = null,
   amount = null,
   giftName = null,
   text = null,
@@ -64,6 +65,7 @@ async function notify({
       type,
       video,
       comment,
+      post,
       amount,
       giftName,
       preview: text ? preview(text) : null,
@@ -114,6 +116,10 @@ function activityPayload(notification) {
     like: 'Le gustó tu vídeo',
     comment: notification.preview ? `Comentó: ${notification.preview}` : 'Comentó tu vídeo',
     reply: notification.preview ? `Respondió: ${notification.preview}` : 'Respondió tu comentario',
+    post_like: 'Le gustó tu publicación',
+    post_comment: notification.preview
+      ? `Comentó tu publicación: ${notification.preview}`
+      : 'Comentó tu publicación',
   }[notification.type] || 'Tienes actividad nueva';
 
   return {
@@ -124,7 +130,7 @@ function activityPayload(notification) {
     // en una sola notificación en vez de apilarse.
     tag: `activity-${notification.type}-${notification.actor?._id || notification.actor}`,
     data: {
-      url: '/?view=activity',
+      url: notification.type.startsWith('post_') ? '/?view=wall' : '/?view=activity',
       type: notification.type,
     },
   };
@@ -158,6 +164,7 @@ function toPublic(notification) {
         }
       : doc.video,
     comment: doc.comment,
+    post: doc.post || null,
   };
 }
 

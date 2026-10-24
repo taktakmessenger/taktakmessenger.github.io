@@ -11,6 +11,7 @@ import Wallet from './components/Wallet';
 import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import Squads from './components/Squads';
+import Wall from './components/Wall';
 import AccountHealth from './components/AccountHealth';
 import Verification from './components/Verification';
 import AuthForm from './components/AuthForm';
@@ -174,6 +175,7 @@ function Shell() {
     const params = new URLSearchParams(window.location.search);
     const target = params.get('view');
     if (target === 'activity') setView('activity');
+    if (target === 'wall') setView('wall');
     if (target === 'pago-exito') {
       setPaymentProvider(params.get('provider') || 'stripe');
       setView('pago-exito');
@@ -303,6 +305,10 @@ function Shell() {
         return <Settings onBack={() => setView('profile')} onNavigate={setView} />;
       case 'squads':
         return <Squads />;
+      case 'wall':
+        // El muro es de lectura pública, como el feed: un visitante puede verlo.
+        // Para publicar o comentar se le pide la sesión desde el propio muro.
+        return <Wall onOpenProfile={() => setView('profile')} />;
       case 'health':
         return <AccountHealth onBack={() => setView('settings')} />;
       case 'verification':
