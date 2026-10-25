@@ -2877,6 +2877,29 @@
   font-weight: 600;
 }
 
+/* Alta manual de un contacto. Va en una fila que se ajusta en pantallas
+   estrechas, porque son dos campos y un botón. */
+.dialer-contact-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.dialer-contact-add input {
+  flex: 1 1 40%;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.dialer-contact-add button {
+  flex: 1 1 100%;
+}
+
 
 /* ------------------------------------------------------------------
    Barra inferior estilo TikTok

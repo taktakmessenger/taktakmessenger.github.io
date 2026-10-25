@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
+import { matches } from '../lib/search';
 
 // Banderas a partir del código ISO. Se derivan del código en vez de guardar una
 // tabla: 245 países a mano se desincronizan, y el emoji regional se calcula.
@@ -45,6 +46,7 @@ export default function Dialer({ onCall, onOpenChat }) {
   const [unknown, setUnknown] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [contactsState, setContactsState] = useState('idle');
+  const [contactDraft, setContactDraft] = useState({ name: '', phone: '' });
   // Voz o vídeo. La videollamada solo existe entre cuentas de TAK TAK: a un
   // teléfono normal se le puede llamar por voz, no con vídeo, porque no hay
   // dónde entregarle la imagen.
@@ -53,6 +55,7 @@ export default function Dialer({ onCall, onOpenChat }) {
 
   const longPressTimer = useRef(null);
   const longPressFired = useRef(false);
+  const pickerRef = useRef(null);
 
   // La lista de países sale de libphonenumber en el servidor, así que cubre
   // todos los territorios y los prefijos están al día.
@@ -114,6 +117,32 @@ export default function Dialer({ onCall, onOpenChat }) {
 
   useEffect(() => () => clearTimeout(longPressTimer.current), []);
 
+  // El selector de país se cierra al tocar fuera o con Escape. Antes no había
+  // forma de cerrarlo sin elegir un país: quien lo abría por error (o no
+  // encontraba el suyo) se quedaba con él encima del marcador y creía que la
+  // pantalla se había quedado colgada.
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    function onDown(event) {
+      // El propio botón que abre el selector se excluye: si no, el pointerdown
+      // lo cerraría y el click que viene después lo volvería a abrir, dejándolo
+      // imposible de cerrar desde el botón.
+      if (event.target.closest?.('.dialer-country-btn')) return;
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        setPickerOpen(false);
+      }
+    }
+    function onKey(event) {
+      if (event.key === 'Escape') setPickerOpen(false);
+    }
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [pickerOpen]);
+
   // Contactos del teléfono. `navigator.contacts` solo existe en algunos
   // navegadores móviles y exige permiso explícito, así que se pide con un botón
   // y no al montar: pedir contactos nada más abrir el marcador es invasivo y en
@@ -143,12 +172,52 @@ export default function Dialer({ onCall, onOpenChat }) {
     }
   }
 
+  // Contactos guardados a mano. Se persisten en el propio dispositivo porque son
+  // una libreta local, no una lista de la cuenta: no hay razón para subirlos al
+  // servidor ni para perderlos al recargar.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('taktak_contacts') || '[]');
+      if (Array.isArray(saved) && saved.length) {
+        setContacts((prev) => [...prev, ...saved]);
+        setContactsState('ready');
+      }
+    } catch {
+      // Un almacenamiento corrupto no debe romper el marcador.
+    }
+  }, []);
+
+  function addContact(event) {
+    event.preventDefault();
+    const name = contactDraft.name.trim();
+    const phone = contactDraft.phone.trim();
+    if (!name || !phone) return;
+    const entry = { name, phone, manual: true };
+    setContacts((prev) => {
+      if (prev.some((c) => c.name === name && c.phone === phone)) return prev;
+      const next = [...prev, entry];
+      try {
+        localStorage.setItem('taktak_contacts', JSON.stringify(next.filter((c) => c.manual)));
+      } catch {
+        // Sin almacenamiento, el contacto sigue usable en esta sesión.
+      }
+      return next;
+    });
+    setContactDraft({ name: '', phone: '' });
+    setContactsState('ready');
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return countries;
+    // Se compara sin acentos: quien busca su país escribe "peru", "mexico" o
+    // "caiman", no la grafía acentuada. Comparar en crudo dejaba esos términos
+    // sin resultados y parecía que el selector no encontraba nada.
     return countries.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
+        matches(c.name, q) ||
+        matches(c.dialCode, q) ||
+        matches(c.code, q) ||
         c.dialCode.includes(q) ||
         c.code.toLowerCase() === q
     );
@@ -161,17 +230,38 @@ export default function Dialer({ onCall, onOpenChat }) {
   // Si el número NO tiene cuenta, no es un callejón sin salida: se ofrecen las
   // dos alternativas reales (llamada telefónica normal o invitar por SMS).
   async function resolve() {
-    const digits = number.trim();
-    if (!digits || busy) return null;
+    const raw = number.trim();
+    if (!raw || busy) return null;
 
     setBusy(true);
-    setStatus('Buscando el número…');
+    setStatus('Buscando…');
     setResolved(null);
     setUnknown(null);
 
+    // Un @usuario se busca como cuenta, no como número. Es la única forma de
+    // llamar a quien se registró con correo: esas cuentas no tienen teléfono,
+    // así que la búsqueda por número nunca las encuentra y la videollamada
+    // quedaba inalcanzable desde el marcador aunque la otra persona sí pueda
+    // recibirla.
+    if (raw.startsWith('@') || /^[a-zA-Z]/.test(raw)) {
+      const username = raw.replace(/^@/, '');
+      try {
+        const { data } = await api.get(`/users/${encodeURIComponent(username)}`);
+        const found = { ...data.user, id: data.user._id || data.user.id };
+        setResolved(found);
+        setStatus(`@${found.username} está en TAK TAK`);
+        return found;
+      } catch (err) {
+        setStatus(err.message);
+        return null;
+      } finally {
+        setBusy(false);
+      }
+    }
+
     try {
       const { data } = await api.post('/users/lookup-phone', {
-        phone: digits,
+        phone: raw,
         country: country?.code,
       });
       setResolved(data.user);
@@ -311,21 +401,21 @@ export default function Dialer({ onCall, onOpenChat }) {
         </button>
 
         <input
-          type="tel"
-          inputMode="tel"
+          type="text"
+          inputMode="text"
           className="dialer-number"
-          placeholder="Número de teléfono"
+          placeholder="Número o @usuario"
           value={number}
           onChange={(e) => {
             resetResolution();
             setNumber(e.target.value);
           }}
-          aria-label="Número de teléfono"
+          aria-label="Número de teléfono o usuario"
         />
       </div>
 
       {pickerOpen && (
-        <div className="dialer-picker">
+        <div className="dialer-picker" ref={pickerRef}>
           <input
             type="search"
             className="dialer-picker-search"
@@ -433,8 +523,8 @@ export default function Dialer({ onCall, onOpenChat }) {
       {unknown && (
         <div className="dialer-unknown">
           <p className="muted">
-            Este número no tiene TAK TAK. Puedes llamarle por teléfono o invitarle a
-            instalarla.
+            Este número no tiene TAK TAK. Puedes llamarle por teléfono, invitarle a
+            instalarla, o buscarle por su @usuario si se registró con correo.
           </p>
           <div className="dialer-unknown-actions">
             <button type="button" className="btn-primary" onClick={callNative}>
@@ -480,16 +570,47 @@ export default function Dialer({ onCall, onOpenChat }) {
 
         {contactsState === 'unsupported' && (
           <p className="muted dialer-hint">
-            Este navegador no permite leer los contactos. Escribe el número o impórtalos
-            desde el móvil.
+            Este navegador no da acceso a la agenda. Escribe el número arriba, o
+            añade un contacto a mano aquí abajo.
           </p>
         )}
         {contactsState === 'denied' && (
-          <p className="muted dialer-hint">No se concedió el permiso de contactos.</p>
+          <p className="muted dialer-hint">
+            No se concedió el permiso de contactos. Puedes añadirlos a mano aquí abajo.
+          </p>
         )}
         {contactsState === 'empty' && (
           <p className="muted dialer-hint">No se encontró ningún contacto con teléfono.</p>
         )}
+
+        {/* Camino alternativo a "Importar": cuando el navegador no expone la
+            agenda (escritorio, iOS, o permiso denegado) el botón de importar no
+            lleva a ninguna parte. Con esto se puede dejar el número guardado a
+            mano y llamarlo después, que es lo que el usuario quería hacer. */}
+        <form className="dialer-contact-add" onSubmit={addContact}>
+          <input
+            type="text"
+            placeholder="Nombre"
+            value={contactDraft.name}
+            onChange={(e) => setContactDraft((d) => ({ ...d, name: e.target.value }))}
+            aria-label="Nombre del contacto"
+          />
+          <input
+            type="text"
+            inputMode="text"
+            placeholder="Teléfono o @usuario"
+            value={contactDraft.phone}
+            onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))}
+            aria-label="Teléfono o usuario del contacto"
+          />
+          <button
+            type="submit"
+            className="btn-secondary"
+            disabled={!contactDraft.name.trim() || !contactDraft.phone.trim()}
+          >
+            Añadir
+          </button>
+        </form>
 
         {contacts.length > 0 && (
           <ul className="dialer-contacts-list">

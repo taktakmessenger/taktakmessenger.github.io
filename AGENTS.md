@@ -1309,3 +1309,35 @@ selectores viejos y parece que la app esta rota. Dos trampas ya vistas:
 
 Antes de culpar a la app, comprobar que el selector del harness sigue existiendo.
 
+### Las llamadas van por cuenta, no por teléfono
+
+Las llamadas WebRTC (voz y vídeo) se invitan por **id de cuenta**
+(`call:invite { to: <id> }` en `backend/src/services/liveSockets.js`). El
+teléfono no interviene: `startCall` solo necesita `target.id`. Por eso una
+cuenta registrada **con correo** (sin teléfono) sí puede recibir y hacer
+videollamadas.
+
+La trampa está en el **marcador**: `/api/users/lookup-phone` busca en el campo
+`phone`, así que una cuenta de correo nunca se encuentra por ahí y la
+videollamada quedaba inalcanzable desde esa pantalla. El marcador ahora acepta
+también `@usuario` y resuelve con `GET /api/users/:username`. Si vuelve a
+reportarse "no me deja videollamar a X", comprobar primero si X se registró con
+correo: su teléfono estará vacío y hay que buscarle por `@usuario`.
+
+`frontend/test/e2e-call-email-account.mjs` cubre esto de extremo a extremo con
+dos navegadores (una cuenta de correo recibe y acepta la videollamada).
+
+### Las suites e2e esperan la app en 13000
+
+El valor por defecto de `E2E_BASE_URL` en los `frontend/test/e2e-*.mjs` es
+`http://127.0.0.1:13000`. En este entorno la app corre en 12000, así que hay que
+pasar la variable: `E2E_BASE_URL=http://127.0.0.1:12000 node test/e2e-home.mjs`.
+Sin ella el fallo es `ECONNREFUSED 127.0.0.1:13000` y parece que la app está
+rota.
+
+### Playwright puede perder sus navegadores
+
+Si `chromium.launch()` falla con "Executable doesn't exist ... chrome-headless-shell",
+no es un fallo del test: hay que reponerlos con
+`cd frontend && npx playwright install chromium`.
+
