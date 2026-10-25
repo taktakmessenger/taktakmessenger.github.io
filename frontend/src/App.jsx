@@ -380,8 +380,12 @@ function Shell() {
       {/* Se ofrece una sola vez tras entrar con correo o Google, porque esas
           cuentas no tienen teléfono y sin él no se las puede llamar por número.
           Es opcional y descartable: obligar a dar el teléfono para usar la app
-          espantaría a quien solo quiere ver vídeos. */}
-      {phonePrompt && user && !user.phoneVerified && (
+          espantaría a quien solo quiere ver vídeos.
+          En WhaTaka no se dibuja: es un modal que bloquea la pantalla entera, y
+          ahí vive el marcador, que es justo donde se llama a otra persona. Antes
+          tapaba el marcador y el selector de país, así que parecían muertos. Ya
+          se ofrece sobre el feed al entrar. */}
+      {phonePrompt && user && !user.phoneVerified && view !== 'messages' && (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modal-content">
             <h3>¿Añades tu teléfono?</h3>

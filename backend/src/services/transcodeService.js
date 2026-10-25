@@ -55,6 +55,112 @@ function scalePadFilter(width, height) {
   );
 }
 
+// --- Marca de TAK TAK -------------------------------------------------------
+//
+// Un vídeo bajado de otra red llega con su marca y sus metadatos. La marca
+// pegada en los píxeles no se puede quitar sin recodificar a peor calidad, pero
+// sí se hacen las dos cosas que se pidieron: se borra todo rastro en los
+// metadatos (nombre, autor, etiquetas, herramienta) y se deja encima la marca
+// de TAK TAK con el @usuario, como hace la otra red pero con la identidad de
+// aquí.
+const BRAND_FONT_CANDIDATES = [
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+  '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+];
+
+let brandFont = null;
+
+async function resolveBrandFont() {
+  if (brandFont !== null) return brandFont;
+  for (const candidate of BRAND_FONT_CANDIDATES) {
+    try {
+      await fs.access(candidate);
+      brandFont = candidate;
+      return brandFont;
+    } catch {
+      // Se prueba el siguiente candidato.
+    }
+  }
+  console.warn('[transcode] sin fuente para la marca: los vídeos se limpiarán pero sin marca');
+  brandFont = false;
+  return brandFont;
+}
+
+// El texto de la marca va en un fichero porque `textfile` evita escapar el
+// @usuario: dentro de una cadena de filtros, `:`, `%` o una coma lo romperían.
+// Se limpian esos caracteres del nombre para que no puedan romper el filtro.
+function brandText(username) {
+  const handle = String(username || '').replace(/[\s:%,'\\]/g, '').slice(0, 40);
+  const lines = [handle ? `@${handle}` : null, 'TAK TAK'].filter(Boolean);
+  return `${lines.join('\n')}\n`;
+}
+
+async function writeBrandText(targetDir, username) {
+  const file = path.join(targetDir, 'brand.txt');
+  await fs.writeFile(file, brandText(username));
+  return file;
+}
+
+// Caja semitransparente con el @usuario y "TAK TAK" centrada abajo. El tamaño
+// se deriva de la altura para que se lea igual en cualquier resolución.
+function watermarkFilter(fontFile, textFile, height) {
+  const size = Math.max(20, Math.round(height / 20));
+  const margin = Math.round(size * 1.2);
+  return (
+    `drawtext=fontfile=${fontFile}:textfile=${textFile}:` +
+    `fontcolor=white:fontsize=${size}:line_spacing=${Math.round(size / 3)}:` +
+    `box=1:boxcolor=black@0.45:boxborderw=${Math.round(size / 2)}:` +
+    `x=(w-text_w)/2:y=h-th-${margin}`
+  );
+}
+
+// Opciones que borran todo rastro en los metadatos. `bitexact` evita además que
+// el muxer escriba su propia firma, así que no queda ni el nombre del archivo
+// original ni la herramienta con la que se procesó.
+const CLEAN_METADATA_OPTIONS = [
+  '-map_metadata',
+  '-1',
+  '-fflags',
+  '+bitexact',
+  '-flags:v',
+  '+bitexact',
+  '-flags:a',
+  '+bitexact',
+];
+
+// Reescribe el contenedor sin tocar los códecs (`-c copy`) para dejar el
+// archivo sin metadatos. Al no recodificar, la calidad es idéntica y es rápido.
+//
+// Se escribe en un temporal y se renombra: si ffmpeg falla a medias, el archivo
+// bueno sigue en su sitio en lugar de quedar truncado. Un fallo aquí no debe
+// tumbar el resto del proceso, así que se traga el error y se avisa.
+function cleanMetadata(inputPath) {
+  const tempPath = `${inputPath}.clean${path.extname(inputPath) || '.mp4'}`;
+  return new Promise((resolve) => {
+    ffmpeg(inputPath)
+      .setFfmpegPath(env.ffmpegPath)
+      .outputOptions(['-c', 'copy', ...CLEAN_METADATA_OPTIONS])
+      .output(tempPath)
+      .on('end', async () => {
+        try {
+          await fs.rename(tempPath, inputPath);
+        } catch (err) {
+          console.warn('[transcode] no se pudo reemplazar el original limpio:', err.message);
+          await fs.rm(tempPath, { force: true }).catch(() => {});
+        }
+        resolve();
+      })
+      .on('error', async (err) => {
+        console.warn('[transcode] no se pudieron limpiar los metadatos:', err.message);
+        await fs.rm(tempPath, { force: true }).catch(() => {});
+        resolve();
+      })
+      .run();
+  });
+}
+
 function variantDir(baseDir, name) {
   return path.join(baseDir, name);
 }
@@ -63,20 +169,32 @@ function variantDir(baseDir, name) {
  * Transcode an uploaded file into a multi-bitrate HLS ladder and grab a
  * thumbnail. Returns null when ffmpeg is unavailable so callers can fall back
  * to the original upload.
+ *
+ * `username` es el @usuario que se imprime en la marca de TAK TAK. Sin él, el
+ * vídeo se limpia igual pero la marca solo dice "TAK TAK".
  */
-async function processVideoToHLS(inputPath, outputDir, videoId) {
+async function processVideoToHLS(inputPath, outputDir, videoId, username) {
   if (!(await hasFfmpeg())) return null;
+
+  // El archivo original es el que se sirve tal cual mientras no hay HLS, y es
+  // el que se descarga: si llegó con el título, el autor o el enlace de otra
+  // red, hay que limpiarlo ahí también. Se hace antes de nada para que ni el
+  // probe de duración ni el HLS vean el nombre viejo.
+  await cleanMetadata(inputPath);
 
   const targetDir = path.join(outputDir, videoId);
   await fs.mkdir(targetDir, { recursive: true });
 
+  const fontFile = await resolveBrandFont();
+  const brandFile = fontFile ? await writeBrandText(targetDir, username) : null;
+
   // Generate the poster frame first: it is cheap and useful even if the
   // transcode below fails partway.
-  await generateThumbnail(inputPath, targetDir);
+  await generateThumbnail(inputPath, targetDir, fontFile, brandFile);
 
   await Promise.all(
     RENDITIONS.map((rendition) =>
-      transcodeVariant(inputPath, variantDir(targetDir, rendition.name), rendition)
+      transcodeVariant(inputPath, variantDir(targetDir, rendition.name), rendition, fontFile, brandFile)
     )
   );
 
@@ -89,18 +207,26 @@ async function processVideoToHLS(inputPath, outputDir, videoId) {
   };
 }
 
-function grabFrame(inputPath, targetDir, seconds) {
+function grabFrame(inputPath, targetDir, seconds, fontFile, brandFile) {
   return new Promise((resolve, reject) => {
     const command = ffmpeg(inputPath).setFfmpegPath(env.ffmpegPath);
     if (seconds > 0) command.seekInput(seconds);
+
+    // La miniatura también lleva la marca: es la carátula del vídeo en el feed,
+    // y ahí es donde se ve si el vídeo es de aquí.
+    const filters = [scalePadFilter(THUMBNAIL_SIZE.width, THUMBNAIL_SIZE.height)];
+    if (fontFile && brandFile) {
+      filters.push(watermarkFilter(fontFile, brandFile, THUMBNAIL_SIZE.height));
+    }
 
     command
       .outputOptions([
         '-frames:v 1',
         // Same fit-and-pad filter as the renditions: a bare `-s` would stretch
         // a landscape frame into the vertical box.
-        `-vf ${scalePadFilter(THUMBNAIL_SIZE.width, THUMBNAIL_SIZE.height)}`,
+        `-vf ${filters.join(',')}`,
         '-q:v 3',
+        ...CLEAN_METADATA_OPTIONS,
       ])
       .output(path.join(targetDir, 'thumbnail.jpg'))
       .on('end', resolve)
@@ -109,15 +235,20 @@ function grabFrame(inputPath, targetDir, seconds) {
   });
 }
 
-function generateThumbnail(inputPath, targetDir) {
+function generateThumbnail(inputPath, targetDir, fontFile, brandFile) {
   // A clip shorter than one second has no frame at 1s, so fall back to the
   // first one rather than leaving the video without a poster.
-  return grabFrame(inputPath, targetDir, 1).catch(() =>
-    grabFrame(inputPath, targetDir, 0)
+  return grabFrame(inputPath, targetDir, 1, fontFile, brandFile).catch(() =>
+    grabFrame(inputPath, targetDir, 0, fontFile, brandFile)
   );
 }
 
-function transcodeVariant(inputPath, outDir, rendition) {
+function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile) {
+  const filters = [scalePadFilter(rendition.width, rendition.height)];
+  if (fontFile && brandFile) {
+    filters.push(watermarkFilter(fontFile, brandFile, rendition.height));
+  }
+
   return fs.mkdir(outDir, { recursive: true }).then(
     () =>
       new Promise((resolve, reject) => {
@@ -135,7 +266,7 @@ function transcodeVariant(inputPath, outDir, rendition) {
             // traen pistas que rompen el muxing a MPEG-TS del HLS.
             '-sn',
             '-dn',
-            `-vf ${scalePadFilter(rendition.width, rendition.height)}`,
+            `-vf ${filters.join(',')}`,
             '-c:v:0 libx264',
             `-b:v:0 ${rendition.bitrate}`,
             // Nivel y perfil compatibles con móviles antiguos y con el
@@ -145,6 +276,7 @@ function transcodeVariant(inputPath, outDir, rendition) {
             '-c:a aac',
             '-b:a 128k',
             '-ac 2',
+            ...CLEAN_METADATA_OPTIONS,
             '-f hls',
             '-hls_time 4',
             '-hls_playlist_type vod',
@@ -180,4 +312,12 @@ function probeDuration(inputPath) {
   });
 }
 
-module.exports = { processVideoToHLS, probeDuration, hasFfmpeg, RENDITIONS };
+module.exports = {
+  processVideoToHLS,
+  probeDuration,
+  hasFfmpeg,
+  RENDITIONS,
+  brandText,
+  watermarkFilter,
+  CLEAN_METADATA_OPTIONS,
+};

@@ -52,7 +52,11 @@ const upload = multer({
 // Kicks off the HLS ladder without blocking the response. A failure is stored
 // on the video so the creator can see it instead of the upload silently
 // staying as a plain file.
-function startTranscode(video, inputPath) {
+//
+// `username` es el @usuario que se estampa en la marca de TAK TAK. Se pasa
+// aparte del vídeo porque el marcador lo tiene en la sesión y así el reproceso
+// no necesita otra consulta a la base.
+function startTranscode(video, inputPath, username) {
   // The client-declared duration is a hint; measuring the file is the only way
   // to be sure, and analytics divides by it.
   transcodeService
@@ -66,7 +70,7 @@ function startTranscode(video, inputPath) {
     .catch(() => {});
 
   transcodeService
-    .processVideoToHLS(inputPath, env.uploadsDir, video._id.toString())
+    .processVideoToHLS(inputPath, env.uploadsDir, video._id.toString(), username)
     .then(async (result) => {
       if (!result) {
         await Video.updateOne({ _id: video._id }, { transcodeStatus: 'failed' });
@@ -289,7 +293,7 @@ router.post(
     await User.updateOne({ _id: req.user.userId }, { $set: { 'profile.isCreator': true } });
 
     // Fire and forget: the response must not wait for ffmpeg.
-    startTranscode(video, req.file.path);
+    startTranscode(video, req.file.path, req.user.username);
 
     res.status(201).json({ video });
   })
@@ -452,7 +456,10 @@ router.post(
     // En segundo plano, igual que en la subida: un vídeo largo tardaría más que
     // el tiempo de espera del proxy y la respuesta se cortaría.
     await Video.updateOne({ _id: video._id }, { transcodeStatus: 'processing' });
-    startTranscode(video, inputPath);
+    // La marca lleva el @usuario del creador, no el de quien reprocesa: un
+    // admin puede reprocesar el vídeo de otra persona y la autoría no cambia.
+    const owner = await User.findById(video.creator).select('username');
+    startTranscode(video, inputPath, owner?.username);
 
     res.status(202).json({ queued: true, transcodeStatus: 'processing' });
   })

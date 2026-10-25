@@ -271,7 +271,7 @@ export default function Dialer({ onCall, onOpenChat }) {
       // Solo "no existe" habilita las alternativas. Un número inválido o sin
       // sesión es un error y se queda como error.
       if (/no hay ninguna cuenta/i.test(err.message)) {
-        setUnknown({ phone: digits });
+        setUnknown({ phone: raw });
         setStatus('Ese número no tiene TAK TAK');
       } else {
         setStatus(err.message);

@@ -430,6 +430,12 @@
   place-items: center;
   padding: 1rem;
   z-index: 40;
+  /* Un modal nunca debe atrapar al usuario. En pantallas bajas (landscape, o
+     con el teclado del móvil abierto) la tarjeta no cabe y sus botones quedaban
+     fuera de la vista, así que no se podía cerrar ni tocar nada de debajo: la
+     app parecía muerta. El contenedor se desplaza si hiciera falta. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-content {
@@ -439,6 +445,10 @@
   padding: 1.6rem;
   width: 100%;
   max-width: 400px;
+  /* La tarjeta se limita a la altura visible y desplaza su interior, para que
+     los botones sigan siendo alcanzables aunque el contenido sea alto. */
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   box-shadow: 0 30px 70px -25px #000, 0 0 40px -18px var(--glow-purple);
 }
 

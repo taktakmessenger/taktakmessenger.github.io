@@ -798,6 +798,38 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
   El detalle de `transcodeError` solo se devuelve al dueño.
 - Clases nuevas de CSS: `.optimize-panel`, `.optimize-title`, `.optimize-actions`,
   `.video-actions` en `App.css`.
+
+### Limpieza de rastro ajeno y marca TAK TAK
+
+Un vídeo bajado de otra red (TikTok y similares) llega con el nombre, el autor,
+el enlace y la herramienta en los **metadatos**, y a veces con la marca pegada
+en los píxeles. Al subirlo, `transcodeService.processVideoToHLS` hace dos cosas
+antes de generar el HLS:
+
+1. **Borra los metadatos** (`-map_metadata -1` + `+bitexact`). Se aplica a tres
+   sitios, porque el rastro vive en los tres: el **archivo original** servido
+   (`cleanMetadata`, que reescribe el contenedor con `-c copy`, sin recodificar,
+   y por eso no pierde calidad), **cada variante HLS** y la **miniatura**.
+2. **Estampa la marca** `@usuario` + `TAK TAK` abajo y centrada, con `drawtext`,
+   sobre una caja semitransparente. El texto va en un fichero `brand.txt` dentro
+   de la carpeta del vídeo (`textfile`), no incrustado en la cadena de filtros,
+   porque un `:`, una coma o un `%` en el nombre romperían el comando. El tamaño
+   se deriva de la altura de cada variante para que se lea igual en todas.
+
+- **`username`** se pasa desde la ruta: en la subida es `req.user.username`; en
+  el reproceso se consulta el del **creador**, no el de quien reprocesa (un
+  admin puede reprocesar el vídeo de otra persona y la autoría no cambia).
+- **Sin fuente instalada** (`resolveBrandFont` prueba DejaVu/Liberation/FreeSans)
+  el vídeo se limpia igual pero sin marca, y se avisa por consola.
+- **Comprobación de extremo a extremo:** `bash scripts/e2e-video-hls.sh`
+  (acepta `API_BASE=...`). Sube un clip con metadatos que dicen "tiktok",
+  y verifica que no quede rastro ni en el original, ni en el segmento HLS, ni en
+  la miniatura, y que la marca se vea de verdad (cuenta píxeles claros en la
+  franja inferior de un fotograma).
+- **Tests unitarios** de los ayudantes puros (saneado del nombre, posición del
+  filtro, opciones de limpieza): `backend/test/transcode-brand.test.js`. El
+  pipeline con ffmpeg real se prueba en `scripts/`, no en los tests de la API,
+  para que la suite no dependa de que ffmpeg esté instalado.
 - Verificación con navegador real: `npm run e2e:upload` (sube un webm, comprueba
   el aviso "Optimizando → ¡Listo!" y la visibilidad del botón Reprocesar).
 
