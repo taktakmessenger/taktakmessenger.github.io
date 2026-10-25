@@ -8,7 +8,8 @@
     "e2e:upload": "node scripts/e2e-upload-optimize.js",
     "e2e:notifications": "node scripts/e2e-notifications.js",
     "e2e:voice-room": "node scripts/e2e-voice-room.js",
-    "smoke": "bash scripts/smoke-api.sh"
+    "smoke": "bash scripts/smoke-api.sh",
+    "e2e:area-codes": "node scripts/e2e-area-codes.js"
   },
   "devDependencies": {
     "puppeteer-core": "^23.0.0"

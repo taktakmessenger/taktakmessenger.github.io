@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import { loadProviders } from '../lib/providers';
 import { validateRegistration, validatePhoneRegistration, resendLabel, MIN_PASSWORD_LENGTH } from '../lib/authForm';
 
 // Loads Google Identity Services once, on demand. Doing it lazily keeps a
@@ -250,18 +251,28 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
   const [devCode, setDevCode] = useState('');
 
   // Which optional providers this deployment actually has, so buttons that
-  // would only fail are hidden.
+  // would only fail are hidden. Con reintentos: es la primera llamada de la
+  // sesión y, tras un reinicio, el backend puede tardar en responder.
   useEffect(() => {
-    api
+    let cancelled = false;
+    loadProviders(
       // The UI is Spanish-only, so the country names are requested in Spanish
       // rather than in the browser's language: a Spanish screen listing
       // "Germany" and "United States" is worse than useless.
-      .get('/auth/providers', { params: { locale: 'es' } })
-      .then(({ data }) => {
+      () => api.get('/auth/providers', { params: { locale: 'es' } }),
+      { shouldAbort: () => cancelled }
+    )
+      .then((data) => {
+        if (cancelled || !data) return;
         setCountries(data.countries || []);
         setProviders(data);
       })
-      .catch(() => setCountries([]));
+      .catch(() => {
+        if (!cancelled) setCountries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Default the picker to the browser's locale when we can infer it, instead

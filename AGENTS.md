@@ -1354,6 +1354,30 @@ selectores viejos y parece que la app esta rota. Dos trampas ya vistas:
 
 Antes de culpar a la app, comprobar que el selector del harness sigue existiendo.
 
+## La lista de países se perdía al reiniciar la app
+
+Sintoma: se reinicia TAK TAK y el marcador de WhaTaka se queda sin codigos de
+area (el boton muestra `🌐` y el selector sale vacio), hasta recargar la pagina.
+
+Causa: `Dialer.jsx` pedia `/auth/providers` **una sola vez** al montar y su
+`.catch(() => {})` se tragaba el error **sin reintentar**. Ese es justo el primer
+momento de la sesion, asi que si el backend aun arrancaba (un 502 del proxy
+mientras levanta) la lista se perdia para siempre. El mismo patron estaba en
+`AuthForm.jsx` (registro) y `PhoneLink.jsx` (enlazar telefono): un solo intento,
+error silenciado.
+
+Arreglo: `frontend/src/lib/providers.js` centraliza la carga con **reintentos de
+espera creciente** (1, 2, 4 y 8 s) y `shouldAbort` para no seguir reintentando si
+el componente se desmonto. Lo usan los tres. Sin el `shouldAbort`, un reintento
+programado seguiria vivo despues de salir de la pantalla.
+
+- Regresion con navegador real: `npm run e2e:area-codes` (necesita
+  `E2E_BASE_URL`). Intercepta `/auth/providers` para que falle 8 s y comprueba
+  que el marcador **se recupera solo** (pasa de `🌐` a `+1` con 245 paises) sin
+  recargar. Antes de medir se espera hasta 25 s: los reintentos tardan, y medir a
+  los pocos segundos da un falso negativo.
+- Tests unitarios del reintento (sin esperas reales): `frontend/test/providers.test.js`.
+
 ### Las llamadas van por cuenta, no por teléfono
 
 Las llamadas WebRTC (voz y vídeo) se invitan por **id de cuenta**

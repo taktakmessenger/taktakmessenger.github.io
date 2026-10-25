@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import { loadProviders } from '../lib/providers';
 
 // A six-digit code field, the same shape as the one in AuthForm. Duplicated on
 // purpose rather than exported from there: AuthForm is one screen's worth of
@@ -65,12 +66,23 @@ export default function PhoneLink({ onDone, onSkip, skipLabel = 'Ahora no', auto
   const [devCode, setDevCode] = useState('');
 
   // La lista de países viene de la misma fuente que el registro, para que el
-  // selector cubra el mundo entero y no una tabla mantenida a mano.
+  // selector cubra el mundo entero y no una tabla mantenida a mano. Con
+  // reintentos: si el backend aún arranca, un solo intento dejaba el selector
+  // vacío hasta recargar.
   useEffect(() => {
-    api
-      .get('/auth/providers', { params: { locale: 'es' } })
-      .then(({ data }) => setCountries(data.countries || []))
-      .catch(() => setCountries([]));
+    let cancelled = false;
+    loadProviders(() => api.get('/auth/providers', { params: { locale: 'es' } }), {
+      shouldAbort: () => cancelled,
+    })
+      .then((data) => {
+        if (!cancelled && data) setCountries(data.countries || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCountries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Arranca el selector en el país del navegador cuando se puede deducir.

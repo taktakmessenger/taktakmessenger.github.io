@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
+import { loadProviders } from '../lib/providers';
 import { matches } from '../lib/search';
 
 // Banderas a partir del código ISO. Se derivan del código en vez de guardar una
@@ -59,13 +60,19 @@ export default function Dialer({ onCall, onOpenChat }) {
 
   // La lista de países sale de libphonenumber en el servidor, así que cubre
   // todos los territorios y los prefijos están al día.
+  //
+  // Se reintenta con espera creciente porque este es el primer momento de la
+  // sesión: justo cuando la app arranca (o el usuario entra nada más
+  // reiniciarse), el backend puede tardar unos segundos en responder y una sola
+  // intentona fallida dejaba el marcador sin códigos de área hasta recargar.
   useEffect(() => {
-    api
-      .get('/auth/providers')
-      .then(({ data }) => {
-        const list = Array.isArray(data?.countries) ? data.countries : [];
+    let cancelled = false;
+    loadProviders(() => api.get('/auth/providers'), { shouldAbort: () => cancelled })
+      .then((data) => {
+        if (cancelled || !data) return;
+        const list = Array.isArray(data.countries) ? data.countries : [];
         setCountries(list);
-        setVoiceAvailable(Boolean(data?.voice));
+        setVoiceAvailable(Boolean(data.voice));
         // Preselecciona el país del navegador si está en la lista, para no
         // obligar a buscarlo cada vez. Si no coincide, se queda sin país y el
         // usuario escribe el prefijo internacional.
@@ -73,7 +80,13 @@ export default function Dialer({ onCall, onOpenChat }) {
         const match = list.find((c) => c.code === guessed);
         if (match) setCountry(match);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Se agotan los reintentos: el marcador queda sin prefijos, pero el
+        // usuario aún puede escribir el número con "+" y buscar por nombre.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function resetResolution() {
