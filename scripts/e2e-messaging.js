@@ -55,15 +55,25 @@ async function newCtx(browser, token, user) {
     localStorage.setItem('taktak_user', JSON.stringify(u));
   }, token, user);
   await page.reload({ waitUntil: 'domcontentloaded' });
+  // Una cuenta recién creada recibe el modal "¿Añades tu teléfono?", que es
+  // bloqueante de verdad. Se descarta como haría una persona; si no, el clic
+  // sobre la bandeja no llegaría nunca al chat.
+  await sleep(1500);
+  await page.evaluate(() => {
+    [...document.querySelectorAll('.modal button')]
+      .find((b) => /ahora no/i.test(b.textContent))
+      ?.click();
+  });
+  await sleep(400);
   return page;
 }
 
 // Abre el primer chat de la bandeja y espera a que el hilo esté montado.
 async function openThread(page) {
-  await clickByText(page, 'Mensajes');
+  await clickByText(page, 'WhaTaka');
   await page.waitForSelector('button.conversation-item', { timeout: 20000 });
   await page.click('button.conversation-item');
-  await page.waitForSelector('.thread-composer input', { timeout: 15000 });
+  await page.waitForSelector('.thread-composer input[type="text"]', { timeout: 15000 });
   await sleep(800);
 }
 
@@ -110,7 +120,7 @@ async function lastTicks(page) {
   try {
     // --- Bandeja ---------------------------------------------------------
     console.log('\n▸ Bandeja de entrada');
-    await clickByText(pageA, 'Mensajes');
+    await clickByText(pageA, 'WhaTaka');
     await pageA.waitForSelector('button.conversation-item', { timeout: 20000 });
     ok('la bandeja carga la conversación');
     const hasSearch = await pageA.$('.inbox-search');
@@ -133,8 +143,8 @@ async function lastTicks(page) {
 
     // --- Escribiendo… ----------------------------------------------------
     console.log('\n▸ Aviso de "escribiendo…"');
-    await pageB.click('.thread-composer input');
-    await pageB.type('.thread-composer input', 'te escribo algo');
+    await pageB.click('.thread-composer input[type="text"]');
+    await pageB.type('.thread-composer input[type="text"]', 'te escribo algo');
     try {
       await pageA.waitForFunction(
         () => /escribiendo/i.test(document.querySelector('.thread-peer-id small')?.textContent || ''),
@@ -158,8 +168,8 @@ async function lastTicks(page) {
 
     // B escribe; sus ticks deben pasar por enviado/entregado y acabar en leído
     // cuando A tenga el hilo abierto (lo tiene, así que se marca leído solo).
-    await pageA.click('.thread-composer input');
-    await pageA.type('.thread-composer input', 'recibido, hablamos');
+    await pageA.click('.thread-composer input[type="text"]');
+    await pageA.type('.thread-composer input[type="text"]', 'recibido, hablamos');
     await pageA.click('.thread-composer button[type="submit"]');
 
     await pageB.waitForFunction(
@@ -198,7 +208,7 @@ async function lastTicks(page) {
     await clickByText(pageB, 'Volver');
     await sleep(1200);
     // Ahora A escribe: B ya no mira el hilo, así que debe contar como no leído.
-    await pageA.type('.thread-composer input', 'otro mensaje');
+    await pageA.type('.thread-composer input[type="text"]', 'otro mensaje');
     await pageA.click('.thread-composer button[type="submit"]');
     await sleep(1800);
     const badge = await pageB.$('.conversation-item .badge');

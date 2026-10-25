@@ -3108,12 +3108,21 @@
   transform: translateX(-50%);
   z-index: 60;
   width: min(92vw, 420px);
-  padding: 0.9rem 1rem;
-  border-radius: 16px;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
   background: rgba(18, 12, 28, 0.96);
   border: 1px solid var(--accent, #e6007a);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(12px);
+  /* Es un aviso flotante, no un modal: no debe robar el toque a lo que queda
+     debajo. Antes se comía los clics del compositor del chat, de los botones
+     del marcador y de la lista de países, así que "Enviar" y el selector de
+     país parecían muertos. Solo sus propios botones capturan el toque. */
+  pointer-events: none;
+}
+
+.notif-prompt-actions button {
+  pointer-events: auto;
 }
 
 .notif-prompt-body {

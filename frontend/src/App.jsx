@@ -396,8 +396,13 @@ function Shell() {
 
       {/* Aviso para activar las notificaciones. Es lo que hace que una llamada
           suene con la app cerrada; sin suscripción, el servidor no tiene a quién
-          despertar y la llamada acaba en "no está disponible". */}
-      {user && <NotificationPrompt user={user} onOpenSettings={() => setView('settings')} />}
+          despertar y la llamada acaba en "no está disponible".
+          En WhaTaka no se dibuja: es una tarjeta anclada abajo y ahí choca con
+          el compositor del chat y con el teclado del marcador. Ya se ofrece al
+          entrar, sobre el feed, así que quien lo quiera activar lo ve igual. */}
+      {user && view !== 'messages' && (
+        <NotificationPrompt user={user} onOpenSettings={() => setView('settings')} />
+      )}
     </div>
   );
 }

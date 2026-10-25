@@ -1272,3 +1272,40 @@ SMOKE_ADMIN_TOKEN="$ADM" bash scripts/smoke-api.sh
 ```
 
 Ultima ejecucion: **51/51 en verde** (backend 308/308, frontend 48/48).
+
+## Un aviso flotante puede dejar WhaTaka "muerta" sin dar ningun error
+
+Los avisos anclados abajo (el de notificaciones, `.notif-prompt`) son tarjetas
+`position: fixed` que se dibujan **encima** de lo que queda debajo. Si no se
+limita su `pointer-events`, se comen el toque de lo que tapan: en pantallas
+bajas (360x640) tapaban el compositor del chat, el boton de llamar y la lista de
+paises del marcador.
+
+El sintoma engana porque **no hay error de consola**: el boton "Enviar" parece
+muerto, el mensaje "no sale" y el selector de pais "no abre". Se diagnostica con
+`document.elementFromPoint()` en el centro del control: si devuelve otro
+elemento, ese es el que roba el toque.
+
+Reglas que quedan de esto:
+
+- Un aviso flotante no bloqueante lleva `pointer-events: none`, y sus propios
+  botones `pointer-events: auto`. Un modal real (`.modal`) si bloquea a
+  proposito.
+- El aviso de notificaciones no se dibuja en la vista `messages`: ahi choca con
+  el compositor y el teclado del marcador. Se sigue ofreciendo sobre el feed.
+- `frontend/test/e2e-whataka-taps.mjs` cubre esto: comprueba con
+  `elementFromPoint` que el campo de mensaje, "Enviar", el boton de pais y el de
+  llamar reciben el toque, a 360x640. Es la regresion del fallo.
+
+### Los harness de la interfaz se desincronizan con el tiempo
+
+Al cambiar textos o marcado, los scripts de `scripts/e2e-*.js` fallan por
+selectores viejos y parece que la app esta rota. Dos trampas ya vistas:
+
+- La pestana se llama **WhaTaka**, no "Mensajes".
+- `.thread-composer input` es el **input de archivo oculto** (el del clip `📎`);
+  el campo de texto es `.thread-composer input[type="text"]`. Teclear en el
+  primero no envia nada y el harness daba "el mensaje no llega".
+
+Antes de culpar a la app, comprobar que el selector del harness sigue existiendo.
+
