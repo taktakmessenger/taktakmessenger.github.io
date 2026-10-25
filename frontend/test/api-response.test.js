@@ -8,8 +8,8 @@ import { NOT_JSON_MESSAGE, NO_RESPONSE_MESSAGE } from '../src/api/response.js';
 // The interceptors run in the browser and touch localStorage. Node has no such
 // global, so it is provided here as a plain in-memory stand-in for the
 // environment — the code under test (the interceptors) is the real one.
-function installLocalStorage() {
-  const store = new Map();
+function installLocalStorage(seed = {}) {
+  const store = new Map(Object.entries(seed));
   global.localStorage = {
     getItem: (k) => (store.has(k) ? store.get(k) : null),
     setItem: (k, v) => store.set(k, String(v)),
@@ -98,7 +98,7 @@ test('un error JSON conserva el mensaje del servidor', async () => {
   server.close();
 });
 
-test('un error 401 borra la sesión guardada', async () => {
+test('un error 401 borra la sesión guardada cuando no hay refresco', async () => {
   installLocalStorage();
   localStorage.setItem('taktak_token', 'viejo');
   localStorage.setItem('taktak_user', '{}');
@@ -144,4 +144,102 @@ test('sin respuesta se informa de falta de conexión', async () => {
       return true;
     }
   );
+});
+
+// Servidor que imita la API real: rechaza el token viejo con 401 y acepta el
+// nuevo. `/refresh` canjea el refresco por un par nuevo. Sirve para comprobar
+// que un 401 ya no echa al usuario: se renueva y se reintenta solo.
+function startAuthServer() {
+  return new Promise((resolve) => {
+    const seen = { refresh: 0, protectedWithNewToken: 0 };
+    const server = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        if (req.url === '/refresh') {
+          seen.refresh += 1;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ token: 'nuevo', refreshToken: 'refresco-2' }));
+          return;
+        }
+        const auth = req.headers.authorization || '';
+        if (auth === 'Bearer nuevo') {
+          seen.protectedWithNewToken += 1;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Token de autenticación requerido' }));
+      });
+    });
+    server.listen(0, '127.0.0.1', () => resolve({ server, seen }));
+  });
+}
+
+test('un 401 con refresco se renueva y se reintenta, sin cerrar la sesión', async () => {
+  installLocalStorage({ taktak_token: 'viejo', taktak_user: '{}', taktak_refresh: 'r' });
+  const { server, seen } = await startAuthServer();
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  // El módulo de sesión pide `/api/auth/refresh`; el servidor de prueba atiende
+  // `/refresh`, así que se reescribe el prefijo igual que en session.test.js.
+  const realFetch = global.fetch;
+  global.fetch = (url, options) =>
+    realFetch(String(url).replace('/api/auth/refresh', `${base}/refresh`), options);
+
+  const client = axios.create({ baseURL: base });
+  client.interceptors.request.use((config) => {
+    const token = localStorage.getItem('taktak_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+  client.interceptors.response.use(onResponse, onResponseError);
+
+  const { data } = await client.get('/protected');
+
+  assert.deepEqual(data, { ok: true });
+  assert.equal(seen.refresh, 1, 'debe renovar una vez');
+  assert.equal(seen.protectedWithNewToken, 1, 'debe reintentar con el token nuevo');
+  assert.equal(localStorage.getItem('taktak_token'), 'nuevo', 'no debe cerrar la sesión');
+
+  global.fetch = realFetch;
+  server.close();
+});
+
+test('un 401 cuyo refresco es 500 no cierra la sesión (fallo pasajero)', async () => {
+  installLocalStorage({ taktak_token: 'viejo', taktak_user: '{}', taktak_refresh: 'r' });
+  const server = await new Promise((resolve) => {
+    const s = http.createServer((req, res) => {
+      if (req.url === '/refresh') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'boom' }));
+        return;
+      }
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Token de autenticación requerido' }));
+    });
+    s.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const realFetch = global.fetch;
+  global.fetch = (url, options) =>
+    realFetch(String(url).replace('/api/auth/refresh', `${base}/refresh`), options);
+
+  const client = axios.create({ baseURL: base });
+  client.interceptors.request.use((config) => {
+    const token = localStorage.getItem('taktak_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+  client.interceptors.response.use(onResponse, onResponseError);
+
+  await assert.rejects(() => client.get('/protected'));
+
+  // El token sigue ahí: no se echa al usuario por un fallo pasajero del servidor.
+  assert.equal(localStorage.getItem('taktak_token'), 'viejo');
+
+  global.fetch = realFetch;
+  server.close();
 });

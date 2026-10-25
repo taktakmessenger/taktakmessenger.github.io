@@ -1378,6 +1378,64 @@ programado seguiria vivo despues de salir de la pantalla.
   los pocos segundos da un falso negativo.
 - Tests unitarios del reintento (sin esperas reales): `frontend/test/providers.test.js`.
 
+## "Se caia la senal": el token caducaba y nadie lo renovaba
+
+Sintoma: con la app abierta un rato (o al volver al dia siguiente), dejan de
+llegar mensajes y llamadas y la app parece "sin senal", sin ningun error claro.
+
+Causa (cadena completa):
+1. La sesión se apoya en un token de **7 dias**. El de refresco (30 dias) se
+   guardaba en `localStorage` (`taktak_refresh`) pero **nunca se canjeaba**: no
+   habia ninguna llamada a `/auth/refresh` en el frontend. (El backend tambien
+   emite un `accessToken` de 1 h, pero el frontend usa `token`, el de 7 dias, y
+   es el que valida el socket con `env.jwtSecret`.)
+2. Al caducar el token, cada peticion recibia 401 y el interceptor **borraba la
+   sesion entera** (`clearSession`), echando al usuario sin intentar renovar.
+3. El socket se autentica **solo al conectar**. Con el token caducado el
+   servidor rechaza el handshake con `Token invalido` y socket.io reintentaba
+   para siempre con el mismo token muerto: no habia recuperacion posible sin
+   recargar y volver a entrar.
+
+Arreglo:
+- `frontend/src/lib/session.js` (NUEVO): `refreshSession()` canjea el refresco
+  (una sola peticion en vuelo, aunque lleguen varios 401 a la vez), guarda el
+  token nuevo y avisa por `onSessionChange`. Distingue **definitivo** (`null`:
+  4xx del refresco, hay que volver a entrar) de **pasajero** (`undefined`: red
+  caida o 5xx, no se cierra la sesion). `tokenExpiry()` lee el `exp` del JWT.
+- `frontend/src/api/client.js`: en un 401 renueva y **reintenta** la peticion
+  una vez (`__retried`) en lugar de cerrar sesion. Un fallo pasajero no borra
+  nada.
+- `frontend/src/contexts/AuthContext.jsx`: escucha `onSessionChange` (asi el
+  token renovado llega al estado y al socket) y **renueva por adelantado** 1
+  minuto antes de caducar. El arranque ya no cierra sesion si `/users/me` falla
+  por red (solo si de verdad no queda token).
+- `frontend/src/contexts/SocketContext.jsx`: en `connect_error` por token,
+  renueva y reconecta con el token nuevo (`instance.auth.token = fresh`).
+  Reconexion sin limite.
+- `frontend/src/components/ConnectionBanner.jsx` (NUEVO): aviso "Sin conexion.
+  Reconectando…" (con 3 s de gracia, para no parpadear en cortes normales).
+
+- Regresion con navegador real: `npm run e2e:session-renewal` (necesita
+  `JWT_SECRET` y `E2E_BASE_URL`). Arranca con un token **caducado** y un refresco
+  valido, y comprueba que la app se recupera sola: renueva el token y el socket
+  vuelve a conectar. **Verificado que falla sin el arreglo** (0 conexiones, el
+  socket se queda reintentando).
+- Tests unitarios (servidor HTTP real, sin dobles): `frontend/test/session.test.js`
+  y los casos nuevos de `frontend/test/api-response.test.js`.
+
+### Un WebSocket no genera eventos `response` en Puppeteer
+
+Al diagnosticar esto, las sondas de red veian **0** handshakes de socket.io
+aunque el socket conectaba perfectamente. La razon: el cliente usa
+`transports: ['websocket', 'polling']` y el WebSocket (upgrade 101) **no** emite
+eventos `response`/`requestfailed` de Puppeteer. Para verlo hay que usar
+**CDP**: `page.target().createCDPSession()` + `Network.enable` y escuchar
+`Network.webSocketCreated` y `Network.webSocketFrameReceived`. El servidor manda
+un fotograma que empieza por `40` cuando el namespace conecta (sesion aceptada) y
+`44` (connect_error) cuando rechaza el token: asi se distingue exito de rechazo.
+No confundir con `window.__taktakSocketConnected`, que solo existe en DEV (el
+build de produccion no lo define).
+
 ### Las llamadas van por cuenta, no por teléfono
 
 Las llamadas WebRTC (voz y vídeo) se invitan por **id de cuenta**

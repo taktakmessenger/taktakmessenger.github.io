@@ -9,7 +9,8 @@
     "e2e:notifications": "node scripts/e2e-notifications.js",
     "e2e:voice-room": "node scripts/e2e-voice-room.js",
     "smoke": "bash scripts/smoke-api.sh",
-    "e2e:area-codes": "node scripts/e2e-area-codes.js"
+    "e2e:area-codes": "node scripts/e2e-area-codes.js",
+    "e2e:session-renewal": "node scripts/e2e-session-renewal.js"
   },
   "devDependencies": {
     "puppeteer-core": "^23.0.0"

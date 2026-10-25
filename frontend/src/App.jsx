@@ -20,12 +20,14 @@ import CallOverlay from './components/CallOverlay';
 import Settings from './components/Settings';
 import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
+import ConnectionBanner from './components/ConnectionBanner';
 import VoiceRoomBar from './components/VoiceRoomBar';
 import Activity from './components/Activity';
 import CoinStore from './components/CoinStore';
 import PaymentResult from './components/PaymentResult';
 import PaymentMethods from './components/PaymentMethods';
 import api from './api/client';
+import { getToken } from './lib/session';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
 
@@ -128,7 +130,7 @@ function Shell() {
   // La portada de acceso es la entrada de quien no tiene sesión. A quien ya la
   // tiene se le deja en el feed: obligarle a pasar por el acceso sería un paso
   // de más en cada arranque.
-  const [view, setView] = useState(() => (localStorage.getItem('taktak_token') ? 'feed' : 'acceso'));
+  const [view, setView] = useState(() => (getToken() ? 'feed' : 'acceso'));
   // El alta inicia sesión en el acto (el backend devuelve token al crear la
   // cuenta). Sin este pestillo, en cuanto `user` existe el formulario se
   // desmontaría y la pantalla de verificación del correo, que vive dentro del
@@ -397,6 +399,11 @@ function Shell() {
           </div>
         </div>
       )}
+
+      {/* Aviso de conexión: si la señal en vivo se cae, se dice en pantalla en
+          vez de dejar la app muda. El socket se recupera solo, así que el aviso
+          desaparece en cuanto vuelve. */}
+      {user && <ConnectionBanner />}
 
       {/* Aviso para activar las notificaciones. Es lo que hace que una llamada
           suene con la app cerrada; sin suscripción, el servidor no tiene a quién

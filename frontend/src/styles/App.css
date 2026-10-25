@@ -4214,3 +4214,40 @@
 .wall-embedded {
   padding-top: 0.5rem;
 }
+
+/* Aviso de "señal caída". Va arriba, no abajo: abajo ya conviven la barra de
+   navegación, el aviso de notificaciones y el compositor del chat. Al ser
+   informativo y no un control, no captura toques (pointer-events: none). */
+.connection-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(18, 12, 28, 0.96);
+  border: 1px solid var(--accent, #e6007a);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #e6007a);
+  animation: connection-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes connection-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}

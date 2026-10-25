@@ -1,12 +1,13 @@
 import axios from 'axios';
 import { isJsonResponse, messageFromError } from './response.js';
+import { getToken, clearSession, refreshSession, hasRefreshToken } from '../lib/session.js';
 
 // A single configured client so the auth header and error shape are applied
 // consistently everywhere.
 const api = axios.create({ baseURL: '/api' });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('taktak_token');
+  const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -29,10 +30,31 @@ export function onResponse(res) {
   return res;
 }
 
-export function onResponseError(error) {
-  if (error.response?.status === 401) {
-    localStorage.removeItem('taktak_token');
-    localStorage.removeItem('taktak_user');
+export async function onResponseError(error) {
+  const { response, config } = error;
+
+  // Un 401 con un token caducado no debe echar al usuario: se renueva la sesión
+  // y se reintenta la petición una sola vez. Antes, el primer 401 borraba la
+  // sesión, así que "se caía la señal" en cuanto el token cumplía su hora.
+  if (response?.status === 401 && config && !config.__retried && hasRefreshToken()) {
+    const token = await refreshSession();
+    // `undefined` = fallo pasajero (red/servidor): no se cierra sesión ni se
+    // reintenta con un token que no hay; se deja que el usuario reintente.
+    if (token) {
+      // El interceptor de petición vuelve a poner el encabezado desde el
+      // almacén, donde `refreshSession` ya dejó el token nuevo.
+      return api({ ...config, __retried: true });
+    }
+    if (token === undefined) {
+      return Promise.reject(new Error(messageFromError(error)));
+    }
+    // `null` = el refresco ya no vale: hay que volver a entrar.
+    clearSession();
+  }
+
+  if (response?.status === 401) {
+    // Sin refresco, o con uno inservible: la sesión ya no da más de sí.
+    clearSession();
   }
   return Promise.reject(new Error(messageFromError(error)));
 }

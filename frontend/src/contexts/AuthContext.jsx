@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import { detachPushSubscription } from '../services/push';
+import { getToken, saveSession, clearSession, onSessionChange, refreshSession, tokenExpiry } from '../lib/session';
 
 const AuthContext = createContext(null);
 
@@ -19,9 +20,22 @@ function readStoredUser() {
 }
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem('taktak_token'));
+  const [token, setToken] = useState(getToken);
   const [user, setUser] = useState(readStoredUser);
   const [loading, setLoading] = useState(Boolean(token));
+
+  // El token también cambia fuera de este proveedor: el interceptor del cliente
+  // lo renueva al recibir un 401. Sin escuchar ese cambio, el estado se quedaría
+  // con el token viejo y el socket seguiría autenticándose con el caducado.
+  useEffect(
+    () =>
+      onSessionChange((next) => {
+        setToken(next);
+        if (!next) setUser(null);
+        else setUser(readStoredUser());
+      }),
+    []
+  );
 
   // Re-validate a persisted token against the server on boot so a revoked or
   // expired session does not leave the UI in a logged-in state.
@@ -40,8 +54,12 @@ export function AuthProvider({ children }) {
         localStorage.setItem('taktak_user', JSON.stringify(res.data.user));
       })
       .catch(() => {
+        // Solo se cierra la sesión si de verdad ya no sirve. El interceptor
+        // renueva al recibir un 401 y, si no puede, borra el token; un fallo de
+        // red (el backend aún arrancando) no borra nada y no debe echar al
+        // usuario. Antes, cualquier fallo al arrancar cerraba la sesión.
         if (cancelled) return;
-        logout();
+        if (!getToken()) logout();
       })
       .finally(() => !cancelled && setLoading(false));
 
@@ -51,17 +69,34 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Renovación por adelantado. El socket solo se autentica al conectar: si se
+  // deja caducar el token, la siguiente reconexión (un corte de red, volver del
+  // segundo plano) falla con "Token inválido" y no hay forma de recuperarse.
+  // Renovando un minuto antes, cualquier reconexión encuentra un token válido.
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const expiry = tokenExpiry(token);
+    // Sin caducidad legible (token ajeno) no se programa nada: el interceptor
+    // sigue cubriendo el 401 de forma reactiva.
+    if (!expiry) return undefined;
+
+    const LEAD_MS = 60_000;
+    const delay = expiry - Date.now() - LEAD_MS;
+    // Si ya venció (o está a punto), se renueva de inmediato.
+    const timer = setTimeout(() => {
+      refreshSession();
+    }, Math.max(delay, 0));
+
+    return () => clearTimeout(timer);
+  }, [token]);
+
   function persist(data) {
     setToken(data.token);
     setUser(data.user);
-    localStorage.setItem('taktak_token', data.token);
-    localStorage.setItem('taktak_user', JSON.stringify(data.user));
-    // The refresh token outlives the access token and is the only thing that
-    // can mint a new session. Losing it on reload would silently log the user
-    // out after an hour.
-    if (data.refreshToken) {
-      localStorage.setItem('taktak_refresh', data.refreshToken);
-    }
+    // El refresco es lo único que puede emitir un token nuevo; si se pierde al
+    // recargar, la sesión se cae sola al caducar el token.
+    saveSession(data);
   }
 
   async function login(identifier, password, country) {
@@ -159,9 +194,7 @@ export function AuthProvider({ children }) {
     await detachPushSubscription();
     setToken(null);
     setUser(null);
-    localStorage.removeItem('taktak_token');
-    localStorage.removeItem('taktak_user');
-    localStorage.removeItem('taktak_refresh');
+    clearSession();
   }
 
   const value = useMemo(

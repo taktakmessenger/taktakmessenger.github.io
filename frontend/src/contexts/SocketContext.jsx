@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { refreshSession } from '../lib/session';
 
 const SocketContext = createContext(null);
 
@@ -41,21 +42,48 @@ export function SocketProvider({ children }) {
       // Same origin as the page: in dev Vite proxies it, in production nginx
       // does. Hardcoding a host here would break both.
       transports: ['websocket', 'polling'],
+      // Reconexión agresiva y sin límite: la app debe recuperar la "señal" sola
+      // tras un corte de red o un reinicio del servidor, sin recargar.
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10_000,
     });
 
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
 
+    // El handshake solo lleva el token al conectar. Si este caducó, el servidor
+    // rechaza la conexión con "Token inválido" y el socket reintentaría en vano
+    // con el mismo token muerto para siempre. Aquí se renueva y se reconecta con
+    // el token nuevo: `instance.auth` se lee en cada intento, así que basta con
+    // actualizarlo y volver a llamar a `connect()`.
+    let renewing = false;
+    const onConnectError = async (err) => {
+      setConnected(false);
+      if (renewing || !/token/i.test(err?.message || '')) return;
+      renewing = true;
+      try {
+        const fresh = await refreshSession();
+        if (fresh && instance.auth) {
+          instance.auth.token = fresh;
+          instance.connect();
+        }
+      } finally {
+        renewing = false;
+      }
+    };
+
     instance.on('connect', onConnect);
     instance.on('disconnect', onDisconnect);
-    instance.on('connect_error', onDisconnect);
+    instance.on('connect_error', onConnectError);
 
     setSocket(instance);
 
     return () => {
       instance.off('connect', onConnect);
       instance.off('disconnect', onDisconnect);
-      instance.off('connect_error', onDisconnect);
+      instance.off('connect_error', onConnectError);
       instance.disconnect();
       setSocket(null);
       setConnected(false);
