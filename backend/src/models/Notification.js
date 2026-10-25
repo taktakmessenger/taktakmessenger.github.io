@@ -25,8 +25,8 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      // Los avisos del muro son tipos aparte de los del vídeo: reusar `like`
-      // diría "le gustó tu vídeo" cuando fue una publicación del muro, que es
+      // Los avisos de Facetak son tipos aparte de los del vídeo: reusar `like`
+      // diría "le gustó tu vídeo" cuando fue una publicación de Facetak, que es
       // falso. El texto de cada aviso se elige por el tipo, así que cada origen
       // necesita el suyo.
       enum: ['gift', 'follow', 'like', 'comment', 'reply', 'post_like', 'post_comment'],
@@ -36,7 +36,7 @@ const notificationSchema = new mongoose.Schema(
     // un seguidor nuevo no apunta a ningún vídeo.
     video: { type: mongoose.Schema.Types.ObjectId, ref: 'Video', default: null },
     comment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment', default: null },
-    // Publicación del muro a la que apunta un aviso de `post_like` o
+    // Publicación de Facetak a la que apunta un aviso de `post_like` o
     // `post_comment`, para poder abrirla desde la lista de actividad.
     post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', default: null },
     // Cuánto valía el regalo, en TTC-C. Se guarda el importe y no una

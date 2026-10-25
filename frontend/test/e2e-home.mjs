@@ -1,5 +1,5 @@
 // Prueba de extremo a extremo de Inicio: las dos caras en un mismo sitio.
-// Comprueba que el feed de vídeos y las publicaciones del muro conviven bajo el
+// Comprueba que el feed de vídeos y las publicaciones de Facetak conviven bajo el
 // selector "Vídeos / Publicaciones", que al pasar a Publicaciones el vídeo se
 // pausa (no se queda sonando por detrás) y que al volver sigue donde estaba.
 import { chromium } from 'playwright';
@@ -68,16 +68,16 @@ const videoTab = page.locator('.home-switch-btn', { hasText: 'Vídeos' });
 const postsTab = page.locator('.home-switch-btn', { hasText: 'Publicaciones' });
 check('arranca en Vídeos', (await videoTab.getAttribute('aria-selected')) === 'true');
 check('el feed de vídeos está a la vista', (await page.locator('.reels').count()) > 0);
-check('el muro no se ve todavía', (await page.locator('.wall').count()) === 0);
+check('Facetak no se ve todavía', (await page.locator('.wall').count()) === 0);
 
 // --- Pasar a Publicaciones -------------------------------------------------
 console.log('\n▸ Se pasa a Publicaciones');
 await postsTab.click();
 await page.waitForTimeout(1200);
 check('la pestaña queda marcada', (await postsTab.getAttribute('aria-selected')) === 'true');
-check('aparece el muro', (await page.locator('.wall').count()) > 0);
+check('aparece Facetak', (await page.locator('.wall').count()) > 0);
 check('hay caja de publicar', (await page.locator('.wall-composer').count()) > 0);
-check('no se repite la cabecera grande del muro', (await page.locator('.wall-header').count()) === 0);
+check('no se repite la cabecera grande de Facetak', (await page.locator('.wall-header').count()) === 0);
 
 // Pausar y reanudar solo se puede comprobar si hay un vídeo que suene. Si el
 // feed está vacío (base recién creada) se avisa y se sigue: el resto de la
@@ -104,7 +104,7 @@ await page.waitForTimeout(1500);
 const published = await page
   .locator('.wall-post', { hasText: texto })
   .count();
-check('la publicación aparece en el muro de Inicio', published > 0);
+check('la publicación aparece en Facetak de Inicio', published > 0);
 
 // --- Volver a Vídeos -------------------------------------------------------
 console.log('\n▸ Se vuelve a Vídeos');
@@ -119,9 +119,9 @@ if (hayVideo) {
   check('el vídeo se reanuda al volver', resumed === true, String(resumed));
 }
 
-// --- El muro sigue en su pestaña -------------------------------------------
-console.log('\n▸ La pestaña Muro de la barra sigue existiendo');
-check('hay pestaña Muro en la barra', (await page.getByRole('button', { name: 'Muro' }).count()) > 0);
+// --- Facetak sigue en su pestaña -------------------------------------------
+console.log('\n▸ La pestaña Facetak de la barra sigue existiendo');
+check('hay pestaña Facetak en la barra', (await page.getByRole('button', { name: 'Facetak' }).count()) > 0);
 
 await browser.close();
 

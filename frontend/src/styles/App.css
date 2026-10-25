@@ -3846,7 +3846,7 @@
 
 
 /* ------------------------------------------------------------------
-   Muro (la sección estilo Facebook)
+   Facetak (la sección estilo Facebook)
    ------------------------------------------------------------------ */
 
 .wall {
@@ -4144,7 +4144,7 @@
 }
 
 /* ------------------------------------------------------------------
-   Inicio: el feed de vídeos y las publicaciones del muro en un mismo sitio
+   Inicio: el feed de vídeos y las publicaciones de Facetak en un mismo sitio
    ------------------------------------------------------------------ */
 
 .home {
@@ -4200,7 +4200,7 @@
   padding-top: 3.2rem;
 }
 
-/* Dentro de Inicio la cabecera del muro sobra: ya está el selector. */
+/* Dentro de Inicio la cabecera de Facetak sobra: ya está el selector. */
 .wall-embedded {
   padding-top: 0.5rem;
 }

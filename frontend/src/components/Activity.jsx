@@ -128,7 +128,7 @@ export default function Activity({ onBack, onOpenVideo, onOpenProfile, onOpenWal
   }, [user]);
 
   function openTarget(n) {
-    // Un aviso del muro lleva al muro: la publicación no tiene pantalla propia.
+    // Un aviso de Facetak lleva a Facetak: la publicación no tiene pantalla propia.
     if (n.type?.startsWith('post_') && onOpenWall) {
       onOpenWall();
       return;

@@ -3,7 +3,7 @@ import Feed from './Feed';
 import Wall from './Wall';
 
 // Inicio reúne las dos caras públicas de TAK TAK en un mismo sitio: el feed
-// vertical de vídeos (lo primero, como en TikTok) y las publicaciones del muro.
+// vertical de vídeos (lo primero, como en TikTok) y las publicaciones de Facetak.
 //
 // El selector flota sobre el vídeo en vez de empujarlo hacia abajo: el reel
 // está medido para ocupar la pantalla entera y restarle altura lo descuadraría.

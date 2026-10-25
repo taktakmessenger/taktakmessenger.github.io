@@ -1,5 +1,5 @@
 // Prueba de extremo a extremo del muro (la sección estilo Facebook), con dos
-// navegadores reales. Navega por la interfaz como una persona: pestaña Muro,
+// navegadores reales. Navega por la interfaz como una persona: pestaña Facetak,
 // escribe una publicación, la ve el otro usuario, le da me gusta y comenta. No
 // usa mocks: recorre el mismo camino que un usuario.
 import { chromium } from 'playwright';
@@ -77,7 +77,7 @@ async function register(context, name) {
 }
 
 async function openWall(who) {
-  await who.page.getByRole('button', { name: 'Muro' }).click();
+  await who.page.getByRole('button', { name: 'Facetak' }).click();
   await who.page.waitForTimeout(1200);
 }
 
@@ -87,7 +87,7 @@ const a = await register(ctxA, 'muroa');
 const b = await register(ctxB, 'murob');
 
 // --- La pestaña existe y abre el muro -------------------------------------
-console.log('\n▸ La pestaña Muro abre la sección');
+console.log('\n▸ La pestaña Facetak abre la sección');
 await openWall(a);
 check('el muro se abre', (await a.page.locator('.wall').count()) > 0);
 check('hay caja de publicar', (await a.page.locator('.wall-composer').count()) > 0);

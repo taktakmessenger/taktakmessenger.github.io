@@ -13,7 +13,7 @@ const { asyncHandler, HttpError } = require('../utils/http');
 
 const router = express.Router();
 
-// Los adjuntos del muro viven en su propia subcarpeta de `uploads`, separados de
+// Los adjuntos de Facetak viven en su propia subcarpeta de `uploads`, separados de
 // los del chat y de los vídeos del feed: así un borrado o un listado de un tipo
 // no toca los otros.
 const WALL_DIR = path.join(env.uploadsDir, 'wall');
@@ -39,7 +39,7 @@ const upload = multer({
   limits: { fileSize: Math.max(...Object.values(attachments.MAX_BYTES)) },
 });
 
-// Escribir en el muro se limita para que una sola cuenta no lo inunde. La
+// Escribir en Facetak se limita para que una sola cuenta no lo inunde. La
 // lectura no se limita más allá del limitador global. Se salta en las pruebas.
 const writeLimiter = env.isTest
   ? (req, res, next) => next()
@@ -51,7 +51,7 @@ const writeLimiter = env.isTest
       message: { error: 'Publicas demasiado rápido, espera un momento' },
     });
 
-// Muro general. Lectura pública, como el feed: un visitante sin sesión puede
+// Facetak general. Lectura pública, como el feed: un visitante sin sesión puede
 // verlo. El `optionalAuth` es lo que rellena `liked` cuando sí hay sesión.
 router.get(
   '/',
@@ -92,7 +92,7 @@ router.post(
       throw new HttpError(400, err.message);
     }
 
-    // En el muro solo tienen sentido imagen y vídeo; un PDF o un zip no se
+    // En Facetak solo tienen sentido imagen y vídeo; un PDF o un zip no se
     // pintan en una tarjeta.
     if (info.kind !== 'image' && info.kind !== 'video') {
       if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});

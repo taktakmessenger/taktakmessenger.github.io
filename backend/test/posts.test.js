@@ -25,12 +25,12 @@ async function createPost(agent, token, body) {
   return res.body;
 }
 
-test('el muro es de lectura pública', async () => {
+test('Facetak es de lectura pública', async () => {
   const agent = app();
   const ana = await registerUser(agent);
   await createPost(agent, ana.token, { text: 'Mi primera publicación' });
 
-  // Sin token: se ve el muro, pero `liked` es falso para todos.
+  // Sin token: se ve Facetak, pero `liked` es falso para todos.
   const res = await agent.get('/api/posts');
   assert.equal(res.status, 200);
   assert.equal(res.body.posts.length, 1);
@@ -55,7 +55,7 @@ test('una publicación vacía se rechaza', async () => {
   assert.equal(res.status, 400, JSON.stringify(res.body));
 });
 
-test('publica una imagen y aparece en el muro', async () => {
+test('publica una imagen y aparece en Facetak', async () => {
   const agent = app();
   const ana = await registerUser(agent);
 
@@ -155,7 +155,7 @@ test('comentar sube el contador y avisa al autor', async () => {
   const feed = await agent.get('/api/posts');
   assert.equal(feed.body.posts[0].comments, 1);
 
-  // El autor recibió el aviso, con el tipo del muro.
+  // El autor recibió el aviso, con el tipo de Facetak.
   const notifs = await agent
     .get('/api/notifications')
     .set('Authorization', `Bearer ${ana.token}`);
@@ -208,7 +208,7 @@ test('un comentario borrado conserva su hueco pero no su texto', async () => {
   assert.equal(feed.body.posts[0].comments, 0);
 });
 
-test('el muro se pagina por cursor', async () => {
+test('Facetak se pagina por cursor', async () => {
   const agent = app();
   const ana = await registerUser(agent);
   for (let i = 0; i < 5; i += 1) {
@@ -228,7 +228,7 @@ test('el muro se pagina por cursor', async () => {
   assert.equal(ids.size, 4);
 });
 
-test('se puede filtrar el muro por autor', async () => {
+test('se puede filtrar Facetak por autor', async () => {
   const agent = app();
   const ana = await registerUser(agent);
   const beto = await registerUser(agent);

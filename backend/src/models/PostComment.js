@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Comentario de una publicación del muro. Es su propio documento por el mismo
+// Comentario de una publicación de Facetak. Es su propio documento por el mismo
 // motivo que los comentarios de vídeo: un array dentro de la publicación
 // crecería sin límite y obligaría a leer el hilo entero para pintar la tarjeta.
 const postCommentSchema = new mongoose.Schema(

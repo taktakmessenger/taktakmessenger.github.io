@@ -15,11 +15,11 @@ const attachmentSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// Una publicación del muro: el equivalente a una entrada de Facebook. Puede ser
+// Una publicación de Facetak: el equivalente a una entrada de Facebook. Puede ser
 // solo texto, solo foto/vídeo, o las dos cosas (el pie de foto).
 //
 // Es un documento propio y no un campo del usuario por el mismo motivo que los
-// comentarios: un muro con muchas entradas no debe obligar a leer la cuenta
+// comentarios: un Facetak con muchas entradas no debe obligar a leer la cuenta
 // entera para pintar la primera página.
 const postSchema = new mongoose.Schema(
   {
@@ -41,7 +41,7 @@ const postSchema = new mongoose.Schema(
     // Denormalizado para poder pintar la tarjeta sin contar los comentarios.
     comments: { type: Number, default: 0, min: 0 },
 
-    // Visibilidad. `public` sale en el muro general; `friends` se guarda para
+    // Visibilidad. `public` sale en Facetak general; `friends` se guarda para
     // cuando existan las listas de amistad, y hoy se comporta como pública.
     visibility: {
       type: String,
@@ -61,10 +61,10 @@ const postSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// La consulta del muro: las publicaciones visibles, de la más nueva a la más
+// La consulta de Facetak: las publicaciones visibles, de la más nueva a la más
 // vieja. El mismo índice sirve para paginar por `createdAt`.
 postSchema.index({ createdAt: -1 });
-// El muro de un perfil concreto.
+// Facetak de un perfil concreto.
 postSchema.index({ author: 1, createdAt: -1 });
 
 postSchema.methods.isVisible = function isVisible() {

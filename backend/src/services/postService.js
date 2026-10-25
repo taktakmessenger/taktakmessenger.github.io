@@ -45,7 +45,7 @@ function assertVisible(post) {
   }
 }
 
-// Muro general: las publicaciones visibles, de la más nueva a la más vieja,
+// Facetak general: las publicaciones visibles, de la más nueva a la más vieja,
 // paginadas por `createdAt` (keyset). `viewerId` decide el campo `liked` de
 // cada entrada sin una consulta extra por publicación.
 async function listFeed({ viewerId, cursor, limit = PAGE_SIZE, authorId } = {}) {
@@ -86,7 +86,7 @@ async function getPost({ postId, viewerId }) {
 }
 
 // Crea una publicación. Exige al menos texto o un adjunto: una entrada vacía no
-// aporta nada y llenaría el muro de huecos.
+// aporta nada y llenaría Facetak de huecos.
 async function createPost({ authorId, text, attachment }) {
   const clean = String(text || '').trim();
   if (!clean && !attachment) {
@@ -95,7 +95,7 @@ async function createPost({ authorId, text, attachment }) {
 
   if (attachment) {
     // El adjunto debe venir de nuestra propia subida, igual que en el chat: si
-    // no, se podría incrustar una URL externa arbitraria en el muro.
+    // no, se podría incrustar una URL externa arbitraria en Facetak.
     if (!String(attachment.url || '').startsWith('/uploads/wall/')) {
       throw new HttpError(400, 'Adjunto inválido');
     }
@@ -241,7 +241,7 @@ async function deleteComment({ commentId, actorId, actorRole }) {
   return { deleted: true };
 }
 
-// Me gusta en un comentario del muro.
+// Me gusta en un comentario de Facetak.
 async function toggleCommentLike({ commentId, userId }) {
   if (!mongoose.isValidObjectId(commentId)) {
     throw new HttpError(404, 'Comentario no encontrado');

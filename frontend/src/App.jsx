@@ -306,8 +306,8 @@ function Shell() {
       case 'squads':
         return <Squads />;
       case 'wall':
-        // El muro es de lectura pública, como el feed: un visitante puede verlo.
-        // Para publicar o comentar se le pide la sesión desde el propio muro.
+        // Facetak es de lectura pública, como el feed: un visitante puede verlo.
+        // Para publicar o comentar se le pide la sesión desde el propio Facetak.
         return <Wall onOpenProfile={() => setView('profile')} />;
       case 'health':
         return <AccountHealth onBack={() => setView('settings')} />;

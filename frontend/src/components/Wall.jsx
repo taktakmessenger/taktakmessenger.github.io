@@ -136,7 +136,7 @@ function Composer({ onPublished }) {
 }
 
 // El hilo de comentarios de una publicación. Se carga solo al abrirlo, para no
-// pedir los comentarios de todas las tarjetas del muro de golpe.
+// pedir los comentarios de todas las tarjetas de Facetak de golpe.
 function PostComments({ postId, currentUser, onCountChange }) {
   const [comments, setComments] = useState([]);
   const [text, setText] = useState('');
@@ -348,7 +348,7 @@ function PostCard({ post, currentUser, onOpenProfile }) {
   );
 }
 
-// El muro: la sección estilo Facebook de TAK TAK. Muestra las publicaciones de
+// Facetak: la sección estilo Facebook de TAK TAK. Muestra las publicaciones de
 // todo el mundo, con caja de publicar, me gusta y comentarios.
 //
 // `embedded` es cuando se pinta dentro de Inicio, en la pestaña Publicaciones:
@@ -398,7 +398,7 @@ export default function Wall({ onOpenProfile, embedded = false }) {
     <div className={`wall ${embedded ? 'wall-embedded' : ''}`}>
       {!embedded && (
         <header className="wall-header">
-          <h1>Muro</h1>
+          <h1>Facetak</h1>
           <p className="muted">Lo que comparte la comunidad TAK TAK</p>
         </header>
       )}
@@ -412,7 +412,7 @@ export default function Wall({ onOpenProfile, embedded = false }) {
       {error && <p className="wall-error">{error}</p>}
 
       {loading ? (
-        <p className="muted">Cargando el muro…</p>
+        <p className="muted">Cargando Facetak…</p>
       ) : posts.length === 0 ? (
         <p className="muted">Todavía no hay publicaciones. Sé el primero.</p>
       ) : (
