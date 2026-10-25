@@ -91,10 +91,13 @@ async function resolveBrandFont() {
 // El texto de la marca va en un fichero porque `textfile` evita escapar el
 // @usuario: dentro de una cadena de filtros, `:`, `%` o una coma lo romperían.
 // Se limpian esos caracteres del nombre para que no puedan romper el filtro.
-function brandText(username) {
+function brandLines(username) {
   const handle = String(username || '').replace(/[\s:%,'\\]/g, '').slice(0, 40);
-  const lines = [handle ? `@${handle}` : null, 'TAK TAK'].filter(Boolean);
-  return `${lines.join('\n')}\n`;
+  return [handle ? `@${handle}` : null, 'TAK TAK'].filter(Boolean);
+}
+
+function brandText(username) {
+  return `${brandLines(username).join('\n')}\n`;
 }
 
 async function writeBrandText(targetDir, username) {
@@ -103,16 +106,26 @@ async function writeBrandText(targetDir, username) {
   return file;
 }
 
-// Caja semitransparente con el @usuario y "TAK TAK" centrada abajo. El tamaño
-// se deriva de la altura para que se lea igual en cualquier resolución.
-function watermarkFilter(fontFile, textFile, height) {
-  const size = Math.max(20, Math.round(height / 20));
-  const margin = Math.round(size * 1.2);
+// Placa abajo a la izquierda con el @usuario y "TAK TAK". Va casi opaca a
+// propósito: una placa translúcida deja ver a través la marca que traiga el
+// vídeo, y el objetivo es taparla. El color es el fondo oscuro de la app, así
+// que la placa no desentona con la identidad de TAK TAK.
+//
+// El tamaño de letra se calcula para que la línea más larga quepa en el 70% del
+// ancho: con el nombre de usuario más largo permitido, un tamaño fijo se saldría
+// del cuadro.
+function watermarkFilter(fontFile, textFile, lines, width, height) {
+  const longest = Math.max(...lines.map((line) => line.length), 1);
+  const byHeight = Math.round(height / 24);
+  const byWidth = Math.floor((width * 0.7) / (longest * 0.62));
+  const size = Math.max(16, Math.min(byHeight, byWidth));
+  const border = Math.round(size / 2);
+  const margin = Math.round(size * 0.9);
   return (
     `drawtext=fontfile=${fontFile}:textfile=${textFile}:` +
-    `fontcolor=white:fontsize=${size}:line_spacing=${Math.round(size / 3)}:` +
-    `box=1:boxcolor=black@0.45:boxborderw=${Math.round(size / 2)}:` +
-    `x=(w-text_w)/2:y=h-th-${margin}`
+    `fontcolor=white:fontsize=${size}:line_spacing=${Math.round(size / 4)}:` +
+    `box=1:boxcolor=0x140826@0.95:boxborderw=${border}:` +
+    `text_align=left:x=${margin}:y=h-th-${margin}`
   );
 }
 
@@ -186,15 +199,16 @@ async function processVideoToHLS(inputPath, outputDir, videoId, username) {
   await fs.mkdir(targetDir, { recursive: true });
 
   const fontFile = await resolveBrandFont();
+  const lines = brandLines(username);
   const brandFile = fontFile ? await writeBrandText(targetDir, username) : null;
 
   // Generate the poster frame first: it is cheap and useful even if the
   // transcode below fails partway.
-  await generateThumbnail(inputPath, targetDir, fontFile, brandFile);
+  await generateThumbnail(inputPath, targetDir, fontFile, brandFile, lines);
 
   await Promise.all(
     RENDITIONS.map((rendition) =>
-      transcodeVariant(inputPath, variantDir(targetDir, rendition.name), rendition, fontFile, brandFile)
+      transcodeVariant(inputPath, variantDir(targetDir, rendition.name), rendition, fontFile, brandFile, lines)
     )
   );
 
@@ -207,7 +221,7 @@ async function processVideoToHLS(inputPath, outputDir, videoId, username) {
   };
 }
 
-function grabFrame(inputPath, targetDir, seconds, fontFile, brandFile) {
+function grabFrame(inputPath, targetDir, seconds, fontFile, brandFile, lines) {
   return new Promise((resolve, reject) => {
     const command = ffmpeg(inputPath).setFfmpegPath(env.ffmpegPath);
     if (seconds > 0) command.seekInput(seconds);
@@ -216,7 +230,9 @@ function grabFrame(inputPath, targetDir, seconds, fontFile, brandFile) {
     // y ahí es donde se ve si el vídeo es de aquí.
     const filters = [scalePadFilter(THUMBNAIL_SIZE.width, THUMBNAIL_SIZE.height)];
     if (fontFile && brandFile) {
-      filters.push(watermarkFilter(fontFile, brandFile, THUMBNAIL_SIZE.height));
+      filters.push(
+        watermarkFilter(fontFile, brandFile, lines, THUMBNAIL_SIZE.width, THUMBNAIL_SIZE.height)
+      );
     }
 
     command
@@ -235,18 +251,18 @@ function grabFrame(inputPath, targetDir, seconds, fontFile, brandFile) {
   });
 }
 
-function generateThumbnail(inputPath, targetDir, fontFile, brandFile) {
+function generateThumbnail(inputPath, targetDir, fontFile, brandFile, lines) {
   // A clip shorter than one second has no frame at 1s, so fall back to the
   // first one rather than leaving the video without a poster.
-  return grabFrame(inputPath, targetDir, 1, fontFile, brandFile).catch(() =>
-    grabFrame(inputPath, targetDir, 0, fontFile, brandFile)
+  return grabFrame(inputPath, targetDir, 1, fontFile, brandFile, lines).catch(() =>
+    grabFrame(inputPath, targetDir, 0, fontFile, brandFile, lines)
   );
 }
 
-function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile) {
+function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile, lines) {
   const filters = [scalePadFilter(rendition.width, rendition.height)];
   if (fontFile && brandFile) {
-    filters.push(watermarkFilter(fontFile, brandFile, rendition.height));
+    filters.push(watermarkFilter(fontFile, brandFile, lines, rendition.width, rendition.height));
   }
 
   return fs.mkdir(outDir, { recursive: true }).then(

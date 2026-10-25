@@ -810,11 +810,21 @@ antes de generar el HLS:
    sitios, porque el rastro vive en los tres: el **archivo original** servido
    (`cleanMetadata`, que reescribe el contenedor con `-c copy`, sin recodificar,
    y por eso no pierde calidad), **cada variante HLS** y la **miniatura**.
-2. **Estampa la marca** `@usuario` + `TAK TAK` abajo y centrada, con `drawtext`,
-   sobre una caja semitransparente. El texto va en un fichero `brand.txt` dentro
-   de la carpeta del vídeo (`textfile`), no incrustado en la cadena de filtros,
-   porque un `:`, una coma o un `%` en el nombre romperían el comando. El tamaño
-   se deriva de la altura de cada variante para que se lea igual en todas.
+2. **Estampa la marca** `@usuario` + `TAK TAK` abajo a la izquierda, con
+   `drawtext`, sobre una placa **casi opaca** (`boxcolor=0x140826@0.95`, el fondo
+   oscuro de la app). Va abajo a la izquierda porque es donde la otra red pone su
+   sello: así la placa **tapa** la marca ajena en vez de dejarla ver a través. El
+   texto va en un fichero `brand.txt` dentro de la carpeta del vídeo (`textfile`),
+   no incrustado en la cadena de filtros, porque un `:`, una coma o un `%` en el
+   nombre romperían el comando. El tamaño de letra se calcula para que la línea
+   más larga quepa en el 70% del ancho: con el nombre de usuario más largo
+   permitido, un tamaño fijo se saldría del cuadro.
+
+**Qué no se puede hacer.** Si la marca ajena está quemada en los píxeles y el
+vídeo no es vertical (o la marca se mueve, como la de TikTok), la placa solo la
+tapa si cae dentro de su zona. Quitarla de verdad no es posible: `delogo` y
+`removelogo` dejan un manchurrón y necesitan que el logo esté siempre quieto.
+Por eso la estrategia es tapar con la marca propia, no borrar.
 
 - **`username`** se pasa desde la ruta: en la subida es `req.user.username`; en
   el reproceso se consulta el del **creador**, no el de quien reprocesa (un
@@ -822,10 +832,13 @@ antes de generar el HLS:
 - **Sin fuente instalada** (`resolveBrandFont` prueba DejaVu/Liberation/FreeSans)
   el vídeo se limpia igual pero sin marca, y se avisa por consola.
 - **Comprobación de extremo a extremo:** `bash scripts/e2e-video-hls.sh`
-  (acepta `API_BASE=...`). Sube un clip con metadatos que dicen "tiktok",
-  y verifica que no quede rastro ni en el original, ni en el segmento HLS, ni en
-  la miniatura, y que la marca se vea de verdad (cuenta píxeles claros en la
-  franja inferior de un fotograma).
+  (acepta `API_BASE=...`). Sube un clip vertical de fondo liso con un recuadro
+  rojo (la marca ajena) y metadatos que dicen "tiktok", y verifica: (0) el
+  original servido no tiene rastro, (1) el segmento HLS tampoco, (2) la marca
+  está abajo a la izquierda (tinta clara en esa mitad), (3) la miniatura también
+  la lleva, y (4) **el recuadro rojo ajeno desaparece** (de 8400 píxeles rojos a
+  0). El fondo liso es a propósito: con una imagen de colores, el rojo y el
+  blanco están por todas partes y las comprobaciones de píxeles no miden nada.
 - **Tests unitarios** de los ayudantes puros (saneado del nombre, posición del
   filtro, opciones de limpieza): `backend/test/transcode-brand.test.js`. El
   pipeline con ffmpeg real se prueba en `scripts/`, no en los tests de la API,

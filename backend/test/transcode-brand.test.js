@@ -30,15 +30,32 @@ test('un nombre desmesurado se recorta', () => {
   assert.equal(out.split('\n')[0], `@${'x'.repeat(40)}`);
 });
 
-test('el filtro de la marca centra el texto abajo y lee de un fichero', () => {
-  const filter = watermarkFilter('/fonts/A.ttf', '/tmp/brand.txt', 854);
+test('el filtro de la marca la ancla abajo a la izquierda y lee de un fichero', () => {
+  const filter = watermarkFilter('/fonts/A.ttf', '/tmp/brand.txt', ['@ana', 'TAK TAK'], 480, 854);
   assert.match(filter, /drawtext=/);
   assert.match(filter, /textfile=\/tmp\/brand\.txt/);
-  assert.match(filter, /x=\(w-text_w\)\/2/);
-  assert.match(filter, /y=h-th-/);
-  // El tamaño escala con la altura para leerse igual en cualquier resolución.
-  const small = watermarkFilter('/fonts/A.ttf', '/tmp/brand.txt', 480);
-  assert.notEqual(filter, small);
+  assert.match(filter, /text_align=left/);
+  assert.match(filter, /x=\d+/);
+  assert.match(filter, /y=h-th-\d+/);
+});
+
+test('la placa es casi opaca para poder tapar la marca que traiga el vídeo', () => {
+  // Una placa translúcida deja ver a través el logo ajeno, que es justo lo que
+  // se quiere tapar.
+  const filter = watermarkFilter('/fonts/A.ttf', '/tmp/brand.txt', ['@ana', 'TAK TAK'], 480, 854);
+  const alpha = Number(filter.match(/boxcolor=0x[0-9a-f]+@([\d.]+)/i)[1]);
+  assert.ok(alpha >= 0.9, `la opacidad ${alpha} deja ver la marca de debajo`);
+});
+
+test('un nombre de usuario largo encoge la letra en vez de salirse del cuadro', () => {
+  const width = 480;
+  const short = watermarkFilter('/f.ttf', '/t.txt', ['@ana', 'TAK TAK'], width, 854);
+  const long = watermarkFilter('/f.ttf', '/t.txt', [`@${'x'.repeat(30)}`, 'TAK TAK'], width, 854);
+  const sizeOf = (f) => Number(f.match(/fontsize=(\d+)/)[1]);
+  assert.ok(sizeOf(long) < sizeOf(short), 'con un nombre largo la letra debe encoger');
+  // El ancho estimado de la línea más larga cabe dentro del cuadro.
+  const estimated = 31 * sizeOf(long) * 0.62;
+  assert.ok(estimated <= width * 0.75, `la línea ocuparía ${Math.round(estimated)}px de ${width}`);
 });
 
 test('las opciones de limpieza borran los metadatos y la firma del muxer', () => {

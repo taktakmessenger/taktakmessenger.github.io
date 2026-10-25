@@ -15,9 +15,16 @@ cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
 echo "--- generando clip de 4 s con audio ---"
+# Fondo azul liso a propósito: así la única tinta roja del clip es la marca
+# ajena y la única blanca es la de TAK TAK, y las comprobaciones de píxeles
+# miden lo que deben (con una imagen de colores, el rojo y el blanco están por
+# todas partes y no se puede distinguir nada). El recuadro rojo simula la marca
+# quemada que traen los vídeos bajados de otra red, en la esquina inferior
+# izquierda, que es donde suele estar. El clip es vertical, como uno real.
 ffmpeg -hide_banner -loglevel error \
-  -f lavfi -i "testsrc=size=640x360:rate=25:duration=4" \
+  -f lavfi -i "color=c=0x1030a0:size=360x640:rate=25:duration=4" \
   -f lavfi -i "sine=frequency=440:duration=4" \
+  -vf "drawbox=x=10:y=ih-90:w=140:h=60:color=red@1.0:t=fill" \
   -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \
   -metadata title="Video de TikTok" \
   -metadata artist="@usuario_tiktok" \
@@ -100,32 +107,68 @@ else
 fi
 
 echo
-echo "--- 2) la marca de TAK TAK está impresa en los píxeles ---"
-# Se saca el último fotograma del segmento: la marca vive abajo, así que se
-# recorta esa franja y se comprueba que hay tinta clara sobre la caja oscura.
+echo "--- 2) la marca de TAK TAK está impresa abajo a la izquierda ---"
+# La marca vive en la esquina inferior izquierda (donde la otra red pone su
+# sello). Se busca tinta clara dentro de esa zona y se comprueba que no haya
+# marca centrada, que es lo que delataría una posición equivocada.
 ffmpeg -hide_banner -loglevel error -sseof -0.5 -i "$SEG" -frames:v 1 "$WORK/frame.png" -y
-ffmpeg -hide_banner -loglevel error -i "$WORK/frame.png" -vf "crop=iw:ih/6:0:ih*5/6,format=gray" "$WORK/bottom.pgm" -y
-BRIGHT=$(python3 - "$WORK/bottom.pgm" <<'PY'
+ffmpeg -hide_banner -loglevel error -i "$WORK/frame.png" -vf "format=gray" "$WORK/full.pgm" -y
+read -r LEFT CENTER < <(python3 - "$WORK/full.pgm" <<'PY'
 import sys
 with open(sys.argv[1], 'rb') as f:
     data = f.read()
-# Cabecera PGM: P5 <w> <h> <max>\n<datos>. Se localiza el final de la cabecera.
 parts = data.split(b'\n', 3)
-pixels = parts[3]
-bright = sum(1 for b in pixels if b > 200)
-print(bright)
+w, h = map(int, parts[1].split())
+px = parts[3]
+# Zona inferior (último 25%) partida en dos mitades: izquierda y centro.
+y0 = int(h * 0.75)
+left = center = 0
+for y in range(y0, h):
+    for x in range(w):
+        if px[y * w + x] > 200:
+            if x < w // 2:
+                left += 1
+            else:
+                center += 1
+print(left, center)
 PY
 )
-echo "  píxeles claros en la franja inferior: $BRIGHT"
-if [ "$BRIGHT" -gt 200 ]; then
-  echo "  ✅ la marca TAK TAK se ve en el vídeo"
+echo "  píxeles claros — mitad izquierda: $LEFT, mitad derecha: $CENTER"
+if [ "$LEFT" -gt 300 ] && [ "$LEFT" -gt "$CENTER" ]; then
+  echo "  ✅ la marca TAK TAK se ve abajo a la izquierda"
 else
-  echo "  ❌ no se ve la marca (pocos píxeles claros)"
+  echo "  ❌ la marca no está donde debería"
+fi
+
+echo
+echo "--- 4) la placa TAK TAK tapa la marca quemada del vídeo ajeno ---"
+# El clip trae un recuadro rojo en la esquina inferior izquierda (la marca
+# ajena). Si la placa de TAK TAK está donde debe y es opaca, ese rojo
+# desaparece. Se cuenta el rojo puro en el original y en el resultado.
+redcount() {
+  python3 - "$1" "$2" <<'PY'
+import subprocess, sys
+# Se decodifica el primer fotograma a RGB crudo para contar píxeles sin
+# depender de librerías de imagen.
+subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-i',sys.argv[1],
+                '-frames:v','1','-f','rawvideo','-pix_fmt','rgb24',sys.argv[2],'-y'], check=True)
+d = open(sys.argv[2],'rb').read()
+red = sum(1 for i in range(0, len(d)-2, 3) if d[i] > 170 and d[i+1] < 70 and d[i+2] < 70)
+print(red)
+PY
+}
+RED_IN=$(redcount "$WORK/clip.mp4" "$WORK/in.raw")
+RED_OUT=$(redcount "$WORK/frame.png" "$WORK/out.raw")
+echo "  píxeles rojos (marca ajena) — en el original: $RED_IN, tras el proceso: $RED_OUT"
+if [ "$RED_IN" -gt 1000 ] && [ "$RED_OUT" -lt $((RED_IN / 10)) ]; then
+  echo "  ✅ la marca ajena quedó tapada por la placa de TAK TAK"
+else
+  echo "  ❌ la marca ajena sigue visible ($RED_OUT de $RED_IN)"
 fi
 
 echo
 echo "--- 3) la miniatura también lleva la marca ---"
-ffmpeg -hide_banner -loglevel error -i "$UPLOADS/$VID/thumbnail.jpg" -vf "crop=iw:ih/6:0:ih*5/6,format=gray" "$WORK/thumb-bottom.pgm" -y
+ffmpeg -hide_banner -loglevel error -i "$UPLOADS/$VID/thumbnail.jpg" -vf "crop=iw/2:ih/4:0:ih*3/4,format=gray" "$WORK/thumb-bottom.pgm" -y
 TB=$(python3 - "$WORK/thumb-bottom.pgm" <<'PY'
 import sys
 with open(sys.argv[1], 'rb') as f:
@@ -134,8 +177,8 @@ parts = data.split(b'\n', 3)
 print(sum(1 for b in parts[3] if b > 200))
 PY
 )
-echo "  píxeles claros en la franja inferior de la miniatura: $TB"
-if [ "$TB" -gt 200 ]; then
+echo "  píxeles claros en la esquina inferior izquierda de la miniatura: $TB"
+if [ "$TB" -gt 300 ]; then
   echo "  ✅ la miniatura lleva la marca"
 else
   echo "  ❌ la miniatura no lleva la marca"
