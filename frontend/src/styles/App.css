@@ -4154,6 +4154,364 @@
 }
 
 /* ------------------------------------------------------------------
+   Marketak (el mercado de segunda mano dentro de Facetak)
+   ------------------------------------------------------------------ */
+
+.wall-sections {
+  display: flex;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.wall-section-btn {
+  flex: 1;
+  padding: 0.55rem 0.8rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wall-section-btn.active {
+  background: linear-gradient(120deg, var(--primary), var(--pink));
+  color: #fff;
+}
+
+.market {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.market-toolbar {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.market-search {
+  flex: 1;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+  color: inherit;
+}
+
+.market-categories {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.market-chip {
+  white-space: nowrap;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.market-chip.active {
+  border-color: var(--primary);
+  background: rgba(255, 0, 128, 0.15);
+}
+
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+
+@media (min-width: 700px) {
+  .market-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.market-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface, transparent);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  padding: 0;
+}
+
+.market-card-media {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.market-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.market-card-placeholder {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.market-card-sold {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  background: var(--danger, #e0245e);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.market-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem 0.7rem;
+}
+
+.market-card-price {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.market-card-title {
+  font-size: 0.85rem;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.market-card-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.market-more {
+  align-self: center;
+}
+
+/* Detalle y formulario: capa superpuesta */
+.market-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0;
+}
+
+.market-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--surface-solid);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 1.2rem 1rem calc(var(--tabbar-h) + 1rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+@media (min-width: 700px) {
+  .market-overlay {
+    align-items: center;
+  }
+  .market-sheet {
+    border-radius: var(--radius);
+    padding-bottom: 1.2rem;
+  }
+}
+
+.market-sheet-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.8rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.market-gallery {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+}
+
+.market-gallery img {
+  height: 220px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.market-detail-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.market-detail-price {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.market-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.market-detail-tags span {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.market-sold-tag {
+  color: var(--danger, #e0245e);
+  border-color: var(--danger, #e0245e) !important;
+  font-weight: 700;
+}
+
+.market-detail-desc {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.market-seller {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.market-seller span {
+  display: flex;
+  flex-direction: column;
+}
+
+.market-seller small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.market-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.market-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.market-form input,
+.market-form textarea,
+.market-form select,
+.market-field input,
+.market-field select {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+}
+
+.market-form-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.market-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 120px;
+}
+
+.market-field span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.market-photo-strip {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.market-photo {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.market-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.market-photo button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--danger, #e0245e);
+  color: #fff;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.market-form-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------
    Inicio: el feed de vídeos y las publicaciones de Facetak en un mismo sitio
    ------------------------------------------------------------------ */
 

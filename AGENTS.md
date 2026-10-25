@@ -985,6 +985,9 @@ adjuntos, me gusta y comentarios. Facetak es `models/Post.js`,
 (`/api/posts`) y, en el frontend, `components/Wall.jsx` con su pestaña en
 `Navigation.jsx`.
 
+- **Facetak tiene dos pestañas: Publicaciones y Marketak.** `Wall.jsx` monta un
+  selector (`.wall-sections`) y renderiza `components/Marketak.jsx` en la
+  segunda. Publicaciones es lo de siempre; Marketak se describe más abajo.
 - **Facetak es de lectura pública.** `GET /api/posts` y los comentarios no piden
   sesión: un visitante puede leer Facetak sin cuenta, como el feed. Publicar,
   dar me gusta, comentar y borrar sí requieren sesión. Sin ella, `Wall.jsx`
@@ -1016,6 +1019,85 @@ pública, me gusta idempotente, comentar, avisos propios, borrado por autor y po
 admin) y `frontend/test/e2e-wall.mjs` (dos navegadores reales: publica texto y
 foto, el otro la ve, da me gusta —que no se infla al repetir—, comenta, llegan
 los avisos, el autor borra y un visitante sin cuenta no puede publicar).
+
+## Marketak (el mercado de segunda mano, dentro de Facetak)
+
+Marketak es el mercado de segunda mano de TAK TAK, como el Marketplace de
+Facebook: se publica un anuncio con fotos, precio y zona, y el comprador
+contacta al vendedor por WhaTaka. Vive **dentro de Facetak** como una segunda
+pestaña, no como sección propia. Es `models/Listing.js`,
+`services/listingService.js`, `routes/listings.js` (`/api/listings`) y, en el
+frontend, `components/Marketak.jsx` (que monta `Wall.jsx`) con sus helpers en
+`lib/market.js`.
+
+- **El precio va en TTC**, la moneda que ya existe en toda la app. Marketak **no
+  cierra el pago**: el comprador escribe al vendedor por WhaTaka y acuerdan la
+  entrega. Guardar el dinero en depósito exigiría un arbitraje de disputas que
+  el producto todavía no tiene, así que no se finge que exista.
+- **Marketak es de lectura pública.** `GET /api/listings` y el detalle no piden
+  sesión, igual que Facetak. Publicar, marcar como vendido y borrar sí la piden.
+- **Las fotos se suben a `uploads/market/`** por `POST /api/listings/photos`
+  (multipart, campo `file`), con la allowlist de `lib/attachments.js` y **solo
+  imágenes**. La foto que se guarda tiene que ser de nuestra subida
+  (`/uploads/market/`); una URL externa se rechaza (400) para que Marketak no sea
+  un escaparate de contenido ajeno. Máximo 8 fotos por anuncio.
+- **La categoría es un `enum`, no texto libre.** `Listing.CATEGORIES`
+  (`electronica`, `ropa`, `hogar`, `vehiculos`, `servicios`, `mascotas`, `otros`)
+  lo comparte el modelo y el servicio; `lib/market.js` pone las etiquetas en
+  español. Con texto libre, "celulares" y "celu" acabarían siendo categorías
+  distintas y el filtro dejaría de servir.
+- **La búsqueda usa una expresión regular escapada**, no `$text`: `$text` exige
+  un índice de texto y no busca por subcadenas, que es lo que espera quien
+  escribe "bici" y quiere ver "bicicleta". El patrón se escapa para que un `.*`
+  escrito por el usuario no recorra la colección entera.
+- **`sold` no borra el anuncio:** queda visible como vendido, para que el
+  vendedor no tenga que republicarlo y quien lo buscaba sepa que se cerró. Solo
+  el vendedor o un admin pueden marcarlo o borrarlo; la comprobación va en el
+  servicio, no solo en la interfaz.
+- **El detalle cuenta una visita** (`views`) al abrirlo, no al pintarlo en la
+  cuadrícula: contar cada aparición inflaría el número sin que nadie lo mire.
+- **"Escribir al vendedor" abre WhaTaka** con esa persona. `Marketak` recibe
+  `onMessage`, que en `App.jsx` es `messageCreator` (el mismo que usa el feed), y
+  `Wall.jsx` lo reenvía. Sin ese cableado el botón no haría nada.
+
+Verificación: `backend/test/listings.test.js` (lectura pública, validaciones de
+título/precio/categoría, foto propia vs externa, filtro por categoría, búsqueda,
+contador de visitas, marcar vendido, permisos de borrado) y
+`frontend/test/e2e-marketak.mjs` (dos navegadores reales: Ana publica con foto,
+Beto lo encuentra buscando, abre el detalle, escribe al vendedor y Ana lo marca
+vendido).
+
+## Inicio de sesión con Facebook
+
+Además de Google y el correo, la portada ofrece **"Continuar con Facebook"**,
+siguiendo el mismo patrón que el botón de Google.
+
+- **El SDK del navegador entrega un token de acceso opaco, no un JWT.** Por eso
+  `services/facebookService.js` **verifica el token contra el Graph API**
+  (`debug_token`) antes de fiarse de él. Un token sin verificar sería una puerta
+  abierta: cualquiera podría mandar el token de otra app.
+- **La comprobación clave es `data.app_id` igual a nuestro App ID.** Es el
+  equivalente al `aud` de Google: impide que un token emitido para *otra*
+  aplicación sirva para entrar aquí. Además se exige `data.is_valid`.
+- **El perfil se lee del Graph API**, no del cliente: el navegador no decide
+  quién eres. El correo solo llega si la app tiene el permiso `email` y la
+  persona lo autorizó, así que su ausencia es normal.
+- **Enlazar con una cuenta existente exige el correo verificado.** Igual que con
+  Google: si Facebook no devuelve el correo, no se toca una cuenta que ya exista
+  con esa dirección. Se identifica por `User.facebookId` (id estable de
+  Facebook), no por el correo.
+- **Cierre si no está configurado.** Sin `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET`
+  el endpoint responde 503 y `/auth/providers` lo marca como no disponible, así
+  que el botón no se ofrece. El CSP permite `connect.facebook.net` (script),
+  `graph.facebook.com` y `www.facebook.com` (conexión); sin eso el botón falla
+  en el navegador aunque el backend esté bien.
+- **El Graph API se puede apuntar a un servidor falso** con
+  `FACEBOOK_GRAPH_BASE`, igual que Stripe y PayPal, para probar la ruta de
+  extremo a extremo sin salir a internet.
+
+Verificación: `backend/test/facebook.test.js` (cerrado sin configurar, token
+inválido, token de otra app, alta nueva, enlace con cuenta existente, providers)
+y `frontend/test/auth-form.test.js` para las reglas de la portada.
 
 ## Sala de voz del creator (SFU con mediasoup, reserva a malla)
 
@@ -1185,10 +1267,11 @@ es que Pages no ejecuta backend. La app necesita un servicio como el de Render.
 ### Metodos de entrada
 
 `GET /api/auth/providers` decide que botones funcionan. Con todo apagado
-(`google:false`, `sms:false`, `email:false`) la pantalla de entrada sigue
-ofreciendo correo y telefono: el registro por correo funciona y el codigo de
-verificacion se imprime en consola (`MAIL:dev`) y se muestra en pantalla si no
-hay proveedor de SMS. Para activarlos: `GOOGLE_CLIENT_ID`, `SMS_PROVIDER=twilio`
+(`google:false`, `facebook:false`, `sms:false`, `email:false`) la pantalla de
+entrada sigue ofreciendo correo y telefono: el registro por correo funciona y el
+codigo de verificacion se imprime en consola (`MAIL:dev`) y se muestra en
+pantalla si no hay proveedor de SMS. Para activarlos: `GOOGLE_CLIENT_ID`,
+`FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` (login con Facebook), `SMS_PROVIDER=twilio`
 con `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`, y el correo
 con las variables SMTP.
 

@@ -38,6 +38,9 @@ const userSchema = new mongoose.Schema(
     // Google's stable subject id ("sub"), not the email: an email can be
     // changed or re-assigned, the subject cannot.
     googleId: { type: String, unique: true, sparse: true },
+    // Facebook's stable user id, con el mismo criterio que `googleId`: es el
+    // identificador que no cambia aunque la persona cambie de correo.
+    facebookId: { type: String, unique: true, sparse: true },
     profile: {
       displayName: String,
       bio: { type: String, maxlength: 300 },

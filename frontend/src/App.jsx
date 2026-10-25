@@ -310,7 +310,7 @@ function Shell() {
       case 'wall':
         // Facetak es de lectura pública, como el feed: un visitante puede verlo.
         // Para publicar o comentar se le pide la sesión desde el propio Facetak.
-        return <Wall onOpenProfile={() => setView('profile')} />;
+        return <Wall onOpenProfile={() => setView('profile')} onMessage={messageCreator} />;
       case 'health':
         return <AccountHealth onBack={() => setView('settings')} />;
       case 'verification':

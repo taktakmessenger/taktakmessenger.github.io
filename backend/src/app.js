@@ -29,6 +29,7 @@ const callRoutes = require('./routes/calls');
 const pushRoutes = require('./routes/push');
 const notificationRoutes = require('./routes/notifications');
 const postRoutes = require('./routes/posts');
+const listingRoutes = require('./routes/listings');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Built as a factory so tests can mount the app without starting a listener.
@@ -66,7 +67,7 @@ function createApp() {
           imgSrc: ["'self'", 'data:', 'blob:'],
           fontSrc: ["'self'", 'https:', 'data:'],
           styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
-          scriptSrc: ["'self'", 'https://js.stripe.com', 'https://accounts.google.com'],
+          scriptSrc: ["'self'", 'https://js.stripe.com', 'https://accounts.google.com', 'https://connect.facebook.net'],
           scriptSrcAttr: ["'none'"],
           // Stripe monta sus campos en un iframe propio.
           frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
@@ -74,6 +75,11 @@ function createApp() {
             "'self'",
             'https://api.stripe.com',
             'https://accounts.google.com',
+            // El SDK de Facebook valida la sesión y abre el diálogo de
+            // autorización contra estos dos hosts; sin ellos el botón falla en
+            // el navegador aunque el backend esté bien.
+            'https://graph.facebook.com',
+            'https://www.facebook.com',
             'wss:',
           ],
           workerSrc: ["'self'", 'blob:'],
@@ -146,6 +152,7 @@ function createApp() {
   app.use('/api/push', pushRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/posts', postRoutes);
+  app.use('/api/listings', listingRoutes);
 
   // Uploaded originals and their HLS renditions. Read-only.
   //

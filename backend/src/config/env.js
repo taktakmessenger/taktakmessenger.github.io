@@ -340,6 +340,16 @@ const env = {
   // for; without it the endpoint stays closed rather than accepting any token.
   googleClientId: process.env.GOOGLE_CLIENT_ID || null,
 
+  // Facebook Login. La app id es pública (va en el SDK del navegador) y el
+  // secreto es lo que permite verificar que el token es nuestro. Hacen falta
+  // los dos: sin secreto no se puede depurar el token, y sin app id no hay nada
+  // que comparar, así que el endpoint queda cerrado en lugar de aceptar
+  // cualquier token.
+  facebookAppId: process.env.FACEBOOK_APP_ID || null,
+  facebookAppSecret: process.env.FACEBOOK_APP_SECRET || null,
+  // El Graph API se apunta a un servidor falso en los tests, igual que Stripe.
+  facebookGraphBase: process.env.FACEBOOK_GRAPH_BASE || 'https://graph.facebook.com/v19.0',
+
   // Age verification provider. Unset means "no provider configured": in
   // production that blocks adult content outright (fail closed), in
   // development it selects the local dev provider so the flow can be exercised.

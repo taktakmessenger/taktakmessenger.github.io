@@ -138,6 +138,13 @@ export function AuthProvider({ children }) {
     persist(data);
   }
 
+  // Facebook entrega un token de acceso opaco (no un JWT como Google); el
+  // backend lo verifica contra el Graph API antes de crear la sesión.
+  async function loginWithFacebook(accessToken) {
+    const { data } = await api.post('/auth/facebook', { accessToken });
+    persist(data);
+  }
+
   // Phone sign-up is two steps: request a code, then verify it. The account is
   // created by the second call, so an unverified number cannot take it.
   async function startPhoneSignup({ phone, country, username, password }) {
@@ -207,6 +214,7 @@ export function AuthProvider({ children }) {
       verifyEmail,
       resendVerification,
       loginWithGoogle,
+      loginWithFacebook,
       startPhoneSignup,
       verifyPhoneSignup,
       startPhoneLink,

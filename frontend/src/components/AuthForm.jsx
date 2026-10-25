@@ -58,6 +58,68 @@ function GoogleButton({ clientId, onCredential }) {
   return <div className="google-button" ref={holder} />;
 }
 
+// Facebook Login. El SDK se carga solo si el despliegue tiene un App ID: en
+// caso contrario no se pide un script de terceros para nada.
+let fbPromise = null;
+function loadFacebookScript(appId) {
+  if (fbPromise) return fbPromise;
+  fbPromise = new Promise((resolve, reject) => {
+    window.fbAsyncInit = () => {
+      window.FB.init({ appId, cookie: false, xfbml: false, version: 'v19.0' });
+      resolve(window.FB);
+    };
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/es_ES/sdk.js';
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => reject(new Error('No se pudo cargar Facebook'));
+    document.head.appendChild(script);
+  });
+  return fbPromise;
+}
+
+// Botón propio (no el widget de Facebook) para que combine con el resto de la
+// portada. La ventana de autorización la abre el SDK con `FB.login`, que es lo
+// que exige Facebook: un popup abierto fuera de su SDK se bloquea.
+function FacebookButton({ appId, onToken, disabled }) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!appId) return undefined;
+    let cancelled = false;
+    loadFacebookScript(appId)
+      .then(() => {
+        if (!cancelled) setReady(true);
+      })
+      .catch(() => {
+        // El resto de vías de entrada siguen funcionando, así que un script
+        // bloqueado no se saca como error.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appId]);
+
+  function handleClick() {
+    if (!window.FB) return;
+    window.FB.login(
+      (response) => {
+        if (response?.authResponse?.accessToken) {
+          onToken(response.authResponse.accessToken);
+        }
+      },
+      { scope: 'public_profile,email' }
+    );
+  }
+
+  if (!appId) return null;
+  return (
+    <button type="button" className="btn-provider" onClick={handleClick} disabled={disabled || !ready}>
+      <span aria-hidden="true">📘</span> Continuar con Facebook
+    </button>
+  );
+}
+
 // A six-digit code field.
 //
 // A single visible input, not six separate ones and not a hidden input behind
@@ -216,6 +278,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     verifyEmail,
     resendVerification,
     loginWithGoogle,
+    loginWithFacebook,
     startPhoneSignup,
     verifyPhoneSignup,
     forgotPassword,
@@ -232,7 +295,13 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('MX');
   const [countries, setCountries] = useState([]);
-  const [providers, setProviders] = useState({ google: false, googleClientId: null, sms: false });
+  const [providers, setProviders] = useState({
+    google: false,
+    googleClientId: null,
+    facebook: false,
+    facebookAppId: null,
+    sms: false,
+  });
   const [code, setCode] = useState('');
   const [accepted, setAccepted] = useState(false);
 
@@ -553,6 +622,18 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
 
   const showGoogle = providers.google && providers.googleClientId;
 
+  const handleFacebook = useCallback(
+    (accessToken) => {
+      run(async () => {
+        await loginWithFacebook(accessToken);
+        onDone?.();
+      });
+    },
+    [loginWithFacebook, onDone]
+  );
+
+  const showFacebook = providers.facebook && providers.facebookAppId;
+
   /* ---------------- Portada ---------------- */
 
   // La pantalla de acceso. Es lo primero que ve quien no tiene sesión, así que
@@ -585,6 +666,12 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
                 <small>No configurado en este servidor</small>
               </button>
             )}
+
+            <FacebookButton
+              appId={providers.facebookAppId}
+              onToken={handleFacebook}
+              disabled={busy}
+            />
 
             <button
               type="button"
@@ -962,11 +1049,18 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
         </form>
       )}
 
-      {/* ---------------- Google ---------------- */}
-      {showGoogle && (view === 'login' || view === 'register') && (
+      {/* ---------------- Google y Facebook ---------------- */}
+      {(showGoogle || showFacebook) && (view === 'login' || view === 'register') && (
         <>
           <div className="auth-divider"><span>o</span></div>
-          <GoogleButton clientId={providers.googleClientId} onCredential={handleGoogle} />
+          {showGoogle && (
+            <GoogleButton clientId={providers.googleClientId} onCredential={handleGoogle} />
+          )}
+          <FacebookButton
+            appId={providers.facebookAppId}
+            onToken={handleFacebook}
+            disabled={busy}
+          />
         </>
       )}
 

@@ -45,7 +45,7 @@ export default function Home(props) {
 
       {showingPosts && (
         <div className="home-pane home-pane-posts">
-          <Wall embedded onOpenProfile={props.onOpenProfile} />
+          <Wall embedded onOpenProfile={props.onOpenProfile} onMessage={props.onMessage} />
         </div>
       )}
     </div>

@@ -20,6 +20,7 @@ const smsService = require('../services/smsService');
 const voiceService = require('../services/voiceService');
 const mailService = require('../services/mailService');
 const googleService = require('../services/googleService');
+const facebookService = require('../services/facebookService');
 
 const router = express.Router();
 
@@ -627,6 +628,51 @@ router.post(
 );
 
 /* ------------------------------------------------------------------ */
+/* Facebook sign-in                                                    */
+/* ------------------------------------------------------------------ */
+
+// Facebook Login. El SDK del navegador entrega un token de acceso opaco, no un
+// JWT: `facebookService` lo verifica contra el Graph API antes de fiarse de él.
+router.post(
+  '/facebook',
+  authLimiter,
+  [body('accessToken').notEmpty().withMessage('Token de Facebook requerido')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const claims = await facebookService.verifyFacebookAccessToken(req.body.accessToken);
+
+    let user = await User.findOne({ facebookId: claims.facebookId });
+
+    // Igual que con Google: enlazar con una cuenta existente del mismo correo
+    // solo es correcto cuando Facebook confirma el correo. Si no, quien pudiera
+    // crear una cuenta de Facebook con esa dirección tomaría la cuenta.
+    if (!user && claims.email && claims.emailVerified) {
+      user = await User.findOne({ email: claims.email });
+      if (user && !user.facebookId) {
+        user.facebookId = claims.facebookId;
+        user.emailVerified = true;
+        await user.save();
+      }
+    }
+
+    if (!user) {
+      const base = claims.email ? claims.email.split('@')[0] : 'user';
+      const username = await generateUsername(base);
+      user = await User.create({
+        username,
+        email: claims.email || `${claims.facebookId}@facebook.taktak.app`,
+        facebookId: claims.facebookId,
+        emailVerified: Boolean(claims.emailVerified),
+        profile: { displayName: claims.name || username, avatar: claims.picture || undefined },
+        wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
+      });
+    }
+
+    res.json(session(user));
+  })
+);
+
+/* ------------------------------------------------------------------ */
 /* Session refresh                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -658,6 +704,8 @@ router.get('/providers', (req, res) => {
   res.json({
     google: googleService.isConfigured(),
     googleClientId: env.googleClientId,
+    facebook: facebookService.isConfigured(),
+    facebookAppId: env.facebookAppId,
     sms: smsService.isConfigured(),
     email: mailService.isConfigured(),
     // Llamadas a teléfonos que no tienen la app. El marcador lo usa para

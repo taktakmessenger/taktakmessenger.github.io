@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import Marketak from './Marketak';
 
 function initials(person) {
   const name = person?.displayName || person?.username || '?';
@@ -349,12 +350,14 @@ function PostCard({ post, currentUser, onOpenProfile }) {
 }
 
 // Facetak: la sección estilo Facebook de TAK TAK. Muestra las publicaciones de
-// todo el mundo, con caja de publicar, me gusta y comentarios.
+// todo el mundo, con caja de publicar, me gusta y comentarios. Dentro lleva
+// Marketak, el mercado de segunda mano, como una pestaña más.
 //
 // `embedded` es cuando se pinta dentro de Inicio, en la pestaña Publicaciones:
 // ahí manda el selector de Inicio y la cabecera grande sobra.
-export default function Wall({ onOpenProfile, embedded = false }) {
+export default function Wall({ onOpenProfile, onMessage, embedded = false }) {
   const { user } = useAuth();
+  const [section, setSection] = useState('posts');
   const [posts, setPosts] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -403,30 +406,59 @@ export default function Wall({ onOpenProfile, embedded = false }) {
         </header>
       )}
 
-      {user ? (
-        <Composer onPublished={(post) => setPosts((prev) => [post, ...prev])} />
-      ) : (
-        <p className="wall-login-hint muted">Entra en tu cuenta para publicar, dar me gusta y comentar.</p>
-      )}
-
-      {error && <p className="wall-error">{error}</p>}
-
-      {loading ? (
-        <p className="muted">Cargando Facetak…</p>
-      ) : posts.length === 0 ? (
-        <p className="muted">Todavía no hay publicaciones. Sé el primero.</p>
-      ) : (
-        <div className="wall-feed">
-          {posts.map((post) => (
-            <PostCard key={post._id} post={post} currentUser={user} onOpenProfile={onOpenProfile} />
-          ))}
-        </div>
-      )}
-
-      {cursor && (
-        <button type="button" className="btn-secondary wall-more" onClick={loadMore} disabled={loadingMore}>
-          {loadingMore ? 'Cargando…' : 'Ver más'}
+      {/* Facetak reúne las publicaciones y Marketak. El selector va arriba para
+          poder saltar entre los dos sin salir de la sección. */}
+      <div className="wall-sections" role="tablist" aria-label="Secciones de Facetak">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'posts'}
+          className={`wall-section-btn ${section === 'posts' ? 'active' : ''}`}
+          onClick={() => setSection('posts')}
+        >
+          Publicaciones
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'market'}
+          className={`wall-section-btn ${section === 'market' ? 'active' : ''}`}
+          onClick={() => setSection('market')}
+        >
+          🛍️ Marketak
+        </button>
+      </div>
+
+      {section === 'market' ? (
+        <Marketak onMessage={onMessage} />
+      ) : (
+        <>
+          {user ? (
+            <Composer onPublished={(post) => setPosts((prev) => [post, ...prev])} />
+          ) : (
+            <p className="wall-login-hint muted">Entra en tu cuenta para publicar, dar me gusta y comentar.</p>
+          )}
+
+          {error && <p className="wall-error">{error}</p>}
+
+          {loading ? (
+            <p className="muted">Cargando Facetak…</p>
+          ) : posts.length === 0 ? (
+            <p className="muted">Todavía no hay publicaciones. Sé el primero.</p>
+          ) : (
+            <div className="wall-feed">
+              {posts.map((post) => (
+                <PostCard key={post._id} post={post} currentUser={user} onOpenProfile={onOpenProfile} />
+              ))}
+            </div>
+          )}
+
+          {cursor && (
+            <button type="button" className="btn-secondary wall-more" onClick={loadMore} disabled={loadingMore}>
+              {loadingMore ? 'Cargando…' : 'Ver más'}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
