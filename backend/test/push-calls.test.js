@@ -332,3 +332,140 @@ test('the pending invite is delivered when the app returns to the foreground', a
   }
 });
 
+// ---------------------------------------------------------------------------
+// Timbre continuo
+//
+// Un push suelto suena una vez y se acabó: no "repica". WhatsApp repica hasta
+// que contestas. Estos tests comprueban que el servidor reenvía el aviso
+// mientras la llamada siga viva, que el payload pide renotify (sin él Android
+// reemplaza la notificación en silencio) y que el timbre se para al colgar o
+// cuando el receptor vuelve a la app.
+// ---------------------------------------------------------------------------
+
+const liveSockets = require('../src/services/liveSockets');
+
+// Recoge cada envío de push (payload y opciones) para poder inspeccionarlos.
+function capturePush({ sent = 1 } = {}) {
+  const original = {
+    isConfigured: pushService.isConfigured,
+    sendToUser: pushService.sendToUser,
+  };
+  const calls = [];
+  pushService.isConfigured = () => true;
+  pushService.sendToUser = async (_userId, payload, options) => {
+    calls.push({ payload, options });
+    return { sent, total: sent };
+  };
+  return {
+    calls,
+    restore() {
+      pushService.isConfigured = original.isConfigured;
+      pushService.sendToUser = original.sendToUser;
+    },
+  };
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('una llamada a alguien sin conexión sigue timbrando, no suena una sola vez', async () => {
+  // Intervalo corto para no esperar 5 s reales por reenvío.
+  process.env.CALL_RING_INTERVAL_MS = '60';
+  const server = await startServer();
+  const capture = capturePush({ sent: 1 });
+
+  try {
+    const agent = require('./helpers').app();
+    const { token: tokenA } = await registerUser(agent, { username: 'ringa' });
+    const { user: userB } = await registerUser(agent, { username: 'ringb' });
+
+    const socketA = await connect(server.url, tokenA);
+    const ringing = once(socketA, 'call:ringing');
+    socketA.emit('call:invite', { to: String(userB.id || userB._id), kind: 'audio' });
+    await ringing;
+
+    // El primer envío es inmediato; después deben venir reenvíos del timbre.
+    assert.ok(capture.calls.length >= 1, 'debe mandar el push inicial');
+    await wait(250);
+    assert.ok(
+      capture.calls.length >= 2,
+      `debe reenviar el timbre (envíos=${capture.calls.length})`
+    );
+    // Y todos piden urgencia alta: es lo que despierta el teléfono en reposo.
+    assert.equal(capture.calls[0].options.urgency, 'high');
+
+    // Al colgar, el timbre se para: no puede seguir sonando una llamada muerta.
+    const before = capture.calls.length;
+    socketA.emit('call:end', { to: String(userB.id || userB._id) });
+    await wait(250);
+    assert.ok(
+      capture.calls.length - before <= 1,
+      `el timbre debe parar al colgar (envíos extra=${capture.calls.length - before})`
+    );
+
+    socketA.close();
+  } finally {
+    delete process.env.CALL_RING_INTERVAL_MS;
+    liveSockets.stopAllRinging();
+    capture.restore();
+    await server.close();
+  }
+});
+
+test('el payload de llamada pide renotify para que cada reenvío vuelva a sonar', () => {
+  const payload = pushService.incomingCallPayload({
+    from: { id: 'abc', username: 'quien' },
+    kind: 'video',
+    conversationId: null,
+  });
+  // Sin `renotify` (y su `tag`), Android reemplaza la notificación en silencio:
+  // el teléfono se queda mudo tras el primer pitido y parece que no repica.
+  assert.equal(payload.renotify, true);
+  assert.ok(payload.tag, 'renotify sin tag no hace nada');
+  assert.equal(payload.requireInteraction, true);
+});
+
+test('el timbre se para cuando el receptor vuelve a la app (suena dentro, no por push)', async () => {
+  process.env.CALL_RING_INTERVAL_MS = '60';
+  const server = await startServer();
+  const capture = capturePush({ sent: 1 });
+
+  try {
+    const agent = require('./helpers').app();
+    const { token: tokenA } = await registerUser(agent, { username: 'visA' });
+    const { token: tokenB, user: userB } = await registerUser(agent, { username: 'visB' });
+
+    const socketA = await connect(server.url, tokenA);
+    // B tiene el socket abierto pero en segundo plano: la llamada va por push.
+    const socketB = await connect(server.url, tokenB);
+    socketB.emit('app:visibility', { visible: false });
+
+    const ringing = once(socketA, 'call:ringing');
+    socketA.emit('call:invite', { to: String(userB.id || userB._id), kind: 'audio' });
+    await ringing;
+
+    await wait(250);
+    assert.ok(capture.calls.length >= 2, 'el timbre debe estar en marcha');
+
+    // B vuelve al frente: recibe la invitación en vivo y el push debe parar para
+    // no sonar dos veces.
+    const incoming = once(socketB, 'call:incoming');
+    socketB.emit('app:visibility', { visible: true });
+    await incoming;
+
+    const before = capture.calls.length;
+    await wait(250);
+    assert.ok(
+      capture.calls.length - before <= 1,
+      `tras volver a la app no debe seguir el push (extra=${capture.calls.length - before})`
+    );
+
+    socketA.close();
+    socketB.close();
+  } finally {
+    delete process.env.CALL_RING_INTERVAL_MS;
+    liveSockets.stopAllRinging();
+    capture.restore();
+    await server.close();
+  }
+});
+

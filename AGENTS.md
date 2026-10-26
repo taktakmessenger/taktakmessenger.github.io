@@ -1108,6 +1108,21 @@ Tres piezas, en `frontend/src/lib/ringtone.js`, `CallOverlay.jsx` y
   no un modal: se puede seguir usando la app sin atenderlo. El descarte se
   recuerda por cuenta. En iOS sin la app en la pantalla de inicio no se muestra,
   porque ahí el push no existe y el aviso solo confundiría.
+- **Una llamada con la app cerrada REPICA, no suena una vez.** Un push suelto se
+  queda en un pitido; WhatsApp repica hasta que contestas. Para imitarlo hacen
+  falta las dos mitades, y con una sola no funciona:
+  - El servidor **reenvía** el aviso cada pocos segundos mientras la llamada
+    siga viva (`startRinging` en `liveSockets.js`, intervalo
+    `CALL_RING_INTERVAL_MS`, 5 s por defecto). Se para al aceptar, rechazar,
+    colgar, al caducar (mismo TTL que la invitación pendiente) y cuando el
+    receptor vuelve a la app (ahí ya suena el tono de dentro y el push sobraría).
+  - El payload lleva `renotify: true` **y** el service worker lo reenvía a
+    `showNotification`. Sin `renotify`, Android reemplaza la notificación con el
+    mismo `tag` **en silencio**: el teléfono se queda mudo tras el primer pitido
+    y parece que el arreglo no funcionó. `renotify` sin `tag` tampoco hace nada.
+  - El `sw.js` se sirve con `max-age=0` (revalida en cada visita), así que la
+    corrección llega al teléfono sin reinstalar nada. Si un arreglo del timbre
+    "no llega", mira primero que el `sw.js` servido lo incluya.
 - Sin suscripción push no hay forma de despertar un dispositivo dormido; esa era
   la causa real de que la app no estuviese "activa" para llamadas entrantes. El
   aviso es la vía para conseguir esa suscripción sin pasar por Ajustes.

@@ -159,6 +159,12 @@ function incomingCallPayload({ from, kind, conversationId }) {
     // `requireInteraction` mantiene la notificación en pantalla hasta que se
     // actúe: una llamada no debe desvanecerse sola a los cinco segundos.
     requireInteraction: true,
+    // `renotify` es lo que hace que cada reenvío del timbre VUELVA a sonar y
+    // vibrar. Sin esto, con el mismo `tag`, Android reemplaza la notificación
+    // en silencio: el teléfono se queda mudo tras el primer pitido y parece que
+    // "no repica". Es la mitad de la pieza; la otra es reenviar (ver
+    // `startRinging`).
+    renotify: true,
     data: {
       url: `/?call=${from.id}&kind=${kind}&from=${encodeURIComponent(from.username)}`,
       fromId: String(from.id),

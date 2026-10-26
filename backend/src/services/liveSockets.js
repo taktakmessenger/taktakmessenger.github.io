@@ -147,6 +147,62 @@ function clearPendingCall(calleeId) {
   pendingCalls.delete(String(calleeId));
 }
 
+/**
+ * Timbre continuo por push.
+ *
+ * Un push suelto no "repica": suena una vez y se acabó. WhatsApp repica hasta
+ * que contestas, y eso es justo lo que se pedía. Aquí se reenvía el aviso cada
+ * pocos segundos mientras la llamada siga viva; cada reenvío vuelve a sonar y
+ * vibrar gracias al `renotify` del payload (sin él, Android reemplazaría la
+ * notificación en silencio y el teléfono se quedaría mudo tras el primer
+ * pitido).
+ *
+ * Se para al aceptar, rechazar o colgar, y también al caducar (mismo TTL que la
+ * invitación pendiente): un teléfono no debe seguir sonando por una llamada que
+ * ya nadie espera.
+ */
+const RING_INTERVAL_MS = 5000;
+// El intervalo se lee al arrancar el timbre, no al cargar el módulo, para que
+// una prueba pueda acortarlo sin recargar nada.
+function ringInterval() {
+  return Number(process.env.CALL_RING_INTERVAL_MS) || RING_INTERVAL_MS;
+}
+const ringingTimers = new Map();
+
+function startRinging(calleeId, payload) {
+  const id = String(calleeId);
+  stopRinging(id);
+  const startedAt = Date.now();
+  const timer = setInterval(() => {
+    if (Date.now() - startedAt > PENDING_CALL_TTL_MS) {
+      stopRinging(id);
+      return;
+    }
+    // Un fallo de red en un reenvío no debe cortar el timbre: el siguiente
+    // intento vuelve a probar mientras la llamada siga viva.
+    pushService
+      .sendToUser(id, payload, pushService.CALL_PUSH_OPTIONS)
+      .catch(() => {});
+  }, ringInterval());
+  // No debe mantener vivo el proceso si todo lo demás se apaga.
+  timer.unref?.();
+  ringingTimers.set(id, timer);
+}
+
+function stopRinging(calleeId) {
+  const id = String(calleeId);
+  const timer = ringingTimers.get(id);
+  if (timer) {
+    clearInterval(timer);
+    ringingTimers.delete(id);
+  }
+}
+
+function stopAllRinging() {
+  for (const timer of ringingTimers.values()) clearInterval(timer);
+  ringingTimers.clear();
+}
+
 // Avisa del cambio de presencia a las personas que comparten un chat con él.
 // Solo a esas: la presencia es un dato de contactos, no un directorio abierto.
 async function announcePresence(io, userId, online) {
@@ -266,6 +322,10 @@ function initLiveSockets(server) {
       // invitación ya se emitió cuando no había socket. Se reentrega ahora.
       const pendingCall = takePendingCall(id);
       if (pendingCall) socket.emit('call:incoming', pendingCall);
+      // El timbre por push NO se para aquí: al conectar todavía no se sabe si
+      // la pestaña está a la vista, y un reconecte en segundo plano (un corte de
+      // red) pararía el timbre por error. De eso se encarga `app:visibility`,
+      // que el cliente manda justo después de conectar.
 
       // El cliente informa de si su pestaña está en primer plano. Es lo que
       // permite distinguir "tiene la app abierta y puede sonar" de "tiene el
@@ -277,6 +337,9 @@ function initLiveSockets(server) {
         if (socket.data.visible) {
           const pending = takePendingCall(id);
           if (pending) socket.emit('call:incoming', pending);
+          // Volvió al frente: la llamada ya suena dentro de la app, así que el
+          // reenvío por push sobra y solo haría sonar dos veces.
+          stopRinging(id);
         }
       });
 
@@ -519,6 +582,16 @@ function initLiveSockets(server) {
             // entregarlo en el instante en que su socket conecte al abrir la
             // notificación. Sin esto la llamada se perdería al aceptarla.
             rememberPendingCall(to, payload);
+            // Y se sigue timbrando: un solo push suena una vez, no "repica".
+            // WhatsApp repica hasta que contestas; esto es lo que lo imita.
+            startRinging(
+              to,
+              pushService.incomingCallPayload({
+                from: { id: me.id, username: me.username },
+                kind: callKind,
+                conversationId: payload.conversationId,
+              })
+            );
           }
 
           // `pushed: true` le dice al marcador que, aunque no haya socket, la
@@ -540,12 +613,15 @@ function initLiveSockets(server) {
       // Ya no hace falta la invitación pendiente: si no se limpiara, un
       // reconecte del mismo usuario le haría sonar una llamada ya en curso.
       clearPendingCall(me.id);
+      // Y se deja de timbrar: ya contestó.
+      stopRinging(me.id);
       io.to(userRoom(to)).emit('call:accepted', { from: me.id });
     });
 
     socket.on('call:reject', ({ to, reason } = {}) => {
       if (!me || typeof to !== 'string') return;
       clearPendingCall(me.id);
+      stopRinging(me.id);
       io.to(userRoom(to)).emit('call:rejected', {
         from: me.id,
         reason: typeof reason === 'string' ? reason.slice(0, 60) : 'rechazada',
@@ -555,6 +631,11 @@ function initLiveSockets(server) {
     socket.on('call:end', ({ to } = {}) => {
       if (!me || typeof to !== 'string') return;
       clearPendingCall(me.id);
+      // Colgar puede venir del que llama o del que recibe: se para el timbre de
+      // los dos, porque el temporizador está a nombre de quien lo sufre (el
+      // receptor) y no se sabe aquí cuál de los dos es.
+      stopRinging(me.id);
+      stopRinging(to);
       io.to(userRoom(to)).emit('call:ended', { from: me.id });
     });
 
@@ -872,4 +953,8 @@ module.exports = {
   isOnline,
   MAX_MESSAGE_LENGTH,
   HISTORY_LIMIT,
+  // Para pruebas: permiten comprobar el timbre continuo sin depender del reloj.
+  startRinging,
+  stopRinging,
+  stopAllRinging,
 };

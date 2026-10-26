@@ -30,6 +30,11 @@ self.addEventListener('push', (event) => {
     icon: '/favicon.svg',
     badge: '/favicon.svg',
     tag: payload.tag || undefined,
+    // `renotify` hace que cada reenvío del timbre vuelva a sonar y vibrar en vez
+    // de reemplazar la notificación en silencio. Es lo que convierte un pitido
+    // suelto en un timbre que insiste, como WhatsApp. Requiere `tag`: sin él el
+    // navegador ignora `renotify` y no vuelve a avisar.
+    renotify: Boolean(payload.renotify) && Boolean(payload.tag),
     // Una llamada se queda en pantalla hasta que se actúe; un aviso normal, no.
     requireInteraction: Boolean(payload.requireInteraction),
     data: payload.data || {},
