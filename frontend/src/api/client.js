@@ -56,7 +56,13 @@ export async function onResponseError(error) {
     // Sin refresco, o con uno inservible: la sesión ya no da más de sí.
     clearSession();
   }
-  return Promise.reject(new Error(messageFromError(error)));
+  // El código viaja con el error: quien llama necesita distinguir "la cuenta ya
+  // no existe" (404, hay que cerrar sesión) de un fallo de red, y el mensaje
+  // solo no basta. Sin esto, `AuthContext` no podía saber que el 404 de
+  // `/users/me` era una cuenta eliminada y dejaba la sesión abierta y rota.
+  const failure = new Error(messageFromError(error));
+  if (response?.status) failure.status = response.status;
+  return Promise.reject(failure);
 }
 
 api.interceptors.response.use(onResponse, onResponseError);

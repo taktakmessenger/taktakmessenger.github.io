@@ -91,7 +91,11 @@ async function listConversations(userId, limit = 30) {
     );
 
   return conversations.map((c) => {
-    const others = c.participants.filter((p) => String(p._id) !== String(userId));
+    // `populate` borra del array a los participantes cuyo documento ya no
+    // existe. Si el otro se borró, la conversación se quedaba con `with: []` y
+    // el hilo sin interlocutor: los botones de llamada se deshabilitaban sin
+    // decir nada. `peerMissing` lo hace explícito para que la UI lo explique.
+    const others = c.participants.filter((p) => p && String(p._id) !== String(userId));
     return {
       id: c._id,
       type: c.type,
@@ -104,6 +108,9 @@ async function listConversations(userId, limit = 30) {
         lastSeenAt: p.lastSeenAt,
         preferredLanguage: p.preferredLanguage || null,
       })),
+      // Una conversación directa sin interlocutor vivo solo puede significar
+      // que la otra cuenta se eliminó. No es lo mismo que "sin participantes".
+      peerMissing: c.type === 'direct' && others.length === 0,
       lastMessageAt: c.lastMessageAt,
       lastMessagePreview: c.lastMessagePreview,
       unread: c.unread?.get(String(userId)) || 0,

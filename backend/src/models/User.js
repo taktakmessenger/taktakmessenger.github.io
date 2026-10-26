@@ -176,6 +176,39 @@ userSchema.methods.comparePassword = function comparePassword(candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
+// Busca una cuenta por su @usuario sin distinguir mayúsculas. `username` es
+// único con índice sensible a mayúsculas, así que `@Elmalayaso` y
+// `@elmalayaso` eran dos cadenas distintas: escribir el nombre con otra caja
+// respondía "usuario no encontrado" aunque la cuenta existiera, y desde el
+// marcador eso dejaba la llamada inalcanzable. El patrón se escapa para que un
+// nombre no pueda inyectar expresiones regulares.
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// `slice(0, 30)` va con el `maxlength` del esquema: un nombre más largo no
+// puede existir, así que recortar no cambia el resultado y evita construir
+// patrones enormes. Devuelve `null` para un nombre vacío, que nunca casa.
+function usernameFilter(username) {
+  const name = String(username || '').trim().replace(/^@/, '').slice(0, 30);
+  if (!name) return null;
+  return { username: new RegExp(`^${escapeRegex(name)}$`, 'i') };
+}
+
+// Siempre devuelve una consulta, aunque el nombre venga vacío: quien llama
+// encadena `.select()` y no debe tener que comprobar el nulo antes.
+userSchema.statics.findByUsername = function findByUsername(username) {
+  return this.findOne(usernameFilter(username) || { username: null });
+};
+
+// La misma regla para el alta: sin esto se podía crear `elmalayaso` con
+// `Elmalayaso` ya registrado, y las dos cuentas casaban con la misma búsqueda.
+userSchema.statics.existsByUsername = function existsByUsername(username) {
+  const filter = usernameFilter(username);
+  if (!filter) return Promise.resolve(false);
+  return this.exists(filter);
+};
+
 // Whether this account may see adult content. This is the single question the
 // feed and the upload gate ask, so the definition of "adult" lives in one
 // place. A self-declared date of birth is intentionally *not* enough: it is

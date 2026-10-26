@@ -55,12 +55,21 @@ export function AuthProvider({ children }) {
         setUser(me);
         localStorage.setItem('taktak_user', JSON.stringify(me));
       })
-      .catch(() => {
+      .catch((err) => {
         // Solo se cierra la sesión si de verdad ya no sirve. El interceptor
         // renueva al recibir un 401 y, si no puede, borra el token; un fallo de
         // red (el backend aún arrancando) no borra nada y no debe echar al
         // usuario. Antes, cualquier fallo al arrancar cerraba la sesión.
         if (cancelled) return;
+        // Un 404 aquí significa que el token es válido pero su cuenta ya no
+        // existe (se eliminó, o la borró un reinicio de datos). Sin esto la app
+        // se quedaba "dentro" con una sesión fantasma: el resto de pantallas
+        // respondía 404 y, en WhaTaka, el interlocutor borrado dejaba las
+        // llamadas deshabilitadas sin explicación.
+        if (err?.status === 404) {
+          logout();
+          return;
+        }
         if (!getToken()) logout();
       })
       .finally(() => !cancelled && setLoading(false));

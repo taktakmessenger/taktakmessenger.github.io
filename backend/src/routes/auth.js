@@ -107,7 +107,7 @@ async function generateUsername(base) {
     const suffix = Math.random().toString(36).slice(2, 6);
     const candidate = `${seed}_${suffix}`.slice(0, 30);
     // eslint-disable-next-line no-await-in-loop
-    const taken = await User.exists({ username: candidate });
+    const taken = await User.existsByUsername(candidate);
     if (!taken) return candidate;
   }
 
@@ -127,7 +127,10 @@ router.post(
     const { username, email, password } = req.body;
 
     const existing = await User.findOne({ $or: [{ email }, { username }] });
-    if (existing) {
+    // El índice de `username` distingue mayúsculas, pero la búsqueda pública no:
+    // sin esta comprobación se podía registrar `elmalayaso` con `Elmalayaso` ya
+    // existente y quedaban dos cuentas que casaban con el mismo @usuario.
+    if (existing || (await User.existsByUsername(username))) {
       throw new HttpError(400, 'El usuario o email ya existe');
     }
 
@@ -428,7 +431,9 @@ router.post(
 
       // A user who chose a username that got taken between step 1 and step 2
       // still gets an account, with a generated one, rather than a dead end.
-      const taken = await User.exists({ username });
+      // La comprobación es la misma que la del alta por correo: insensible a
+      // mayúsculas, para no crear dos cuentas que casen con el mismo @usuario.
+      const taken = await User.existsByUsername(username);
       const finalUsername = taken ? await generateUsername(`u${phone.slice(-6)}`) : username;
 
       const digits = phone.replace(/\D/g, '');

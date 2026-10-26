@@ -243,3 +243,37 @@ test('un 401 cuyo refresco es 500 no cierra la sesión (fallo pasajero)', async 
   global.fetch = realFetch;
   server.close();
 });
+
+// El `status` debe llegar a quien llama. `AuthContext` necesita distinguir el
+// 404 de `/users/me` (la cuenta ya no existe: hay que cerrar sesión) de un
+// fallo de red, y antes solo recibía un mensaje.
+test('el error conserva el código HTTP de la respuesta', async () => {
+  installLocalStorage();
+  const server = await startServer();
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const api = makeClient(base);
+
+  await assert.rejects(
+    () => api.get('/missing'),
+    (err) => {
+      assert.equal(err.status, 404, 'un 404 debe distinguirse de un fallo de red');
+      return true;
+    }
+  );
+
+  server.close();
+});
+
+test('un fallo sin respuesta no inventa un código HTTP', async () => {
+  installLocalStorage();
+  const api = makeClient('http://127.0.0.1:1');
+
+  await assert.rejects(
+    () => api.get('/json'),
+    (err) => {
+      assert.equal(err.status, undefined, 'sin respuesta no hay código que atribuir');
+      return true;
+    }
+  );
+});
+

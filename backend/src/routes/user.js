@@ -122,7 +122,7 @@ router.patch(
 router.get(
   '/:username',
   asyncHandler(async (req, res) => {
-    const user = await User.findOne({ username: req.params.username }).select(
+    const user = await User.findByUsername(req.params.username).select(
       'username profile stats createdAt'
     );
     if (!user) throw new HttpError(404, 'Usuario no encontrado');
@@ -144,7 +144,7 @@ router.post(
   '/:username/follow',
   auth,
   asyncHandler(async (req, res) => {
-    const target = await User.findOne({ username: req.params.username });
+    const target = await User.findByUsername(req.params.username);
     if (!target) throw new HttpError(404, 'Usuario no encontrado');
     if (target._id.toString() === req.user.userId) {
       throw new HttpError(400, 'No puedes seguirte a ti mismo');
@@ -173,7 +173,7 @@ router.delete(
   '/:username/follow',
   auth,
   asyncHandler(async (req, res) => {
-    const target = await User.findOne({ username: req.params.username });
+    const target = await User.findByUsername(req.params.username);
     if (!target) throw new HttpError(404, 'Usuario no encontrado');
 
     await User.updateOne(

@@ -1925,3 +1925,36 @@ que es lo que cierra el SSRF. Además,
 mensaje de una conversación del que pregunta: sin eso, la ruta del audio se ve en
 el DOM y cualquiera podría transcribir la nota de voz de otro con solo copiarla.
 Los tests de esto están en `backend/test/transcription.test.js`.
+
+### Un participante borrado no puede dejar el hilo sin interlocutor
+
+`populate` **elimina del array** a los participantes cuyo documento ya no
+existe. Si la otra cuenta se borra (por ejemplo, un `reset-data`), la
+conversación llegaba con `with: []`: el hilo se quedaba sin `peer`, los botones
+de llamada se deshabilitaban en silencio y la bandeja pintaba `@undefined`. Un
+token de una cuenta ya borrada sobrevive hasta su caducidad, así que el teléfono
+puede seguir "dentro" con una **sesión fantasma** (el `/users/me` da 404 pero el
+resto responde 200).
+
+Dos defensas, y ninguna basta sola:
+
+- `messageService.listConversations` marca `peerMissing` cuando una conversación
+  directa se queda sin interlocutor, para que la UI lo explique ("Cuenta
+  eliminada") en vez de mostrar botones muertos.
+- `AuthContext` cierra la sesión cuando `/users/me` responde **404** (no un fallo
+  de red). Para poder distinguirlo, el interceptor de `api/client.js` adjunta el
+  `status` al error: el mensaje solo no bastaba.
+
+La búsqueda por `@usuario` es **insensible a mayúsculas** (`User.findByUsername`,
+`User.existsByUsername`). El índice de `username` sí distingue mayúsculas, así
+que `@elmalayaso` respondía 404 con `Elmalayaso` registrado, y desde el marcador
+eso dejaba la llamada inalcanzable. Por lo mismo, el alta rechaza un nombre que
+solo cambie la caja: sin ello quedarían dos cuentas que casan con la misma
+búsqueda. Los tests están en `backend/test/username-case.test.js` y
+`backend/test/messages.test.js`.
+
+Para recuperar una cuenta borrada por accidente, el alta sigue en el oplog
+(`local.oplog.rs`, `ns: 'taktak.users', op: 'i'`) durante la ventana de retención:
+se puede reinsertar el documento tal cual (mismo `_id` y hash de contraseña) y la
+sesión del teléfono vuelve a valer. Una copia de `.data/backups/` sirve igual si
+es anterior al borrado.

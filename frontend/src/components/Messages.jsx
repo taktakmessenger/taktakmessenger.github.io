@@ -119,6 +119,9 @@ function Thread({ conversationId, onBack, onCall }) {
   const { emit, subscribe } = useSocket();
   const [messages, setMessages] = useState([]);
   const [peer, setPeer] = useState(null);
+  // La otra cuenta ya no existe (se eliminó). Se distingue de "aún cargando"
+  // para poder explicarlo, en vez de dejar los botones muertos sin motivo.
+  const [peerMissing, setPeerMissing] = useState(false);
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -167,6 +170,7 @@ function Thread({ conversationId, onBack, onCall }) {
         const inbox = Array.isArray(inboxRes.data?.conversations) ? inboxRes.data.conversations : [];
         const current = inbox.find((c) => c.id === conversationId);
         setPeer(current?.with?.[0] || null);
+        setPeerMissing(Boolean(current?.peerMissing));
         const me = presenceRes?.data?.peers?.find(
           (p) => String(p.userId) !== String(userId(user))
         );
@@ -442,11 +446,19 @@ function Thread({ conversationId, onBack, onCall }) {
           ←
         </button>
         <div className="thread-peer">
-          <span className="avatar">{initials(peer)}</span>
+          <span className="avatar">{peerMissing ? '?' : initials(peer)}</span>
           <div className="thread-peer-id">
-            <strong>{peer?.profile?.displayName || `@${peer?.username || '…'}`}</strong>
+            <strong>
+              {peerMissing
+                ? 'Cuenta eliminada'
+                : peer?.profile?.displayName || `@${peer?.username || '…'}`}
+            </strong>
             <small className={peerTyping ? 'typing' : peerOnline ? 'online' : ''}>
-              {peerTyping ? 'escribiendo…' : lastSeenLabel(peer, peerOnline)}
+              {peerMissing
+                ? 'Esta persona ya no está en TAK TAK'
+                : peerTyping
+                  ? 'escribiendo…'
+                  : lastSeenLabel(peer, peerOnline)}
             </small>
           </div>
         </div>
@@ -469,6 +481,7 @@ function Thread({ conversationId, onBack, onCall }) {
             type="button"
             className="btn-secondary"
             disabled={!peer}
+            title={peerMissing ? 'Esta cuenta ya no existe' : undefined}
             onClick={() => onCall?.(peer, 'audio')}
             aria-label="Llamada de voz"
           >
@@ -478,6 +491,7 @@ function Thread({ conversationId, onBack, onCall }) {
             type="button"
             className="btn-secondary"
             disabled={!peer}
+            title={peerMissing ? 'Esta cuenta ya no existe' : undefined}
             onClick={() => onCall?.(peer, 'video')}
             aria-label="Videollamada"
           >
@@ -1023,6 +1037,11 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
         <ul className="conversation-list">
           {visible.map((c) => {
             const other = c.with?.[0];
+            // Sin interlocutor solo cabe una lectura: la otra cuenta se
+            // eliminó. Mostrar `@undefined` era el síntoma de no contemplarlo.
+            const name = c.peerMissing
+              ? 'Cuenta eliminada'
+              : other?.displayName || `@${other?.username}`;
             return (
               <li key={c.id}>
                 <button
@@ -1031,12 +1050,12 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
                   onClick={() => setOpenId(c.id)}
                 >
                   <span className="avatar-wrap">
-                    <span className="avatar">{initials(other)}</span>
+                    <span className="avatar">{c.peerMissing ? '?' : initials(other)}</span>
                     {(online[String(other?.id)] ?? false) && <span className="presence-dot" />}
                   </span>
                   <span className="conversation-main">
                     <span className="conversation-top">
-                      <strong>{other?.displayName || `@${other?.username}`}</strong>
+                      <strong>{name}</strong>
                       <small className="conversation-time">{clock(c.lastMessageAt)}</small>
                     </span>
                     <small className="conversation-preview">

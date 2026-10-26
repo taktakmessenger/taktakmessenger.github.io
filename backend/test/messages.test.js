@@ -8,6 +8,7 @@ const {
   registerUser,
 } = require('./helpers');
 const Conversation = require('../src/models/Conversation');
+const User = require('../src/models/User');
 
 test.before(async () => connectTestDb());
 test.beforeEach(async () => resetDb());
@@ -372,3 +373,42 @@ test('an unknown call status is rejected', async () => {
 
   assert.equal(res.status, 400);
 });
+
+test('a direct thread whose peer was deleted is flagged, not left empty', async () => {
+  const agent = app();
+  const a = await registerUser(agent);
+  const b = await registerUser(agent);
+
+  await openConversation(agent, a.token, b.user.id);
+
+  // Se borra la cuenta del otro, como haría un `reset-data`.
+  await User.deleteOne({ _id: b.user.id });
+
+  const inbox = await agent
+    .get('/api/messages/conversations')
+    .set('Authorization', `Bearer ${a.token}`);
+
+  assert.equal(inbox.status, 200);
+  assert.equal(inbox.body.conversations.length, 1, 'la conversación no debe desaparecer');
+  assert.deepEqual(inbox.body.conversations[0].with, [], 'ya no hay interlocutor');
+  assert.equal(
+    inbox.body.conversations[0].peerMissing,
+    true,
+    'el cliente necesita saber que la cuenta se eliminó para explicarlo'
+  );
+});
+
+test('a healthy direct thread is not flagged as missing its peer', async () => {
+  const agent = app();
+  const a = await registerUser(agent);
+  const b = await registerUser(agent);
+
+  await openConversation(agent, a.token, b.user.id);
+
+  const inbox = await agent
+    .get('/api/messages/conversations')
+    .set('Authorization', `Bearer ${a.token}`);
+
+  assert.equal(inbox.body.conversations[0].peerMissing, false);
+});
+
