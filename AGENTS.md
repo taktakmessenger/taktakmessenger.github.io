@@ -634,8 +634,9 @@ desarrollo**, o deja de probar lo que se despliega.
     `waitText` **lanza** al agotar el tiempo: para comprobaciones que se
     registran con `check` hay que usar `sawText`, que devuelve booleano; si no,
     el `check` sale siempre en falso aunque la pantalla sea la correcta.
-    Los tres fallos de `e2e-upload-optimize.js` en este contenedor son
-    ambientales: sin `ffmpeg` no hay HLS (`TRANSCODE_ENABLED`), no son de la UI.
+    `e2e-upload-optimize.js` necesita `ffmpeg` en el host para que el vídeo
+    quede optimizado; `scripts/dev-up.sh` lo instala al arrancar, así que en
+    este contenedor ya no hay fallos ambientales.
   - `node scripts/e2e-calls.js` lanza **dos navegadores** y hace una llamada de
     voz y otra de vídeo reales entre ellos, comprobando que llegan pistas
     remotas de audio (y vídeo) y que colgar cierra la llamada en el otro lado.
@@ -744,6 +745,26 @@ el camino es el push a GitHub, que sigue pendiente del permiso de escritura.
 - Si añades clases nuevas (`.reels-wrap`, `.reel-sound`, `.reel-sound-hint`),
   mantén sus reglas en `App.css`: no hay comprobación automática de que existan.
 
+### Formatos de vídeo aceptados al subir
+
+El filtro vive en `backend/src/lib/videoUpload.js` (`isAcceptedVideo`), no
+dentro de la ruta, para poder probarlo sin levantar el servidor
+(`backend/test/video-upload.test.js`).
+
+- **Acepta el MIME de vídeo habitual** (`video/mp4`, `video/webm`,
+  `video/quicktime`, `video/x-matroska`…) y también el **3GP/3G2** que graban
+  los Android y el AVI/MKV que exportan los editores.
+- **Cuando el MIME es genérico** (`application/octet-stream`, `application/mp4`)
+  **o no viene, decide por la extensión.** Esto es lo que rompía las subidas:
+  hay navegadores y grabadores que no etiquetan bien el archivo, y mirar solo el
+  MIME rechazaba vídeos válidos con "Formato de video no soportado". La
+  extensión es lo único que queda en ese caso.
+- **Un MIME de otro tipo sigue rechazando aunque la extensión sea de vídeo**
+  (`image/png` con nombre `.mp4` no pasa): la allowlist no se ha vuelto un
+  coladero.
+- El límite de tamaño es `MAX_VIDEO_BYTES` (50 MB por defecto); al superarlo
+  `errorHandler` responde 413 con un mensaje claro en vez de un 500.
+
 ### El vídeo se ve pero no suena: se subió en H.265/HEVC
 
 Un `.mp4` grabado con un iPhone en modo "Alta eficiencia" es H.265/HEVC. El
@@ -755,9 +776,18 @@ es de formato.
 La solución es el HLS: `transcodeService` reencoda a **H.264/AAC**, que sí es
 universal. Para que eso ocurra hacen falta dos cosas:
 
-1. **`ffmpeg` instalado** (`sudo apt-get install -y ffmpeg`). El servicio lo
-   detecta en el PATH y, si no está, sirve el original tal cual y avisa por
-   consola: `[transcode] ffmpeg no disponible...`.
+1. **`ffmpeg` instalado.** El servicio lo detecta en el PATH y, si no está,
+   sirve el original tal cual y avisa por consola:
+   `[transcode] ffmpeg no disponible...`.
+   - En desarrollo, `scripts/dev-up.sh` **lo instala al arrancar** si falta
+     (`apt-get install -y ffmpeg`). Hace falta porque apt vive en el sistema de
+     archivos del contenedor, no en `/workspace`: un reinicio del entorno se
+     lleva ffmpeg y, sin esta comprobación, la optimización se rompía en
+     silencio (la subida seguía funcionando y el creador veía "No se pudo
+     optimizar" sin más pista).
+   - En producción viene en la imagen (`backend/Dockerfile`), no del host.
+   - `hasFfmpeg()` **cachea** el resultado en el proceso, así que instalar
+     ffmpeg con el servidor ya arriba no basta: hay que reiniciarlo.
 2. **`TRANSCODE_ENABLED=true`** en `backend/.env` (por defecto está en `false`).
 
 Comprobación rápida de qué códec trae un fichero, sin ffprobe:
@@ -789,15 +819,113 @@ creador no tenía forma de saber si su vídeo iba a reproducirse. Ahora:
   cada 3 s (máximo ~5 min) hasta `ready`, `failed` o `timeout`, con los botones
   adecuados en cada caso (Ir al feed / Reintentar / Subir otro). El sondeo se
   cancela al desmontar la pantalla.
-- **En el perfil** (`Profile.jsx`): cada vídeo propio muestra su estado
-  (`⏳ Optimizando…` / `⚠️ Sin optimizar`) y, si está en `failed` o no tiene
-  `hlsUrl`, un botón "🔄 Reprocesar" que llama a `POST /videos/:id/retranscode`.
+- **En el perfil** (`Profile.jsx`): los vídeos se ven en una **rejilla estilo
+  TikTok** (tres columnas de miniaturas verticales) y el estado y las acciones
+  viven dentro del reproductor a pantalla completa, no en una lista aparte. Al
+  abrir un vídeo se ve su `⏳ Optimizando…` / `⚠️ Sin optimizar` y, si está en
+  `failed` o no tiene `hlsUrl`, un botón "🔄 Reprocesar" que llama a
+  `POST /videos/:id/retranscode`.
 - **`GET /api/videos/:id/status`** es un endpoint ligero y sin efectos
   secundarios: **no** incrementa el contador de vistas (a diferencia de
   `GET /:id`), que es justo lo que permite sondearlo sin inflar las métricas.
   El detalle de `transcodeError` solo se devuelve al dueño.
 - Clases nuevas de CSS: `.optimize-panel`, `.optimize-title`, `.optimize-actions`,
-  `.video-actions` en `App.css`.
+  `.video-actions`, `.profile-grid`, `.profile-thumb*`, `.profile-player*` en
+  `App.css`.
+
+### La rejilla de vídeos del perfil (estilo TikTok)
+
+Antes el perfil listaba los vídeos como filas de texto (título, métricas y
+botones). Ahora son **miniaturas verticales en tres columnas**, como la pestaña
+de vídeos de un perfil de TikTok:
+
+- **Rejilla** (`VideoGrid` en `Profile.jsx`, `.profile-grid`): cada miniatura
+  mantiene la proporción 9/16 con `aspect-ratio`, para que la rejilla no salte de
+  altura mientras cargan las imágenes. Lleva el contador de vistas abreviado
+  (`formatCount`, en `lib/format.js`: "1,2 mil", "3 M") y un aviso si el vídeo
+  sigue optimizándose o falló.
+- **Sin miniatura, el propio vídeo hace de cartel**: muchos vídeos recién subidos
+  aún no tienen `thumbnailUrl`, y sin esta reserva la rejilla saldría vacía. Se
+  pinta un `<video>` mudo con `preload="metadata"`.
+- **Reproductor a pantalla completa** (`ProfilePlayer`): al tocar una miniatura
+  se abre a pantalla completa, con desplazamiento por vídeo (snap) para pasar de
+  uno a otro, botón de cerrar y de sonido. **Arranca en silencio** a propósito:
+  el navegador bloquea el autoplay con audio, así que empezar mudo garantiza que
+  el vídeo se vea y el usuario activa el sonido cuando quiere.
+- **Solo el vídeo visible se carga**: cada diapositiva es su propio componente
+  (`PlayerSlide`) y solo la activa monta la fuente; las demás muestran su
+  miniatura. Sin esto, abrir el perfil descargaría todos los vídeos a la vez.
+- **Exportar y Reprocesar viven en el reproductor**, junto al vídeo que se está
+  viendo, en lugar de en una fila de la lista.
+- **La lógica de reproducción se comparte** (`lib/video.js`, `attachVideoSource`)
+  entre el feed y el perfil: preferir el HLS y caer al original si no existe, sin
+  duplicar el import dinámico de hls.js.
+
+Verificación: `npm run e2e:profile-grid` (rejilla de tres columnas, cartel de
+reserva sin miniatura, contador, apertura del reproductor, salto entre vídeos y
+cierre) y `npm run e2e:upload` (las acciones de exportar y reprocesar dentro del
+reproductor).
+
+### Compartir y descargar vídeos (propios o de otras personas)
+
+En el feed, cada vídeo tiene una **flecha curva de compartir** (➦) en la barra de
+acciones, al estilo TikTok. No es un menú de tres puntos: es el icono de
+compartir de TikTok, y al pulsarlo abre una **hoja de compartir** desde abajo con
+las salidas habituales:
+
+- **Compartir** — Web Share API del sistema (`navigator.share`), que abre
+  WhatsApp, correo, etc. Si no está disponible (escritorio, HTTP sin localhost),
+  cae a copiar el enlace.
+- **Copiar enlace** — copia `/?video=<id>` al portapapeles, con respaldo
+  `execCommand('copy')` para contextos no seguros.
+- **Descargar** — baja el archivo original, sin marca de agua (ver abajo).
+- **Mensaje** — abre un chat de WhaTaka con el creador.
+- **Enviar a** — fila de contactos recientes (bandeja de WhaTaka); al tocar uno
+  se abre/crea el hilo y se publica el enlace con su texto.
+- **No me interesa** / **Ocultar a @creador** — las señales negativas que antes
+  vivían en su propio menú de tres puntos, ahora al final de la hoja.
+
+Detalles de implementación:
+
+- **Componente:** `frontend/src/components/ShareSheet.jsx` (hoja inferior, mismo
+  telón y animación que `CreatorSheet`). El estado `shareFor` vive en `Feed.jsx`
+  y la hoja se monta dentro del feed, para que el vídeo siga detrás y el scroll
+  no se pierda al cerrar.
+- **Helper:** `frontend/src/lib/share.js` — `videoShareUrl`, `shareMessage`,
+  `copyToClipboard`, `shareWithSystem`. Son funciones puras con dependencias
+  inyectables (origen, portapapeles, `document`), por eso se prueban sin DOM.
+- **Enlace profundo:** el enlace apunta a `/?video=<id>` (la portada con un
+  parámetro, no a `/video/<id>`, porque el servidor sirve una única página y una
+  ruta desconocida daría 404). `App.jsx` lee el parámetro al arrancar, lo pasa a
+  `Feed` como `focusVideoId`, y el feed trae ese vídeo con `GET /videos/:id` y lo
+  coloca el primero. Se hace en un efecto aparte para no chocar con la carga
+  asíncrona del feed y sin volver a saltar al principio al pulsar "Cargar más".
+
+Descarga (la opción **Descargar** de la hoja):
+
+- **Endpoint:** `GET /api/videos/:id/download` (con `auth`). Devuelve
+  `{ downloadUrl, filename, watermark: false, reencoded: false }`. La URL apunta
+  al original en `/uploads/...`, así que no hay reencode.
+- **Mismas puertas que `GET /:id`:** un vídeo `rejected` responde 404, y uno
+  `isNSFW` responde 404 (no 403, para no confirmar que existe) si quien lo pide
+  no ha verificado su edad. El creador sí puede bajarse el suyo.
+- **Contador `downloads`** en el modelo `Video`: sube solo cuando la descarga se
+  concede. Es una señal de interés distinta de la vista y el "me gusta".
+- **El frontend pide el fichero como blob** (`frontend/src/lib/download.js`),
+  no con un enlace directo al `/uploads`. El motivo: `express.static` sirve ese
+  endpoint con su propia cabecera `Content-Disposition` (nombre interno del
+  archivo), y el navegador le da prioridad sobre el atributo `download`, así que
+  el archivo se guardaba con el nombre feo del servidor. Con un blob el nombre
+  legible (`Titulo-<id>.ext`) es el que gana.
+- **Avisos:** la hoja de compartir confirma "Descargando «…»" o muestra el error
+  en `.share-notice`; un fallo general del feed usa el aviso flotante
+  `.reel-toast` (solo errores, y se retira solo a los 4 s).
+- Tests: `backend/test/transparency.test.js` (autorización, moderación, NSFW,
+  contador), `frontend/test/download.test.js` (helper de descarga),
+  `frontend/test/share.test.js` (helper de compartir) y
+  `frontend/test/e2e-download.mjs` (un usuario baja el vídeo de otro desde la
+  hoja de compartir, con descarga real del navegador, y comprueba que el enlace
+  `?video=` abre ese reel).
 
 ### Limpieza de rastro ajeno y marca TAK TAK
 
@@ -849,14 +977,14 @@ Por eso la estrategia es tapar con la marca propia, no borrar.
 
 ## Navegación y pantallas
 
-- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene seis pestañas —Inicio,
-  Facetak, Creators, Subir, WhaTaka, Perfil— y **cada sección es su propia
-  pantalla**. TAK TAK es una sola aplicación con tres secciones grandes, cada
-  una inspirada en una app conocida: el feed vertical (como TikTok), el chat
+- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene siete pestañas —Inicio,
+  Explorar, Facetak, Creators, Subir, WhaTaka, Perfil— y **cada sección es su
+  propia pantalla**. TAK TAK es una sola aplicación con tres secciones grandes,
+  cada una inspirada en una app conocida: el feed vertical (como TikTok), el chat
   WhaTaka (como WhatsApp) y Facetak (como Facebook). El resto de accesos
   (Ajustes, Monedero, Verificación, Salud de la cuenta) van dentro del perfil,
   que es donde TikTok los esconde.
-- No añadas más pestañas a la barra por encima de estas seis: con siete botones
+- No añadas más pestañas a la barra por encima de estas siete: con siete botones
   la etiqueta ya hubo que encogerla (`font-size: 0.6rem` y `white-space:
   nowrap` en `.tabbar-label`). Si algo nuevo no es una app en sí, va al perfil.
 - La única excepción es la **campana de Avisos**, que va la primera en la barra.
@@ -885,6 +1013,35 @@ Por eso la estrategia es tapar con la marca propia, no borrar.
 - Las pantallas que cuelgan del perfil (Ajustes, Monedero, Verificación, Salud)
   reciben `onBack` y pintan su cabecera con `.screen-head`. Respeta ese patrón:
   sin botón de volver, el usuario queda atrapado (no hay historial de router).
+
+## Seguridad del usuario: bloquear y reportar
+
+Dos caras del mismo problema, en `backend/src/services/safetyService.js` y
+`frontend/src/components/ReportDialog.jsx` / `BlockDialog.jsx`.
+
+- **Bloquear es mutuo, y en las dos direcciones.** `getBlockedCreatorIds`
+  (`feedService.js`) devuelve los que bloqueé **y** los que me bloquearon: el
+  feed filtra por los dos lados. El chat (`isBlockedBetween`) ya lo hacía así.
+  Si el feed mirara solo "a quién bloqueé", quien bloquea desaparecería del otro
+  pero seguiría viendo al que lo bloqueó, que es justo lo contrario de lo que
+  espera cualquiera que pulse "bloquear". Al bloquear también se corta el
+  seguimiento en ambos sentidos.
+- **Reportar dos veces lo mismo no crea dos filas.** Hay un índice único
+  `{reporter, targetType, targetId}` y `createReport` hace `upsert`: la segunda
+  vez actualiza el motivo y devuelve el estado a `open`. Un doble toque no debe
+  inflar la cola de moderación.
+- **No se puede reportar el propio contenido.** Lo corta el servicio, no la
+  ruta, porque los diálogos de vídeo y de perfil comparten esa puerta.
+- **El reporte es anónimo para el reportado:** `listMyReports` filtra por
+  `reporter`, así que solo ve los suyos.
+- **La cola de reportes se ve en el panel de administración** (`AdminPanel.jsx`,
+  sección "Reportes", con filtro por estado). Antes el reporte llegaba a la base
+  de datos y no a ninguna pantalla: un agujero negro.
+- Los motivos son una lista cerrada (`REASONS` en `routes/safety.js`, el mismo
+  enum en el esquema). Un motivo inventado se rechaza en la validación y en el
+  modelo, para que la cola se pueda agrupar.
+- Regresión: `backend/test/safety.test.js` (18 casos) y el recorrido con
+  navegador real `npm run e2e:explore`.
 
 ## Ranking del feed: `rankingBonus` no es un contador
 
@@ -924,8 +1081,36 @@ Tres piezas, en `frontend/src/lib/ringtone.js`, `CallOverlay.jsx` y
   la causa real de que la app no estuviese "activa" para llamadas entrantes. El
   aviso es la vía para conseguir esa suscripción sin pasar por Ajustes.
 
+## Que la llamada responda al volumen
+
+En una llamada por navegador la voz remota es un `MediaStream` que se reproduce
+en un `<audio>`. En varios móviles los botones de volumen del teléfono no bajan
+ese flujo, así que bajar el volumen durante una llamada parecía no hacer nada.
+Tres piezas lo resuelven:
+
+- **Control propio** (`CallOverlay.jsx`, `.call-volume`): un deslizador que
+  escribe el volumen del elemento de audio. Es el arreglo que siempre funciona,
+  porque no depende del sistema. El valor vive en `CallContext` (`volume`) y se
+  acota en `clampVolume` (`lib/sound.js`) para que nunca salga de `[0, 1]`; un
+  dato ausente se resuelve al máximo, no a cero.
+- **Sesión de audio** (`applyAudioSession`): mientras hay llamada se declara
+  `navigator.audioSession.type = 'play-and-record'`. Es lo que hace que el móvil
+  trate el audio como una conversación y no como música de una pestaña, de modo
+  que los botones del teléfono sí la regulen. La API solo existe en Safari; si
+  falta, la función no hace nada y la app sigue igual. Al colgar se vuelve a
+  `'auto'` para no retener el canal de comunicación.
+- **El feed se calla durante la llamada** (`shouldPauseFeed` en `lib/sound.js`,
+  usado por `Home.jsx`): sin esto el vídeo de fondo seguiría sonando y los
+  botones de volumen acabarían regulando el vídeo en vez de la voz. El feed se
+  pausa con cualquier estado de llamada, no solo con la llamada activa.
+
+Además, el `<video>` remoto va siempre `muted`: el stream lleva audio, pero se
+reproduce en el `<audio>` para que el control de volumen no tenga que perseguir
+dos copias del mismo sonido.
+
 Verificación: `npm run e2e:calls` (dos navegadores reales; tono entrante y
-saliente, parada al aceptar, audio remoto, burbuja con vídeo y audio vivos) y
+saliente, parada al aceptar, audio remoto, control de volumen que baja de verdad
+el volumen del audio, vídeo remoto silenciado, burbuja con vídeo y audio vivos) y
 `npm run e2e:notifications` (el aviso aparece, explica que sonará con la app
 cerrada y desaparece con el permiso concedido).
 
@@ -1099,24 +1284,32 @@ Verificación: `backend/test/facebook.test.js` (cerrado sin configurar, token
 inválido, token de otra app, alta nueva, enlace con cuenta existente, providers)
 y `frontend/test/auth-form.test.js` para las reglas de la portada.
 
-## Sala de voz del creator (SFU con mediasoup, reserva a malla)
+## Directo del creator (SFU con mediasoup, reserva a malla)
 
-La sala de voz de un TAK Creator es audio en grupo. Está en
-`VoiceRoomContext.jsx`, `VoiceRoomBar.jsx`, `frontend/src/lib/sfuClient.js`,
+El directo de un TAK Creator es audio **y vídeo** en grupo, con la rejilla al
+estilo de TikTok Live: se ve al anfitrión en una ventana algo más grande arriba
+y a los invitados repartidos debajo, hasta veinte. Está en
+`VoiceRoomContext.jsx`, `LiveStage.jsx`, `VoiceRoomBar.jsx`, `VoiceRoomAudio.jsx`,
+`frontend/src/lib/sfuClient.js`, `frontend/src/lib/liveGrid.js`,
 `backend/src/services/sfuService.js` y la sección `voice:*` de
 `backend/src/services/liveSockets.js`.
 
-- **Es un SFU, no una malla.** Cada participante sube UN flujo de audio y el
-  servidor (`mediasoup`) lo reenvía a quien lo pida. El coste de subida no crece
-  con el número de personas, así que aguanta salas de cientos. Una malla haría
-  que cada móvil subiera un flujo por cada uno de los demás (con 20 personas, 19
-  flujos), que es lo que no escala.
+- **Es un SFU, no una malla.** Cada participante sube UN flujo de audio y otro de
+  vídeo, y el servidor (`mediasoup`) los reenvía a quien los pida. El coste de
+  subida no crece con el número de personas, así que aguanta salas de cientos.
+  Una malla haría que cada móvil subiera un flujo por cada uno de los demás (con
+  20 personas, 19 flujos por tipo), que es lo que no escala.
+- **El anfitrión es el dueño del creator**, no quien entra primero. Al montar la
+  sala se fija `voiceRoomHosts` y `voice:joined` lo entrega como `hostId`; el
+  aforo de invitados viaja como `guestLimit`. El anfitrión no cuenta para el
+  aforo: si la sala está llena y él vuelve, entra igual. El cliente pinta su
+  ventana con `.live-tile.host` (más grande, arriba) y la marca "Anfitrión".
 - **El modo es de la sala, no del participante.** El primero que entra decide
   (`sfu` si el servidor lo tiene disponible, `mesh` si no) y los demás se
   adaptan; el modo viaja en `voice:joined.mode`. Si cada uno eligiera por su
   cuenta, una sala mixta quedaría sorda: quien espera ofertas de malla no las
-  recibe y quien espera productores del SFU tampoco. La barra muestra el modo
-  ("grupo" o "directo").
+  recibe y quien espera productores del SFU tampoco. La cabecera del directo y la
+  barra muestran el modo ("grupo" o "directo").
 - **La malla sigue existiendo como reserva.** Si `mediasoup` no está instalado o
   el worker no se descargó, `sfuService.isAvailable()` es `false` y la sala cae
   a malla sin más. Degradar es mejor que romper. El cliente puede pedir malla
@@ -1135,24 +1328,33 @@ La sala de voz de un TAK Creator es audio en grupo. Está en
 - **El SFU se apaga solo cuando nadie está dentro**: al quedar vacía, la sala
   cierra su router. Al desconectar, el socket libera sus transportes y
   productores (`sfuService.removeParticipant`), o quedarían consumiendo puertos.
-- **La barra vive fuera de las vistas** (`App.jsx`, junto a `CallOverlay`). Si se
-  desmontara al cambiar de pestaña, el `<audio>` remoto se iría con ella y la
-  sala quedaría muda. Por eso se puede seguir en el feed mientras hablas.
-- Los elementos `<audio>` de los pares están ocultos (`.voice-audio`): solo
-  existen para sonar, uno por participante.
+- **El audio vive en su propio componente** (`VoiceRoomAudio.jsx`, montado en
+  `App.jsx` junto a `CallOverlay`). No puede colgar ni de la barra (que se oculta
+  al abrir la rejilla) ni de la rejilla (que se cierra al minimizar): en los dos
+  casos el `<audio>` se desmontaría y la voz se cortaría. Por eso se puede seguir
+  en el feed mientras hablas.
+- **La rejilla se abre al entrar y se minimiza a la barra** (`LiveStage` +
+  `stageOpen` en el contexto). Al minimizar, la barra flotante queda con los
+  controles de cámara, micro, reabrir y salir. El vídeo se pinta en las ventanas;
+  el sonido, en los `<audio>` ocultos (`.voice-audio`).
+- **`frontend/src/lib/user.js` normaliza el id del usuario** (`_id` ?? `id`). Sin
+  esto `user.id` es `undefined` y el anfitrión no se reconocería a sí mismo en la
+  rejilla (ni funcionarían los avisos de una vez por cuenta).
 
 Configuración del SFU (`backend/src/config/env.js`, todas por variable de
 entorno): `SFU_ENABLED`, `SFU_ANNOUNCED_IP` (en producción TIENE que ser la IP
 pública o los clientes no conectan), `SFU_LISTEN_IP`, `SFU_RTC_MIN_PORT` /
-`SFU_RTC_MAX_PORT` (hay que abrirlos en el cortafuegos), `SFU_WORKERS` y
-`SFU_MAX_PARTICIPANTS`.
+`SFU_RTC_MAX_PORT` (hay que abrirlos en el cortafuegos), `SFU_WORKERS`,
+`SFU_MAX_PARTICIPANTS` y `LIVE_GUEST_LIMIT` (tope de invitados, por defecto 20).
 
 Verificación: `npm run e2e:voice-room` (navegadores reales; con SFU prueba tres
-participantes: entran a la misma sala, el servidor monta el SFU, todos oyen a
-todos, el audio sobrevive al cambio de pestaña, el silencio se propaga y al salir
-el par desaparece) y `backend/test/voice-room.test.js` (autorización, modo de la
-sala, señalización SFU con acuse de recibo, aislamiento entre salas y limpieza al
-desconectar).
+participantes: entran al directo, se abre la rejilla con la ventana del anfitrión
+marcada, todos oyen y **ven** a todos, el audio sobrevive al minimizar y al
+cambio de pestaña, el silencio se propaga y al salir el par desaparece) y
+`backend/test/voice-room.test.js` (autorización, host y aforo, modo de la sala,
+señalización SFU con acuse de recibo, códec de vídeo, aislamiento entre salas y
+limpieza al desconectar). La disposición de la rejilla se prueba aparte, sin
+navegador, en `frontend/test/liveGrid.test.js`.
 
 ## Métodos de pago guardados (tarjeta y PayPal)
 
@@ -1437,6 +1639,22 @@ selectores viejos y parece que la app esta rota. Dos trampas ya vistas:
 
 Antes de culpar a la app, comprobar que el selector del harness sigue existiendo.
 
+Otras trampas vistas al probar Explorar y la seguridad
+(`scripts/e2e-explore-safety.js`):
+
+- **Los avisos de entrada interceptan los clics.** Al abrir la sesión saltan dos
+  modales de pantalla completa (añadir teléfono y activar notificaciones). Un
+  `click` sobre un elemento que hay debajo no llega y parece que el botón "no
+  funciona". Hay que descartarlos antes de tocar nada (ver `dismissPrompts`).
+- **Esperar por texto da falsos positivos.** `waitText(page, '@beto')` daba por
+  abierto el perfil cuando `@beto` ya estaba en la lista de resultados de
+  Explorar. Para saber si una pantalla se abrió, esperar un selector suyo
+  (`.public-profile-safety`), no un texto que pueda estar en la pantalla previa.
+- **Comprobar el estado con la API, no con el texto de la pantalla.** El feed
+  pinta una tarjeta a la vez y la base de datos de desarrollo acumula vídeos de
+  ejecuciones anteriores con títulos parecidos. Comparar por `_id` contra
+  `/feed/for-you` es determinista; buscar el título en `innerText` no lo es.
+
 ## La lista de países se perdía al reiniciar la app
 
 Sintoma: se reinicia TAK TAK y el marcador de WhaTaka se queda sin codigos de
@@ -1551,3 +1769,159 @@ Si `chromium.launch()` falla con "Executable doesn't exist ... chrome-headless-s
 no es un fallo del test: hay que reponerlos con
 `cd frontend && npx playwright install chromium`.
 
+
+## Traducción de WhaTaka: dónde vive cada pieza
+
+La traducción tiene tres sitios y conviene no confundirlos, porque cada uno
+resuelve un caso distinto:
+
+- **Mensajes de texto** — `frontend/src/components/TranslateButton.jsx`, uno por
+  burbuja del otro. Se apoya en `frontend/src/lib/translateClient.js`, que lleva
+  la caché por sesión y la deduplicación de peticiones en vuelo.
+- **Notas de voz** — `frontend/src/components/VoiceTranscript.jsx`. Intenta
+  primero `POST /api/messages/transcribe` (servidor, si hay `STT_PROVIDER`);
+  si no, cae al reconocimiento del navegador, que obliga a reproducir la nota en
+  alto para que el micrófono la oiga. Traduce con el mismo `translateText` del
+  chat, así que funciona sin configurar nada: con solo MyMemory, una nota en
+  chino se lee en español (y al revés) sin tocar ajustes. El botón se ofrece
+  siempre en las notas ajenas porque el cliente no sabe si el servidor tiene
+  proveedor de STT; la comprobación se hace al pulsar (503 → respaldo local).
+- **Llamadas** — `frontend/src/lib/speech.js` (lógica pura) enganchado en
+  `frontend/src/contexts/CallContext.jsx`, con la interfaz en
+  `frontend/src/components/CallOverlay.jsx`.
+
+### En una llamada cada lado reconoce su propia voz
+
+El modelo es emisor/receptor y no "traducir el audio del otro": cada lado
+reconoce **su** micrófono, manda el TEXTO por `call:speech`, y el receptor lo
+traduce a su idioma y lo sintetiza. Nadie reproduce el audio del otro para
+volver a capturarlo. Las razones, por si alguien quiere cambiarlo:
+
+- Mi voz se oye limpia en mi dispositivo; el audio que llega del otro viene
+  comprimido y con eco, y reconocerlo da peor transcripción.
+- Reproducir en alto para capturar con el micrófono falla con auriculares, que es
+  justo cuando más se usa una llamada.
+- El texto no gasta ancho de banda y el otro lo dice con la voz de **su**
+  sistema, que es la que suena bien en su dispositivo.
+
+`call:speech` es el único evento de llamada que el servidor NO reenvía a ciegas:
+valida que sea cadena y lo recorta a 1000 caracteres en
+`backend/src/services/liveSockets.js`, porque el otro lado lo va a decir en voz
+alta. Los demás (`call:offer`, `call:answer`, `call:ice`) sí son opacos.
+
+### La traducción automática del hilo se pide en lote
+
+Al encender el interruptor del hilo, `Messages.jsx` pide **un** lote
+(`POST /api/translate/batch`) con los últimos 30 mensajes en vez de dejar que
+cada burbuja pida el suyo: veinte burbujas serían veinte peticiones y saltarían
+el límite por minuto del servidor. El lote deja las traducciones en la caché de
+`translateClient` y las burbujas las recogen cuando `translateReady` avisa. El
+endpoint acepta 30 como máximo, así que el `slice(-30)` no es decorativo.
+
+### La traducción funciona sin contratar nada
+
+`backend/src/services/translationService.js` tiene un proveedor **sin clave**,
+MyMemory (`mymemoryProvider`). Es el que hace que la app traduzca recién
+instalada, sin que nadie configure una cuenta: `auto` elige deepl → google →
+libretranslate y, si no hay ninguno, cae en MyMemory. Dos detalles que no son
+opcionales:
+
+- **Corta a 500 caracteres** (403 por encima). El proveedor trocea el texto en
+  trozos de 450 y vuelve a unir la traducción; sin eso, todo mensaje largo se
+  quedaría sin traducir.
+- **Contesta 200 con un aviso dentro** cuando se agota la cuota diaria
+  (`responseStatus: 403`). Ese aviso en inglés no puede acabar en la burbuja como
+  si fuera la traducción, así que se detecta y se lanza un 502.
+- El chino se pide como `zh-CN`/`zh-TW`: el servicio no conoce `zh-Hans` y, si se
+  mandara tal cual, no traduciría.
+
+Los tests lo ejercitan contra un servidor falso (`test/fakeTranslator.js`, ruta
+`/mymemory`), nunca contra internet. En `NODE_ENV=test` el proveedor sin clave
+queda apagado salvo que un test lo pida con `{ provider: 'mymemory' }`.
+
+### La traducción en vivo es solo de las llamadas de WhaTaka
+
+`CallOverlay` se pinta en toda la app, así que sin una marca explícita la
+traducción de llamada aparecería también en las que salen del feed. El origen
+viaja con la llamada y se decide en un solo sitio:
+
+- `startCall(target, kind, origin)` (`CallContext`) fija el origen **al empezar**
+  y no cambia en toda la llamada. `callPeerFromChat` en `App.jsx` es el único que
+  pasa `'whataka'`; los demás puntos de llamada (feed, perfil, marcador fuera del
+  chat) pasan `'app'` por defecto.
+- El servidor **normaliza** el origen en `call:invite`: lo que no sea exactamente
+  `whataka` es `app`. Un cliente no puede etiquetar su llamada como del chat para
+  colar la traducción donde no toca. Lo reenvía en `call:incoming`.
+- El receptor **no se fía de lo que reciba**: vuelve a comprobar que sea
+  `whataka` antes de ofrecer la traducción.
+
+El idioma de cada parte sale del **perfil** (`preferredLanguage`), no de lo que
+diga el cliente. El llamante lo manda en `call:incoming` y el servidor lo
+devuelve en `call:ringing`. Con los dos idiomas, `CallContext` calcula
+`needsTranslation` (idiomas distintos) e `isWhatakaCall`, y `CallOverlay` ofrece
+un aviso de un toque para traducir en vez de esperar a que el usuario encuentre
+el botón. Si falta el idioma del otro, `needsTranslation` es falso: es preferible
+callar a sugerir una traducción que puede no hacer falta.
+
+`cleanup` limpia origen e idioma al colgar. Sin eso, la siguiente llamada
+heredaría el "es de WhaTaka" de la anterior y ofrecería traducir donde no toca.
+
+### Una llamada traducida es semi-dúplex, y sin eso entra en bucle
+
+El motor de la traducción en vivo son tres piezas en `frontend/src/lib/speech.js`:
+un reconocedor de mi voz (`createRecognizer`), un altavoz de la traducción
+(`createSpeaker`) y los dos extremos que las unen (`createSpeechSender` y
+`createSpeechReceiver`). El fallo que hay que entender antes de tocar esto es el
+**eco**, porque no se ve leyendo el código y hace la función inservible en cuanto
+se usa sin auriculares:
+
+1. Ana dice algo; el reconocedor de Ana lo convierte en texto y lo manda.
+2. A Li le llega, lo traduce a su idioma y su altavoz lo dice en alto.
+3. **Ese altavoz lo oye el micrófono de Li**, que está abierto. Lo reconoce como
+   si fuera Li hablando y lo reenvía a Ana.
+4. Ana lo traduce y lo dice, y su altavoz lo vuelve a capturar. La llamada repite
+   frases cada vez más deformadas.
+
+Se corta en dos sitios, y los dos hacen falta:
+
+- **El altavoz cierra el micrófono mientras habla.** `createSpeaker` avisa por
+  `onStart`/`onEnd`, y `CallContext` los engancha a `sender.pause()`/`resume()`.
+  Es semi-dúplex a propósito: en una llamada traducida no se puede hablar y oír
+  la síntesis a la vez.
+- **El emisor descarta lo que llegue con el altavoz aún en la boca.** Cerrar el
+  micrófono no basta: el reconocedor tarda un poco en cerrar un resultado final,
+  así que una frase que oyó del altavoz puede llegar después de que este termine.
+  Por eso `createSpeechSender` recibe `isSpeaking` y `pause` deja `paused = true`
+  hasta el `resume`.
+
+Tres detalles que son trampas:
+
+- `stop()` del emisor pone `active = false`. Al apagar la traducción se para
+  primero el emisor y luego el altavoz; el `onEnd` del altavoz llama a `resume`,
+  y sin ese distintivo el micrófono se reabriría justo cuando el usuario acaba de
+  pedir que se cierre.
+- El altavoz lleva un **vigilante** (`setTimeout` al doble de lo que tardaría una
+  persona en decir la frase). Algunos navegadores no disparan `onend`; como
+  `speaking` cierra el micrófono, quedarse en `true` dejaría al usuario mudo el
+  resto de la llamada.
+- Mientras habla la síntesis, `CallOverlay` baja la voz del otro al 15 % en vez
+  de callarla: si se cortara, se perdería el principio de la frase que el otro
+  empieza mientras termina la traducción.
+
+El e2e que cubre todo esto es `frontend/test/e2e-call-translate-live.mjs`.
+Chromium headless no tiene motor de voz, así que instala dobles de
+`webkitSpeechRecognition` y `speechSynthesis` con `addInitScript` (antes de que
+cargue la app, para que `canRecognize`/`canSynthesize` los vean) y comprueba lo
+que sí es real: el cableado de `CallContext`, el envío por `call:speech`, el relay
+del servidor, la traducción de verdad contra la API y la pausa del micrófono.
+
+### La transcripción no deja leer el audio de otro
+
+`POST /api/messages/transcribe` recibe una **ruta relativa** de un adjunto del
+chat, no una URL. `transcriptionService.resolveAttachmentPath` la resuelve
+dentro de la carpeta de adjuntos y rechaza cualquier cosa que se salga de ahí,
+que es lo que cierra el SSRF. Además,
+`messageService.attachmentBelongsToUser` comprueba que el audio está en un
+mensaje de una conversación del que pregunta: sin eso, la ruta del audio se ve en
+el DOM y cualquiera podría transcribir la nota de voz de otro con solo copiarla.
+Los tests de esto están en `backend/test/transcription.test.js`.

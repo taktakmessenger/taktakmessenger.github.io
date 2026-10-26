@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import { userId } from '../lib/user';
+import { formatDuration } from '../lib/voiceNote';
+import { resolveViewerLanguage, normalizeLanguage, languageNativeName } from '../lib/translate';
+import TranslateButton from './TranslateButton';
+import TranslateIcon from './TranslateIcon';
+import { translateBatch } from '../lib/translateClient';
+import VoiceTranscript from './VoiceTranscript';
 import Dialer from './Dialer';
+import VoiceRecorder from './VoiceRecorder';
 
 function initials(person) {
   const name = person?.displayName || person?.username || '?';
@@ -10,11 +18,9 @@ function initials(person) {
 }
 
 // El mismo usuario llega con `_id` desde /users/me y con `id` desde el resto de
-// la API. Sin normalizar, `user.id` es `undefined` y ni se empareja la copia
+// la API. La normalización vive en `lib/user` porque no es cosa solo de este
+// componente: sin ella, `user.id` es `undefined` y ni se empareja la copia
 // optimista (el mensaje se duplica) ni se distingue el lado de la burbuja.
-function userId(person) {
-  return person?._id ?? person?.id ?? null;
-}
 
 // Incorpora un mensaje confirmado por el servidor al hilo sin duplicarlo.
 //
@@ -129,6 +135,21 @@ function Thread({ conversationId, onBack, onCall }) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Traducción del hilo. El idioma del que lee sale de lo que eligió en Ajustes
+  // y, si no eligió nada, del idioma del navegador. El del otro viene con la
+  // conversación, y se usa como pista: en una frase corta ("ok", "sí") es la
+  // única señal fiable que hay.
+  const viewerLanguage = resolveViewerLanguage({ preferred: user?.preferredLanguage });
+  const peerLanguage = normalizeLanguage(peer?.preferredLanguage);
+  // Apagada por defecto, y encendida si esta persona activó la traducción
+  // automática en sus ajustes. Traducir cuesta dinero, así que no se enciende
+  // sola a espaldas de nadie.
+  const [translateOn, setTranslateOn] = useState(Boolean(user?.autoTranslate));
+  // Se pone a `true` cuando el lote de traducción del hilo ya está en la caché.
+  // Las burbujas esperan a esta señal para recoger su traducción: sin ella, una
+  // burbuja ya montada se quedaría con el resultado vacío de la caché.
+  const [translateReady, setTranslateReady] = useState(false);
+
   // Carga inicial del hilo y del interlocutor.
   useEffect(() => {
     let active = true;
@@ -230,6 +251,58 @@ function Thread({ conversationId, onBack, onCall }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
+  // Al encender la traducción del hilo, se piden de una vez los mensajes que ya
+  // están en pantalla. Cada burbuja pediría el suyo al montarse, y veinte
+  // mensajes serían veinte peticiones que saltarían el límite por minuto del
+  // servidor. El lote deja las traducciones en la caché, y las burbujas las
+  // recogen cuando `translateReady` les avisa.
+  //
+  // Los mensajes que llegan después del lote ya no pasan por aquí: los traduce su
+  // propia burbuja al montarse, que es una sola petición.
+  const batchRef = useRef({ key: null, done: false });
+  useEffect(() => {
+    if (!translateOn) return undefined;
+
+    const key = `${conversationId}|${viewerLanguage}|${peerLanguage}|${translateOn}`;
+    if (batchRef.current.key !== key) {
+      batchRef.current = { key, done: false };
+      setTranslateReady(false);
+    }
+    // El lote ya se pidió para este hilo y esta configuración.
+    if (batchRef.current.done) return undefined;
+
+    const texts = messages
+      .filter(
+        (m) =>
+          String(userId(m.sender)) !== String(userId(user)) &&
+          m.text &&
+          String(m.text).trim()
+      )
+      .map((m) => m.text)
+      // El servidor acepta 30 por lote. Un hilo largo se traduce por la cola, que
+      // es lo que el usuario tiene a la vista; lo de más arriba se traduce al
+      // subir, con el botón de cada burbuja.
+      .slice(-30);
+    // Sin mensajes todavía (el hilo acaba de abrirse) no se marca como hecho: se
+    // pide el lote en cuanto lleguen, en vez de quedarse sin traducir.
+    if (texts.length === 0) return undefined;
+
+    batchRef.current.done = true;
+    const token = batchRef.current;
+    translateBatch({ texts, to: viewerLanguage, hint: peerLanguage })
+      .catch(() => {
+        // Un fallo del lote no rompe el hilo: cada burbuja sigue ofreciendo su
+        // botón para traducir a mano.
+      })
+      .finally(() => {
+        // Solo avisa si sigue siendo el lote vigente: si se cambió de hilo
+        // mientras tanto, su resultado ya no pinta nada.
+        if (batchRef.current === token) setTranslateReady(true);
+      });
+
+    return undefined;
+  }, [translateOn, conversationId, viewerLanguage, peerLanguage, messages, user]);
+
   // Sube el archivo elegido y guarda la referencia. Se sube al elegirlo y no al
   // enviar, para que el usuario vea una vista previa y pueda quitar el archivo
   // antes de mandarlo, y para que el envío no dependa de una subida lenta.
@@ -255,6 +328,47 @@ function Thread({ conversationId, onBack, onCall }) {
 
   function clearAttachment() {
     setAttachment(null);
+  }
+
+  // Nota de voz recién grabada: se sube y se envía en un solo gesto, como al
+  // soltar el botón en WhatsApp. No se deja como vista previa pendiente porque
+  // el gesto ya terminó: pedir un segundo toque para "Enviar" rompería la
+  // expectativa de que soltar envía.
+  async function sendVoiceNote(file, durationSeconds) {
+    setError('');
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post('/messages/attachments', form);
+      const note = { ...data.attachment, durationSeconds };
+
+      // Se reutiliza el mismo camino que un mensaje con adjunto: la copia
+      // optimista, el POST y el `mergeMessage`. Duplicar esa lógica para el
+      // audio sería la forma segura de que los ticks se comportaran distinto.
+      const optimistic = {
+        id: `local-${Date.now()}`,
+        conversation: conversationId,
+        sender: { id: userId(user), username: user.username },
+        kind: 'attachment',
+        text: '',
+        attachment: note,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        pending: true,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+
+      const { data: sent } = await api.post(
+        `/messages/conversations/${conversationId}/messages`,
+        { attachment: note }
+      );
+      setMessages((prev) => mergeMessage(prev, sent.message));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
   }
 
   function send(event) {
@@ -339,6 +453,20 @@ function Thread({ conversationId, onBack, onCall }) {
         <div className="thread-call">
           <button
             type="button"
+            className={`btn-secondary translate-toggle ${translateOn ? 'on' : ''}`}
+            onClick={() => setTranslateOn((prev) => !prev)}
+            aria-pressed={translateOn}
+            aria-label={translateOn ? 'Desactivar traducción automática' : 'Activar traducción automática'}
+            title={
+              translateOn
+                ? `Traduciendo a ${languageNativeName(viewerLanguage) || viewerLanguage}`
+                : 'Traducir los mensajes a mi idioma'
+            }
+          >
+            <TranslateIcon size={18} active={translateOn} />
+          </button>
+          <button
+            type="button"
             className="btn-secondary"
             disabled={!peer}
             onClick={() => onCall?.(peer, 'audio')}
@@ -357,6 +485,18 @@ function Thread({ conversationId, onBack, onCall }) {
           </button>
         </div>
       </div>
+
+      {translateOn && (
+        <div className="translate-banner">
+          <TranslateIcon size={16} active />
+          <span>
+            Traducción a {languageNativeName(viewerLanguage) || viewerLanguage}
+            {peerLanguage ? ` · ${peer?.profile?.displayName || `@${peer?.username}`} escribe en ${
+              languageNativeName(peerLanguage) || peerLanguage
+            }` : ''}
+          </span>
+        </div>
+      )}
 
       {error && (
         <p className="error" role="alert">
@@ -399,8 +539,30 @@ function Thread({ conversationId, onBack, onCall }) {
               {showDay && <div className="day-sep"><span>{dayLabel(m.createdAt)}</span></div>}
               <div className={`bubble-row ${mine ? 'mine' : 'theirs'}`}>
                 <div className={`bubble ${m.pending ? 'pending' : ''} ${m.attachment ? 'has-attachment' : ''}`}>
-                  <Attachment attachment={m.attachment} pending={m.pending} />
+                  <Attachment
+                    attachment={m.attachment}
+                    pending={m.pending}
+                    translateTarget={viewerLanguage}
+                    translateHint={peerLanguage}
+                    canTranslate={!mine}
+                  />
                   {m.text && <span className="bubble-text">{m.text}</span>}
+
+                  {/* El botón va en la burbuja del otro: traducir lo que uno
+                      mismo escribió no sirve de nada, y un icono en cada burbuja
+                      propia solo añade ruido al hilo. `auto` traduce solo cuando
+                      el hilo tiene la traducción encendida. */}
+                  {!mine && (
+                    <TranslateButton
+                      text={m.text}
+                      target={viewerLanguage}
+                      hint={peerLanguage}
+                      compact
+                      auto={translateOn}
+                      ready={translateReady}
+                    />
+                  )}
+
                   <span className="bubble-meta">
                     <span className="bubble-time">{clock(m.createdAt)}</span>
                     {mine && <Ticks status={m.pending ? 'pending' : m.status} />}
@@ -446,6 +608,14 @@ function Thread({ conversationId, onBack, onCall }) {
           {uploading ? '⏳' : '📎'}
         </button>
 
+        {/* Nota de voz: mantener pulsado graba, soltar envía. Se desactiva
+            mientras hay texto escrito, porque en ese caso el gesto natural es
+            enviar el texto y no empezar una grabación. */}
+        <VoiceRecorder
+          onRecorded={sendVoiceNote}
+          disabled={uploading || Boolean(text.trim())}
+        />
+
         {attachment && (
           <div className="composer-preview">
             {attachment.kind === 'image' ? (
@@ -486,10 +656,97 @@ function Thread({ conversationId, onBack, onCall }) {
   );
 }
 
+// Reproductor de una nota de voz, con la barra de progreso y el tiempo, como en
+// WhatsApp. Se usa un `<audio>` oculto y se pinta la barra a mano: los controles
+// nativos del navegador no se pueden estilizar y rompen el diseño del chat.
+function VoiceBubble({ attachment, translateTarget, translateHint, canTranslate }) {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Duración: la que guardó el servidor al enviar. Si no la hay (un audio
+  // adjunto a mano), se toma la del propio archivo en cuanto se conoce.
+  const [duration, setDuration] = useState(attachment.durationSeconds || 0);
+
+  function toggle() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      el.pause();
+      return;
+    }
+    // Solo suena una nota a la vez: pausar las demás evita que dos audios se
+    // solapen al ir pulsando por el hilo.
+    document.querySelectorAll('audio[data-voice]').forEach((other) => {
+      if (other !== el) other.pause();
+    });
+    el.play().catch(() => {});
+  }
+
+  const total = duration || 0;
+  const progress = total > 0 ? Math.min(1, elapsed / total) : 0;
+
+  return (
+    <div className="bubble-attachment bubble-voice">
+      <button
+        type="button"
+        className="voice-play"
+        onClick={toggle}
+        aria-label={playing ? 'Pausar nota de voz' : 'Reproducir nota de voz'}
+      >
+        {playing ? '❚❚' : '▶'}
+      </button>
+      <div className="voice-track" aria-hidden="true">
+        <div className="voice-track-fill" style={{ width: `${progress * 100}%` }} />
+      </div>
+      <small className="voice-duration">
+        {formatDuration(playing || elapsed > 0 ? elapsed : total)}
+      </small>
+
+      {/* Transcribir y traducir la nota. Solo en las notas del otro: la propia
+          se sabe lo que dice, y transcribirla gastaría una llamada al proveedor
+          para nada. El botón se ofrece siempre en las notas ajenas porque el
+          cliente no sabe si el servidor tiene proveedor de STT: se intenta
+          primero el servidor y, si no lo hay (503), se cae al reconocimiento del
+          navegador. Cuando ninguna de las dos vías existe, `VoiceTranscript`
+          enseña el motivo en vez de quedarse en blanco. */}
+      {canTranslate && (
+        <VoiceTranscript
+          attachment={attachment}
+          target={translateTarget}
+          hint={translateHint}
+        />
+      )}
+
+      <audio
+        ref={audioRef}
+        data-voice
+        src={attachment.url}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setElapsed(0);
+        }}
+        onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => {
+          const known = e.currentTarget.duration;
+          // `duration` puede llegar como Infinity en algunos webm grabados sin
+          // cabecera de duración; en ese caso se conserva la del servidor.
+          if (Number.isFinite(known) && known > 0) {
+            setDuration((prev) => (prev > 0 ? prev : Math.round(known)));
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 // Adjunto dentro de una burbuja. Cada tipo se pinta como se espera en un chat:
 // la imagen se ve, el vídeo y el audio se reproducen ahí mismo, y el resto se
 // ofrece como descarga con su nombre y tamaño.
-function Attachment({ attachment, pending }) {
+function Attachment({ attachment, pending, translateTarget, translateHint, canTranslate }) {
   if (!attachment) return null;
 
   const url = attachment.url;
@@ -522,11 +779,15 @@ function Attachment({ attachment, pending }) {
   }
 
   if (attachment.kind === 'audio') {
+    // Una nota de voz y un archivo de audio suelto se pintan igual: un
+    // reproductor con barra. La diferencia es solo de dónde salió el archivo.
     return (
-      <div className="bubble-attachment bubble-audio">
-        <span aria-hidden="true">🎤</span>
-        <audio src={url} controls preload="metadata" />
-      </div>
+      <VoiceBubble
+        attachment={attachment}
+        translateTarget={translateTarget}
+        translateHint={translateHint}
+        canTranslate={canTranslate}
+      />
     );
   }
 

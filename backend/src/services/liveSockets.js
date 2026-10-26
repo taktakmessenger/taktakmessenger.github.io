@@ -50,6 +50,13 @@ const voiceRooms = new Map();
 // se adaptan. Se borra cuando la sala se vacía.
 const voiceRoomModes = new Map();
 
+// Anfitrión de cada sala: `room -> userId`. Es el dueño del TAK Creator. El
+// directo de TikTok tiene una ventana más grande para quien lo abre, y para eso
+// el cliente necesita saber quién es. Se fija al crear la sala y no cambia
+// aunque el anfitrión salga y vuelva: la sala sigue siendo suya. Se borra al
+// quedar vacía, como el modo.
+const voiceRoomHosts = new Map();
+
 function voiceMembers(room) {
   const members = voiceRooms.get(room);
   return members ? [...members.values()] : [];
@@ -91,6 +98,7 @@ function leaveVoiceRoom(io, socket, notify = true) {
       // vuelve a decidir (y así una sala puede pasar de malla a SFU cuando el
       // SFU esté disponible).
       voiceRoomModes.delete(room);
+      voiceRoomHosts.delete(room);
     }
   }
 
@@ -406,13 +414,31 @@ function initLiveSockets(server) {
     // beyond requiring an authenticated socket, and it tells the caller the
     // truth about whether the callee is reachable.
 
-    socket.on('call:invite', ({ to, kind, conversationId } = {}) => {
+    socket.on('call:invite', async ({ to, kind, conversationId, origin } = {}) => {
       if (!me || typeof to !== 'string' || to === String(me.id)) return;
       const callKind = kind === 'video' ? 'video' : 'audio';
 
+      // El idioma de cada parte viaja con la llamada. Sin él, la app no puede
+      // saber si hace falta traducir y tendría que preguntarlo al usuario en
+      // cada llamada, que es justo lo que hace que nadie use la función.
+      // Se lee aquí y no en el cliente porque el cliente no puede fiarse del
+      // idioma que le digan: es un dato del perfil, no de la llamada.
+      const [caller, callee] = await Promise.all([
+        User.findById(me.id).select('preferredLanguage').lean().catch(() => null),
+        User.findById(to).select('preferredLanguage').lean().catch(() => null),
+      ]);
+
       const payload = {
-        from: { id: me.id, username: me.username },
+        from: {
+          id: me.id,
+          username: me.username,
+          language: caller?.preferredLanguage || null,
+        },
         kind: callKind,
+        // De dónde salió la llamada. Se reenvía tal cual (validado) porque el
+        // receptor decide con ello si ofrece traducir: la traducción en vivo es
+        // una función de WhaTaka, no del marcador ni del feed.
+        origin: origin === 'whataka' ? 'whataka' : 'app',
         conversationId: typeof conversationId === 'string' ? conversationId : null,
         at: Date.now(),
       };
@@ -432,13 +458,23 @@ function initLiveSockets(server) {
         .fetchSockets()
         .then(async (sockets) => {
           if (sockets.length > 0) {
-            socket.emit('call:ringing', { to, reachable: true });
+            socket.emit('call:ringing', {
+              to,
+              reachable: true,
+              // Idioma del otro para el llamante, que también necesita saber si
+              // le van a entender sin traducir.
+              language: callee?.preferredLanguage || null,
+            });
             io.to(userRoom(to)).emit('call:incoming', payload);
             return;
           }
 
           if (!pushService.isConfigured()) {
-            socket.emit('call:ringing', { to, reachable: false });
+            socket.emit('call:ringing', {
+              to,
+              reachable: false,
+              language: callee?.preferredLanguage || null,
+            });
             return;
           }
 
@@ -461,7 +497,12 @@ function initLiveSockets(server) {
           // `pushed: true` le dice al marcador que, aunque no haya socket, la
           // llamada sí está sonando en el dispositivo del otro. Sin esto el
           // llamante vería "no disponible" mientras el teléfono suena.
-          socket.emit('call:ringing', { to, reachable: false, pushed: sent > 0 });
+          socket.emit('call:ringing', {
+            to,
+            reachable: false,
+            pushed: sent > 0,
+            language: callee?.preferredLanguage || null,
+          });
         })
         .catch(() => socket.emit('call:ringing', { to, reachable: false }));
     });
@@ -499,6 +540,22 @@ function initLiveSockets(server) {
       });
     }
 
+    // Texto reconocido de la voz, para la traducción en vivo de una llamada.
+    //
+    // Va aparte de los eventos de arriba porque NO es opaco: se valida y se
+    // recorta. Es texto que viene de un cliente y que el otro lado va a traducir
+    // y a decir en voz alta, así que no puede llegar sin límite ni sin ser una
+    // cadena. Se limita a 1000 caracteres, que es más que cualquier frase que se
+    // diga de una vez, y evita que un cliente malicioso use el servidor como
+    // amplificador para mandar un texto enorme al otro.
+    socket.on('call:speech', ({ to, text } = {}) => {
+      if (!me || typeof to !== 'string') return;
+      if (typeof text !== 'string') return;
+      const clean = text.trim().slice(0, 1000);
+      if (!clean) return;
+      io.to(userRoom(to)).emit('call:speech', { from: me.id, text: clean });
+    });
+
     // ------------------------------------------------------------------
     // Sala de voz de un TAK Creator (audio en grupo, malla WebRTC)
     // ------------------------------------------------------------------
@@ -529,9 +586,32 @@ function initLiveSockets(server) {
 
         const room = squad.voiceRoom;
 
-        // Aforo opcional. Se comprueba antes de tocar el SFU para no crear un
-        // router que luego se quedaría vacío. Si el SFU no está disponible no
-        // hay aforo que aplicar: en malla el límite real lo pone el cliente.
+        // El anfitrión del directo es el dueño del TAK Creator. Se fija la
+        // primera vez que se abre la sala y se mantiene aunque él salga y
+        // vuelva: la sala es suya mientras exista.
+        const hostId = String(squad.owner);
+        if (!voiceRoomHosts.has(room)) voiceRoomHosts.set(room, hostId);
+        const isHost = String(me.id) === voiceRoomHosts.get(room);
+
+        // Aforo del directo: el anfitrión más hasta `liveGuestLimit` invitados.
+        // Se cuenta por persona (no por pestaña) y sin contar al anfitrión, así
+        // que el límite no cambia porque alguien abra dos pestañas. Se aplica en
+        // cualquier modo: es un límite de producto (la rejilla no da para más),
+        // no de infraestructura.
+        if (!isHost && env.liveGuestLimit > 0) {
+          const guests = voiceMembers(room).filter(
+            (p) => String(p.id) !== hostId
+          ).length;
+          if (guests >= env.liveGuestLimit) {
+            return socket.emit('voice:error', {
+              error: `El directo está lleno (${env.liveGuestLimit} invitados)`,
+            });
+          }
+        }
+
+        // Aforo del SFU, aparte del de producto: protege los puertos de media.
+        // Se comprueba antes de tocar el SFU para no crear un router que luego
+        // se quedaría vacío.
         if (env.sfuMaxParticipants > 0 && sfu.isAvailable()) {
           const already = sfu.getRoom(room)?.hasUser(me.id);
           const current = sfu.participantCount(room);
@@ -588,6 +668,8 @@ function initLiveSockets(server) {
           slug: squad.slug,
           name: squad.name,
           mode,
+          hostId: voiceRoomHosts.get(room),
+          guestLimit: env.liveGuestLimit,
           routerRtpCapabilities,
           producers,
           peers: existing,
@@ -664,15 +746,17 @@ function initLiveSockets(server) {
         });
         ack?.({ ok: true, producerId: id });
 
-        // Avisa a los demás para que se suscriban a este micrófono. Se manda el
-        // userId para que el cliente sepa de quién es el audio antes de tenerlo.
+        // Avisa a los demás para que se suscriban a este flujo. Se manda el
+        // `kind` para que el cliente sepa si es micrófono o cámara antes de
+        // tenerlo, y el `userId` para saber de quién es.
         socket.to(voiceRoom(socket.data.voiceRoom)).emit('voice:new-producer', {
           producerId: id,
           userId: String(me.id),
           username: me.username,
+          kind: kind === 'video' ? 'video' : 'audio',
         });
       } catch {
-        ack?.({ ok: false, error: 'No se pudo publicar tu micrófono' });
+        ack?.({ ok: false, error: 'No se pudo publicar tu cámara o micrófono' });
       }
     });
 
@@ -713,6 +797,16 @@ function initLiveSockets(server) {
       socket
         .to(voiceRoom(socket.data.voiceRoom))
         .emit('voice:peer-mute', { userId: String(me.id), muted: muted !== false });
+    });
+
+    // Cámara apagada. Igual que el micrófono: es un aviso para que los demás
+    // muestren el avatar en vez de un vídeo congelado. Quien apaga la cámara de
+    // verdad es el cliente, desactivando la pista.
+    socket.on('voice:camera', ({ off } = {}) => {
+      if (!me || !socket.data.voiceRoom) return;
+      socket
+        .to(voiceRoom(socket.data.voiceRoom))
+        .emit('voice:peer-camera', { userId: String(me.id), off: off !== false });
     });
 
     // Señalización entre pares de la sala (solo malla). Igual que en las

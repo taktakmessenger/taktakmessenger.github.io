@@ -3,55 +3,24 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import Comments from './Comments';
 import CreatorSheet from './CreatorSheet';
+import ShareSheet from './ShareSheet';
+import ReportDialog from './ReportDialog';
+import BlockDialog from './BlockDialog';
 import { readSoundOn, writeSoundOn, isMuted } from '../lib/sound';
+import { downloadVideo } from '../lib/download';
+import { attachVideoSource } from '../lib/video';
 
 // One vertical, full-screen player. The feed is a snap-scroll column, so each
 // card only plays while it is the visible one.
-function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGift, onHideCreator, onHideTag, onComments, onOpenCreator }) {
+function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGift, onHideCreator, onHideTag, onComments, onOpenCreator, onShare }) {
   const videoRef = useRef(null);
   const startedAt = useRef(0);
   const reported = useRef(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return undefined;
-
-    // Prefer the HLS ladder when the background transcode produced one; fall
-    // back to the original file so a video is playable the moment it uploads.
-    const source = video.hlsUrl || video.videoUrl;
-
-    if (!source?.endsWith('.m3u8')) {
-      el.src = source;
-      return undefined;
-    }
-
-    let hls;
-    let cancelled = false;
-
-    // hls.js is ~500 kB, so it is fetched only when a video actually needs it
-    // instead of weighing down the initial bundle.
-    import('hls.js')
-      .then(({ default: Hls }) => {
-        if (cancelled) return;
-        if (Hls.isSupported()) {
-          hls = new Hls({ enableWorker: true });
-          hls.loadSource(source);
-          hls.attachMedia(el);
-        } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
-          // Safari plays HLS natively.
-          el.src = source;
-        }
-      })
-      .catch(() => {
-        // If the player cannot be loaded, the original file is still playable.
-        el.src = video.videoUrl;
-      });
-
-    return () => {
-      cancelled = true;
-      hls?.destroy();
-    };
+    return attachVideoSource(el, video);
   }, [video.hlsUrl, video.videoUrl]);
 
   // Play only the visible card, and record how long it was watched when it
@@ -184,52 +153,26 @@ function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGi
             <small>{video.views}</small>
           </div>
 
-          {/* Negative signals. Without these the only way to stop seeing a
-              topic is to stop opening the app. */}
+          {/* Compartir, con la flecha curva de TikTok. Abre la hoja con
+              enviar/compartir/copiar enlace/descargar y, al final, las señales
+              negativas que antes vivían en un menú de tres puntos aparte. */}
           <button
             type="button"
             className="reel-action"
-            onClick={() => setMenuOpen((open) => !open)}
-            aria-expanded={menuOpen}
-            aria-label="Más opciones"
+            onClick={() => onShare(video)}
+            aria-label="Compartir vídeo"
+            title="Compartir"
           >
-            <span aria-hidden="true">⋯</span>
+            <span aria-hidden="true">➦</span>
+            <small>Compartir</small>
           </button>
         </div>
       </div>
-
-      {menuOpen && (
-        <div className="reel-menu" role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setMenuOpen(false);
-              onHideTag(video.tags?.[0] ?? video.title);
-            }}
-          >
-            🚫 No me interesa
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setMenuOpen(false);
-              onHideCreator(video.creator);
-            }}
-          >
-            🙈 Ocultar a @{video.creator?.username}
-          </button>
-          <button type="button" role="menuitem" onClick={() => setMenuOpen(false)}>
-            ✖ Cerrar
-          </button>
-        </div>
-      )}
     </section>
   );
 }
 
-export default function Feed({ onGiftRequest, onCall, onMessage, paused = false }) {
+export default function Feed({ onGiftRequest, onCall, onMessage, paused = false, focusVideoId = null }) {
   const { user } = useAuth();
   const [videos, setVideos] = useState([]);
   const [likedIds, setLikedIds] = useState([]);
@@ -243,6 +186,13 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
   // la elección se recuerda entre visitas.
   const [soundOn, setSoundOn] = useState(readSoundOn);
   const [soundBlocked, setSoundBlocked] = useState(false);
+  // Vídeo cuya hoja de compartir está abierta. Es una sola a la vez, así que
+  // vive aquí y no en cada tarjeta.
+  const [shareFor, setShareFor] = useState(null);
+  // Seguridad: qué se está reportando y a quién se está bloqueando. Son dos
+  // diálogos distintos y excluyentes, así que un estado cada uno.
+  const [reportFor, setReportFor] = useState(null);
+  const [blockFor, setBlockFor] = useState(null);
   const containerRef = useRef(null);
 
   const toggleSound = useCallback(() => {
@@ -290,6 +240,51 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
     load();
   }, [load, user]);
 
+  // Enlace compartido (`/?video=<id>`): el vídeo del enlace se trae aparte y se
+  // coloca el primero, para que el reel abierto sea el que se compartió. Se
+  // pide al endpoint de un vídeo suelto y no al feed porque el feed va rankeado
+  // y podría no incluirlo entre los primeros.
+  //
+  // Se guarda en su propio estado en vez de anteponerlo a `videos` al vuelo: la
+  // carga del feed es asíncrona y puede llegar después y pisar la lista, así que
+  // el reordenado se hace en un efecto aparte que se aplica también a cada
+  // cambio de `videos`.
+  const [focusVideo, setFocusVideo] = useState(null);
+  // Si el vídeo del enlace ya se colocó delante. Se separa del efecto para que
+  // "Cargar más" no vuelva a saltar al principio del feed.
+  const focusPlaced = useRef(false);
+
+  useEffect(() => {
+    if (!focusVideoId) return undefined;
+    let active = true;
+    api
+      .get(`/videos/${focusVideoId}`)
+      .then(({ data }) => {
+        if (active && data?.video) setFocusVideo(data.video);
+      })
+      // Un enlace roto o retirado no debe romper el feed: se ignora y se sigue
+      // mostrando lo de siempre.
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [focusVideoId]);
+
+  useEffect(() => {
+    if (!focusVideo) return;
+    setVideos((prev) => {
+      // Ya está delante: no se toca la lista (devolver `prev` evita el bucle,
+      // porque el estado no cambia de identidad).
+      if (prev[0]?._id === focusVideo._id) return prev;
+      return [focusVideo, ...prev.filter((v) => v._id !== focusVideo._id)];
+    });
+    if (!focusPlaced.current) {
+      focusPlaced.current = true;
+      setActiveIndex(0);
+      containerRef.current?.scrollTo({ top: 0 });
+    }
+  }, [focusVideo, videos]);
+
   async function like(video) {
     if (!user) {
       setError('Inicia sesión para dar me gusta');
@@ -307,6 +302,41 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
       setError(err.message);
     }
   }
+
+  // Descarga el vídeo que se está viendo, sea de quien sea. Se pide al servidor
+  // el descriptor y se dispara la bajada; el contador sube al concederse, así
+  // que se refleja aquí sin recargar el feed. Devuelve el descriptor para que
+  // quien lo llamó (la hoja de compartir) pueda decir qué se bajó.
+  async function handleDownload(video) {
+    if (!user) {
+      setError('Inicia sesión para descargar vídeos');
+      return null;
+    }
+    try {
+      const data = await downloadVideo(video._id);
+      setVideos((prev) =>
+        prev.map((v) =>
+          v._id === video._id ? { ...v, downloads: (v.downloads || 0) + 1 } : v
+        )
+      );
+      return data;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    }
+  }
+
+  // El aviso flotante no debe quedarse pegado: el error se retira solo. Sin
+  // esto, un fallo puntual tapaba el vídeo hasta cambiar de pantalla.
+  //
+  // El error de carga del feed (lista vacía) se deja fuera: ese se pinta como
+  // pantalla completa y borrarlo haría que un fallo real se confundiera con
+  // "todavía no hay vídeos".
+  useEffect(() => {
+    if (!error || videos.length === 0) return undefined;
+    const timer = setTimeout(() => setError(''), 4000);
+    return () => clearTimeout(timer);
+  }, [error, videos.length]);
 
   // Negative signals. The video is dropped locally right away so the feed feels
   // instant, and the server is told in the background.
@@ -340,6 +370,23 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
       setError(err.message);
       load();
     }
+  }
+
+  // Al bloquear, los vídeos de esa persona desaparecen del feed en el acto. Se
+  // hace en local y no se recarga: la lista entera saltaría de posición y el
+  // usuario perdería el vídeo que estaba viendo.
+  function blockCreator(creator) {
+    if (!creator?._id) return;
+    setVideos((prev) => prev.filter((v) => v.creator?._id !== creator._id));
+  }
+
+  // El contador de compartidos de la tarjeta sube con lo que responde el
+  // servidor, no sumando uno a ciegas: si el servidor ya lo tenía contado (el
+  // usuario ya había compartido ese vídeo antes), devuelve el mismo número y la
+  // pantalla no miente.
+  function adjustShareCount(video, shares) {
+    if (!video?._id || typeof shares !== 'number') return;
+    setVideos((prev) => prev.map((v) => (v._id === video._id ? { ...v, shares } : v)));
   }
 
   // The card crossing the viewport midpoint becomes the active one.
@@ -392,6 +439,15 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
         </button>
       )}
 
+      {/* Aviso flotante de error (p. ej. descarga fallida). El error general
+          solo se pinta cuando el feed está vacío, así que aquí hace falta uno
+          propio para no dejar un fallo en silencio. */}
+      {error && videos.length > 0 && (
+        <div className="reel-toast error" role="status">
+          {error}
+        </div>
+      )}
+
       <div className="reels" ref={containerRef} onScroll={handleScroll}>
         {videos.map((video, index) => (
           <VideoCard
@@ -407,6 +463,7 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
             onHideTag={hideTag}
             onComments={setCommentsFor}
             onOpenCreator={setCreatorSheet}
+            onShare={setShareFor}
           />
         ))}
 
@@ -447,6 +504,54 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false 
               setCreatorSheet(null);
               onCall?.(creator, kind);
             }}
+            onReport={(creator) => {
+              setCreatorSheet(null);
+              setReportFor({ type: 'user', item: creator });
+            }}
+            onBlock={(creator) => {
+              setCreatorSheet(null);
+              setBlockFor(creator);
+            }}
+          />
+        )}
+
+        {/* Hoja de compartir: enviar, compartir, copiar enlace y descargar, más
+            las señales negativas. Como el resto de hojas, vive dentro del feed
+            para que el vídeo siga detrás y el scroll no se pierda. */}
+        {shareFor && (
+          <ShareSheet
+            video={shareFor}
+            onClose={() => setShareFor(null)}
+            onDownload={handleDownload}
+            onMessage={(creator) => {
+              setShareFor(null);
+              onMessage?.(creator);
+            }}
+            onHideCreator={hideCreator}
+            onHideTag={hideTag}
+            onReport={(video) => setReportFor({ type: 'video', item: video })}
+            onBlock={(creator) => setBlockFor(creator)}
+            onShared={adjustShareCount}
+          />
+        )}
+
+        {/* Reportar un vídeo del feed. El diálogo es el mismo que usa Explorar,
+            para que el motivo elegido sea idéntico venga de donde venga. */}
+        {reportFor && (
+          <ReportDialog
+            targetType={reportFor.type}
+            target={reportFor.item}
+            onClose={() => setReportFor(null)}
+          />
+        )}
+
+        {/* Bloquear desde el feed. Al confirmar, sus vídeos se van de la lista
+            sin recargar. */}
+        {blockFor && (
+          <BlockDialog
+            person={blockFor}
+            onClose={() => setBlockFor(null)}
+            onBlocked={blockCreator}
           />
         )}
       </div>

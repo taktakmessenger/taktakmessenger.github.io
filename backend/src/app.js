@@ -30,6 +30,9 @@ const pushRoutes = require('./routes/push');
 const notificationRoutes = require('./routes/notifications');
 const postRoutes = require('./routes/posts');
 const listingRoutes = require('./routes/listings');
+const searchRoutes = require('./routes/search');
+const safetyRoutes = require('./routes/safety');
+const translateRoutes = require('./routes/translate');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Built as a factory so tests can mount the app without starting a listener.
@@ -153,6 +156,9 @@ function createApp() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/posts', postRoutes);
   app.use('/api/listings', listingRoutes);
+  app.use('/api/search', searchRoutes);
+  app.use('/api/safety', safetyRoutes);
+  app.use('/api/translate', translateRoutes);
 
   // Uploaded originals and their HLS renditions. Read-only.
   //

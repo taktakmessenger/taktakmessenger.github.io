@@ -33,6 +33,15 @@ export function isMuted(active, soundOn) {
   return !active || !soundOn;
 }
 
+// ¿Debe callarse el feed? Se calla cuando ya no es la vista (Facetak) y cuando
+// hay una llamada en curso. Durante una llamada el vídeo de fondo competiría con
+// la voz y, en el móvil, los botones de volumen regularían el vídeo en vez de la
+// llamada: por eso la llamada pausa el feed aunque se siga viendo. Se aísla
+// igual que `isMuted` para poder probar la regla sin DOM.
+export function shouldPauseFeed(showingPosts, callStatus, idleStatus = 'idle') {
+  return Boolean(showingPosts) || callStatus !== idleStatus;
+}
+
 // Salidas de audio disponibles (altavoz del teléfono, auriculares, Bluetooth).
 // `setSinkId` no existe en todos los navegadores: Firefox y buena parte de
 // Safari lo ignoran, así que se degrada a una lista vacía y la app sigue
@@ -54,6 +63,41 @@ export async function applySink(element, deviceId) {
   if (!element || typeof element.setSinkId !== 'function') return false;
   try {
     await element.setSinkId(deviceId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Volumen del audio de una llamada, acotado a [0, 1]. Un valor fuera de rango
+// lo ignora el navegador y el control parecería muerto. Un valor ausente (null,
+// undefined o cadena vacía) se resuelve al máximo: `Number(null)` es 0, y sin
+// este caso un dato que falta silenciaría la llamada en vez de dejarla sonar.
+export function clampVolume(value) {
+  if (value === null || value === undefined || value === '') return 1;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1, Math.max(0, n));
+}
+
+// Aplica el volumen a un elemento de audio o vídeo. Devuelve el valor aplicado.
+export function applyVolume(element, value) {
+  const volume = clampVolume(value);
+  if (element) element.volume = volume;
+  return volume;
+}
+
+// Declara ante el sistema que la página está en una llamada. Con el tipo
+// `play-and-record` el móvil enruta el sonido por el flujo de comunicación, que
+// es el que controlan los botones de volumen del teléfono; sin declararlo, bajar
+// el volumen durante una llamada puede no tener efecto. La API todavía no existe
+// en todos los navegadores (Safari sí, Chrome no): si falta, no se hace nada y
+// la app sigue funcionando.
+export function applyAudioSession(type, nav = globalThis.navigator) {
+  const session = nav?.audioSession;
+  if (!session || typeof session !== 'object') return false;
+  try {
+    session.type = type;
     return true;
   } catch {
     return false;

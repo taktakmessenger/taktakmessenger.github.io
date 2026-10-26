@@ -25,6 +25,15 @@ WORKDIR /app
 # "/bin/sh: python: not found". On Debian the prebuilt binary is used as is and
 # the install finishes in seconds. Do not switch back to alpine without
 # installing python3, make and g++ in the image.
+#
+# ffmpeg es la optimización de vídeo (el HLS y la miniatura). Sin él la subida
+# sigue funcionando, pero el vídeo se sirve tal cual y el creador ve "No se pudo
+# optimizar": `transcodeService.hasFfmpeg()` es false y `/retranscode` responde
+# 503. Se instala aquí y no se asume del host, porque la imagen es lo único que
+# se despliega.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend/package*.json ./
 RUN npm ci --omit=dev || npm install --omit=dev
 

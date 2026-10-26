@@ -174,16 +174,18 @@ export default function Squads() {
 
           <div className="voice-room">
             <div className="voice-room-head">
-              <h4>🎙 Sala de voz</h4>
+              <h4>📡 Directo</h4>
               {voiceRoomState?.slug === active.squad.slug ? (
                 <span className="voice-live">● En directo</span>
               ) : (
-                <span className="muted">Habla con el creator y los demás miembros</span>
+                <span className="muted">
+                  Entra con tu cámara y habla con el creator y los demás miembros
+                </span>
               )}
             </div>
             {voiceRoomState?.slug === active.squad.slug ? (
               <button type="button" className="btn-danger" onClick={leaveVoice}>
-                Salir de la sala de voz
+                Salir del directo
               </button>
             ) : (
               <button
@@ -193,7 +195,7 @@ export default function Squads() {
                   joinVoice({ slug: active.squad.slug, name: active.squad.name })
                 }
               >
-                🎤 Entrar a la sala de voz
+                🎥 Entrar al directo
               </button>
             )}
           </div>

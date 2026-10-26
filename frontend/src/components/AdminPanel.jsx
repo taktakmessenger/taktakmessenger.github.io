@@ -7,31 +7,54 @@ export default function AdminPanel() {
   const [ageQueue, setAgeQueue] = useState([]);
   const [claims, setClaims] = useState([]);
   const [sources, setSources] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [reportFilter, setReportFilter] = useState('open');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes] = await Promise.all([
-        api.get('/admin/stats'),
-        api.get('/admin/videos', { params: { status: 'pending' } }),
-        api.get('/admin/age-verifications', { params: { status: 'pending' } }),
-        api.get('/admin/news-claims'),
-        api.get('/admin/news-sources'),
-      ]);
+      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes] =
+        await Promise.all([
+          api.get('/admin/stats'),
+          api.get('/admin/videos', { params: { status: 'pending' } }),
+          api.get('/admin/age-verifications', { params: { status: 'pending' } }),
+          api.get('/admin/news-claims'),
+          api.get('/admin/news-sources'),
+          api.get('/admin/reports', { params: { status: reportFilter } }),
+        ]);
       setStats(statsRes.data);
       setPending(videosRes.data.videos);
       setAgeQueue(ageRes.data.users);
       setClaims(claimsRes.data.videos);
       setSources(sourcesRes.data.sources);
+      setReports(reportsRes.data.reports);
     } catch (err) {
       setError(err.message);
     }
-  }, []);
+  }, [reportFilter]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Al resolver un reporte se recarga la lista para que desaparezca del filtro
+  // activo (si se está mirando "abiertos"), en vez de dejarlo ahí ya resuelto.
+  async function resolveReport(id, status) {
+    setError('');
+    setNotice('');
+    try {
+      await api.patch(`/admin/reports/${id}`, { status });
+      setNotice(
+        status === 'actioned'
+          ? 'Reporte atendido: se tomaron medidas'
+          : 'Reporte descartado'
+      );
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function moderate(id, status) {
     setError('');
@@ -101,6 +124,84 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* La cola de reportes va primero, después de las cifras: es lo que un
+          moderador abre a mirar. Antes los reportes de los usuarios no llegaban
+          a ninguna parte. */}
+      <div className="moderation">
+        <div className="admin-section-head">
+          <h3>Reportes ({reports.length})</h3>
+          <div className="admin-filters">
+            {[
+              { id: 'open', label: 'Abiertos' },
+              { id: 'reviewing', label: 'En revisión' },
+              { id: 'actioned', label: 'Atendidos' },
+              { id: 'dismissed', label: 'Descartados' },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={`explore-tab ${reportFilter === f.id ? 'active' : ''}`}
+                onClick={() => setReportFilter(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {reports.length === 0 ? (
+          <p>No hay reportes en este estado.</p>
+        ) : (
+          <ul>
+            {reports.map((r) => (
+              <li key={r.id} className="moderation-item">
+                <div>
+                  <strong>
+                    {r.reason} · {r.targetType}
+                  </strong>
+                  <small>
+                    {r.target?.preview ? `“${r.target.preview}” · ` : ''}
+                    {r.target?.owner ? `@${r.target.owner.username} · ` : ''}
+                    reportado por @{r.reporter?.username || 'desconocido'}
+                    {r.details ? ` · “${r.details}”` : ''}
+                  </small>
+                  {!r.target && <small className="muted">El contenido ya no existe.</small>}
+                </div>
+                <div className="moderation-buttons">
+                  {r.status !== 'reviewing' && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => resolveReport(r.id, 'reviewing')}
+                    >
+                      En revisión
+                    </button>
+                  )}
+                  {r.status !== 'actioned' && (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => resolveReport(r.id, 'actioned')}
+                    >
+                      Actuar
+                    </button>
+                  )}
+                  {r.status !== 'dismissed' && (
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={() => resolveReport(r.id, 'dismissed')}
+                    >
+                      Descartar
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="moderation">
         <h3>Cola de moderación ({pending.length})</h3>

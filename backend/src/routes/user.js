@@ -9,6 +9,7 @@ const { asyncHandler, HttpError } = require('../utils/http');
 const phoneService = require('../services/phoneService');
 const notificationService = require('../services/notificationService');
 const env = require('../config/env');
+const { normalizeLanguage } = require('../lib/language');
 
 const router = express.Router();
 
@@ -78,14 +79,36 @@ router.patch(
     body('displayName').optional().trim().isLength({ max: 50 }),
     body('bio').optional().trim().isLength({ max: 300 }),
     body('avatar').optional().trim().isLength({ max: 500 }),
+    // El idioma se valida contra el catálogo y se guarda normalizado: así
+    // 'es-ES' y 'ES' acaban siendo 'es' y la traducción no falla por una
+    // variante regional que el proveedor no entiende.
+    body('preferredLanguage').optional({ nullable: true }).isString().trim(),
+    body('autoTranslate').optional().isBoolean(),
+    body('callCaptions').optional().isBoolean(),
   ],
   validate,
   asyncHandler(async (req, res) => {
-    const { displayName, bio, avatar } = req.body;
+    const { displayName, bio, avatar, autoTranslate, callCaptions } = req.body;
     const update = {};
     if (displayName !== undefined) update['profile.displayName'] = displayName;
     if (bio !== undefined) update['profile.bio'] = bio;
     if (avatar !== undefined) update['profile.avatar'] = avatar;
+    if (autoTranslate !== undefined) update.autoTranslate = autoTranslate;
+    if (callCaptions !== undefined) update.callCaptions = callCaptions;
+
+    if (req.body.preferredLanguage !== undefined) {
+      // Cadena vacía o null significa "sin preferencia": se guarda null en vez
+      // de un código inventado, para que el cliente pueda proponer el idioma
+      // del navegador.
+      const raw = req.body.preferredLanguage;
+      if (raw === null || raw === '') {
+        update.preferredLanguage = null;
+      } else {
+        const normalized = normalizeLanguage(raw);
+        if (!normalized) throw new HttpError(400, 'Idioma no soportado');
+        update.preferredLanguage = normalized;
+      }
+    }
 
     const user = await User.findByIdAndUpdate(req.user.userId, update, {
       new: true,

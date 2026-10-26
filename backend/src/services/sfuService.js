@@ -22,7 +22,12 @@ const env = require('../config/env');
 // puede entrar a una sala) vive en `liveSockets.js`, que es quien llama aquí.
 
 // Códecs que el router anuncia a los navegadores. Opus para voz (48 kHz,
-// estéreo; el navegador baja a mono si quiere). Sin vídeo: la sala es de voz.
+// estéreo; el navegador baja a mono si quiere) y VP8 para el vídeo del directo.
+//
+// VP8 va primero entre los de vídeo a propósito: es el que todo navegador sabe
+// codificar por software, así que un móvil modesto puede publicar su cámara sin
+// depender de un codificador por hardware. H.264 sería más eficiente en algunos
+// equipos, pero no está en todas partes.
 const MEDIA_CODECS = [
   {
     kind: 'audio',
@@ -34,6 +39,17 @@ const MEDIA_CODECS = [
       // móvil sin mejorar la voz. 32 kbps es de sobra para habla.
       'sprop-stereo': 1,
       useinbandfec: 1, // corrección de errores integrada: menos cortes
+    },
+  },
+  {
+    kind: 'video',
+    mimeType: 'video/VP8',
+    clockRate: 90000,
+    parameters: {
+      // Bitrate de arranque del directo. El cliente puede pedir más o menos con
+      // `setMaxSpatialLayer`/`setPreferredLayers`; esto es solo el punto de
+      // partida para que la primera imagen no salga borrosa ni sature la red.
+      'x-google-start-bitrate': 800,
     },
   },
 ];
@@ -337,15 +353,18 @@ function participantCount(roomName) {
   return room ? room.userCount() : 0;
 }
 
-// Los micrófonos vivos de una sala, con su dueño. Se le entrega a quien entra
-// para que sepa a qué audio suscribirse sin esperar a que los demás vuelvan a
-// producir.
+// Los flujos vivos de una sala, con su dueño y su tipo. Se le entrega a quien
+// entra para que sepa a qué suscribirse sin esperar a que los demás vuelvan a
+// producir. El `kind` ('audio' o 'video') es lo que permite al cliente pintar el
+// micrófono y la cámara en sitios distintos: la voz va a un `<audio>` y la
+// imagen a un `<video>`.
 function listProducers(roomName) {
   const room = rooms.get(roomName);
   if (!room) return [];
   return [...room.producers.values()].map(({ producer, userId }) => ({
     producerId: producer.id,
     userId,
+    kind: producer.kind,
   }));
 }
 

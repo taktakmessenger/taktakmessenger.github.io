@@ -5,6 +5,23 @@ const { HttpError } = require('../utils/http');
 
 const MAX_PAGE = 50;
 
+// ¿Hay un bloqueo entre los dos, en cualquier dirección? Se comprueba contra la
+// base y no contra un parámetro para que valga en todos los caminos (abrir el
+// hilo, enviar, llamar) sin que ninguno tenga que acordarse de pasar la lista.
+//
+// Se lee aquí y no se importa `safetyService` para no crear un ciclo: `safety`
+// no necesita mensajes, pero mantener la dependencia en un solo sentido evita
+// que un cambio futuro lo rompa.
+async function blockedBetween(a, b) {
+  const [userA, userB] = await Promise.all([
+    User.findById(a).select('blockedUsers'),
+    User.findById(b).select('blockedUsers'),
+  ]);
+  const aBlockedB = (userA?.blockedUsers || []).some((id) => String(id) === String(b));
+  const bBlockedA = (userB?.blockedUsers || []).some((id) => String(id) === String(a));
+  return aBlockedB || bBlockedA;
+}
+
 // Loads a conversation and asserts the caller is in it. Every read and write in
 // this service goes through here: membership is the only thing separating a
 // private thread from a public one, so it is checked in one place rather than
@@ -34,6 +51,13 @@ async function findOrCreateDirect(userId, otherId) {
   const other = await User.findById(otherId).select('username profile');
   if (!other) throw new HttpError(404, 'Usuario no encontrado');
 
+  // Un bloqueo corta el contacto en las dos direcciones. Se responde 403 con un
+  // mensaje genérico y no se revela quién bloqueó a quién: decir "te bloqueó"
+  // convertiría el error en un canal para saber si alguien te tiene bloqueado.
+  if (await blockedBetween(userId, otherId)) {
+    throw new HttpError(403, 'No puedes iniciar una conversación con este usuario');
+  }
+
   const key = Conversation.directKey(userId, otherId);
 
   const existing = await Conversation.findOne({ key });
@@ -57,7 +81,14 @@ async function listConversations(userId, limit = 30) {
   const conversations = await Conversation.find({ participants: userId })
     .sort({ lastMessageAt: -1 })
     .limit(Math.min(Number(limit) || 30, MAX_PAGE))
-    .populate('participants', 'username profile.displayName profile.avatar lastSeenAt');
+    .populate(
+      'participants',
+      // `preferredLanguage` viaja con cada participante para que el hilo sepa en
+      // qué idioma escribe el otro sin una petición aparte. Es lo que permite
+      // traducir con la pista correcta en frases cortas, donde la detección sola
+      // no acierta.
+      'username profile.displayName profile.avatar lastSeenAt preferredLanguage'
+    );
 
   return conversations.map((c) => {
     const others = c.participants.filter((p) => String(p._id) !== String(userId));
@@ -71,6 +102,7 @@ async function listConversations(userId, limit = 30) {
         displayName: p.profile?.displayName,
         avatar: p.profile?.avatar,
         lastSeenAt: p.lastSeenAt,
+        preferredLanguage: p.preferredLanguage || null,
       })),
       lastMessageAt: c.lastMessageAt,
       lastMessagePreview: c.lastMessagePreview,
@@ -167,6 +199,14 @@ async function sendMessage({ conversationId, senderId, text, attachment }) {
   }
 
   const conversation = await loadForParticipant(conversationId, senderId);
+
+  // El hilo puede existir de antes del bloqueo. Comprobarlo al enviar y no solo
+  // al abrirlo es lo que hace que el bloqueo sirva de verdad: si no, bastaba con
+  // tener una conversación abierta para seguir escribiendo a quien te bloqueó.
+  const other = conversation.participants.find((p) => String(p) !== String(senderId));
+  if (other && (await blockedBetween(senderId, other))) {
+    throw new HttpError(403, 'No puedes enviar mensajes a este usuario');
+  }
 
   const message = await Message.create({
     conversation: conversation._id,
@@ -359,6 +399,23 @@ async function presenceOf(conversationId, userId) {
   }));
 }
 
+// ¿Este adjunto pertenece a una conversación de este usuario?
+//
+// Es la comprobación que impide transcribir el audio de otra persona: sin ella,
+// conocer la ruta de un adjunto bastaría para pedir su transcripción, y las
+// rutas no son secretas (se ven en el DOM del chat). Se busca el mensaje por la
+// URL del adjunto y se exige que el usuario sea participante de su conversación.
+async function ownsAttachment(url, userId) {
+  if (!url) return false;
+  const message = await Message.findOne({ 'attachment.url': String(url) }).select('conversation');
+  if (!message) return false;
+  const conversation = await Conversation.findOne({
+    _id: message.conversation,
+    participants: userId,
+  }).select('_id');
+  return Boolean(conversation);
+}
+
 module.exports = {
   loadForParticipant,
   findOrCreateDirect,
@@ -371,5 +428,6 @@ module.exports = {
   participantsOf,
   presenceOf,
   serializeMessage,
+  ownsAttachment,
   MAX_PAGE,
 };

@@ -45,6 +45,25 @@ async function waitText(page, text, timeout = 30000) {
   return false;
 }
 
+// Abre el primer vídeo de la rejilla del perfil. Las acciones de mantenimiento
+// (exportar, reprocesar) solo existen dentro del reproductor, así que sin este
+// paso no se encontrarían.
+async function openFirstThumb(page) {
+  const clicked = await page.evaluate(() => {
+    const thumb = document.querySelector('.profile-thumb');
+    if (!thumb) return false;
+    thumb.click();
+    return true;
+  });
+  if (!clicked) return false;
+  for (let i = 0; i < 20; i += 1) {
+    const open = await page.evaluate(() => !!document.querySelector('.profile-player'));
+    if (open) return true;
+    await sleep(250);
+  }
+  return false;
+}
+
 (async () => {
   const browser = await puppeteer.launch({
     executablePath: '/usr/bin/chromium',
@@ -87,11 +106,15 @@ async function waitText(page, text, timeout = 30000) {
   const detail = await page.evaluate(() => document.body.innerText.includes('se reproduce en todas partes'));
   check(detail, 'se explica que el vídeo ya se reproduce en todas partes');
 
-  console.log('\n▸ Botón Reprocesar en el perfil (vídeo ya listo)');
+  console.log('\n▸ Acciones del vídeo en el perfil (vídeo ya listo)');
   await clickByText(page, 'Ir al feed');
   await sleep(500);
   await clickByText(page, 'Perfil');
   await sleep(1500);
+  // Las acciones viven dentro del reproductor: hay que abrir la miniatura
+  // antes de buscarlas, porque en la rejilla no se muestran.
+  const openedReady = await openFirstThumb(page);
+  check(openedReady, 'la miniatura del perfil abre el reproductor');
   const hasReprocessReady = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('button')];
     return btns.some((b) => b.textContent.includes('Reprocesar'));
@@ -102,7 +125,7 @@ async function waitText(page, text, timeout = 30000) {
   );
   check(hasExport, 'el botón "Exportar limpio" sigue presente');
 
-  console.log('\n▸ Botón Reprocesar en un vídeo sin HLS');
+  console.log('\n▸ Acciones en un vídeo sin HLS');
   // Un vídeo creado por JSON (sin fichero) nunca tiene hlsUrl: es el caso que
   // debe ofrecer Reprocesar.
   const created = await api('/videos', {
@@ -115,6 +138,7 @@ async function waitText(page, text, timeout = 30000) {
   await sleep(1000);
   await clickByText(page, 'Perfil');
   await sleep(1500);
+  await openFirstThumb(page);
   const hasReprocess = await page.evaluate(() =>
     [...document.querySelectorAll('button')].some((b) => b.textContent.includes('Reprocesar'))
   );

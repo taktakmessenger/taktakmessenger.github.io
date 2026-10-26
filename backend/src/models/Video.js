@@ -36,7 +36,19 @@ const videoSchema = new mongoose.Schema(
     // like counter idempotent; without it a double-click inflated `likes`.
     likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     comments: { type: Number, default: 0, min: 0 },
+    // Compartidos. Antes este campo existía y la barra de acciones lo mostraba,
+    // pero **nada lo incrementaba**: siempre marcaba 0 y el ranking le daba un
+    // peso (el mayor de todos) a una señal que nunca llegaba.
+    //
+    // `sharedBy` lo hace idempotente por persona, como `likedBy`: compartir el
+    // mismo vídeo cinco veces no lo hace cinco veces más relevante. Se pierde
+    // contar un segundo envío a otro amigo, pero a cambio el número no se puede
+    // inflar a mano, que es lo que importa cuando alimenta el ranking.
     shares: { type: Number, default: 0, min: 0 },
+    sharedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    // Descargas concedidas. Cuenta cuánta gente se llevó el archivo, que es una
+    // señal de interés distinta del "me gusta" o de la vista.
+    downloads: { type: Number, default: 0, min: 0 },
     gifts: { type: Number, default: 0, min: 0 },
 
     ttcEarned: { type: Number, default: 0, min: 0 },

@@ -35,13 +35,15 @@ async function getForYouFeed(userId, { limit = 10, page = 1, excludeVideoIds = [
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
   const safePage = Math.max(Number(page) || 1, 1);
 
-  const [preferredTags, seen, hiddenCreators, hiddenTags, adultOk] = await Promise.all([
-    getPreferredTags(userId),
-    getRecentlyWatchedVideoIds(userId),
-    getHiddenCreatorIds(userId),
-    getHiddenTags(userId),
-    canViewAdultContent(userId),
-  ]);
+  const [preferredTags, seen, hiddenCreators, hiddenTags, adultOk, blockedIds] =
+    await Promise.all([
+      getPreferredTags(userId),
+      getRecentlyWatchedVideoIds(userId),
+      getHiddenCreatorIds(userId),
+      getHiddenTags(userId),
+      canViewAdultContent(userId),
+      getBlockedCreatorIds(userId),
+    ]);
 
   const excluded = [...new Set([...seen, ...excludeVideoIds].map(String))]
     .filter((id) => mongoose.isValidObjectId(id))
@@ -53,8 +55,19 @@ async function getForYouFeed(userId, { limit = 10, page = 1, excludeVideoIds = [
   // a ranking bonus would still leak the video into the page.
   if (!adultOk) match.isNSFW = { $ne: true };
   if (excluded.length) match._id = { $nin: excluded };
-  if (hiddenCreators.length) match.creator = { $nin: hiddenCreators };
   if (hiddenTags.length) match.tags = { $nin: hiddenTags };
+
+  // Los creadores ocultos y los bloqueados se filtran juntos: son dos listas
+  // distintas pero un solo campo de Mongo (`creator`). Asignar una después de la
+  // otra borraría la primera, así que se unen antes de escribir el filtro.
+  //
+  // "No me interesa" es una preferencia de recomendación; el bloqueo es una
+  // decisión de seguridad que además corta el contacto. Para el feed el efecto
+  // es el mismo: ese creador no aparece.
+  const mutedCreators = [...new Set([...hiddenCreators, ...blockedIds].map(String))].map(
+    (id) => new mongoose.Types.ObjectId(id)
+  );
+  if (mutedCreators.length) match.creator = { $nin: mutedCreators };
 
   // Fetch a candidate pool far larger than the page, then rank it. The pool is
   // bounded so a huge library cannot make one request unbounded work.
@@ -158,6 +171,24 @@ async function getHiddenTags(userId) {
   return user?.feedPreferences?.hiddenTags ?? [];
 }
 
+// Creadores que este usuario no debe ver en el feed: los que bloqueó **y**
+// los que le bloquearon a él. El bloqueo es mutuo en el resto de la app (el
+// chat y las llamadas lo aplican en las dos direcciones), así que el feed no
+// puede ser el único sitio donde una de las dos partes sigue viendo a la otra:
+// quien bloquea espera desaparecer también del otro lado.
+async function getBlockedCreatorIds(userId) {
+  if (!userId) return [];
+  const [user, blockedBy] = await Promise.all([
+    User.findById(userId).select('blockedUsers'),
+    User.find({ blockedUsers: userId }).select('_id'),
+  ]);
+  const ids = [
+    ...(user?.blockedUsers ?? []).map((id) => String(id)),
+    ...blockedBy.map((u) => String(u._id)),
+  ];
+  return [...new Set(ids)];
+}
+
 // Whether a viewer may be shown adult content. Anonymous visitors and anyone
 // who has not passed age verification are excluded. Exposed so the single-video
 // endpoint can apply the same rule instead of re-deriving it.
@@ -173,6 +204,7 @@ module.exports = {
   getRecentlyWatchedVideoIds,
   getHiddenCreatorIds,
   getHiddenTags,
+  getBlockedCreatorIds,
   canViewAdultContent,
   MIN_WATCH_SECONDS,
   MIN_COMPLETION_RATE,

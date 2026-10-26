@@ -4,8 +4,10 @@
   "description": "Utilidades de desarrollo y verificación de TAK TAK (no forma parte de la app).",
   "scripts": {
     "e2e:ui": "node scripts/e2e-ui.js",
+    "e2e:explore": "node scripts/e2e-explore-safety.js",
     "e2e:calls": "node scripts/e2e-calls.js",
     "e2e:upload": "node scripts/e2e-upload-optimize.js",
+    "e2e:profile-grid": "node scripts/e2e-profile-grid.js",
     "e2e:notifications": "node scripts/e2e-notifications.js",
     "e2e:voice-room": "node scripts/e2e-voice-room.js",
     "smoke": "bash scripts/smoke-api.sh",

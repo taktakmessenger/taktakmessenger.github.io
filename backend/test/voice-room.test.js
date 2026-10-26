@@ -1,3 +1,9 @@
+// Se fija antes de cualquier otro `require`: `config/env` lee NODE_ENV al
+// cargarse, y de él depende que los limitadores de auth se sustituyan por un
+// no-op. Sin esta línea, este fichero carga `app` antes que `helpers`, los
+// limitadores quedan activos y una suite con varios registros acaba en 429.
+process.env.NODE_ENV = 'test';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
@@ -383,6 +389,106 @@ test('no se puede publicar ni consumir sin haber entrado en modo SFU', async () 
         rtpCapabilities: { codecs: [] },
       });
       assert.equal(consumed.ok, false);
+    } finally {
+      a.close();
+    }
+  });
+});
+
+test('el directo anuncia quién es el anfitrión y su aforo', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const member = await registerUser(agent);
+  const squad = await createSquad(agent, owner.token);
+  await agent.post(`/api/squads/${squad.slug}/join`).set('Authorization', `Bearer ${member.token}`);
+
+  await withServer(async (url) => {
+    const a = await connect(url, owner.token);
+    const b = await connect(url, member.token);
+    try {
+      a.emit('voice:join', { slug: squad.slug, mesh: true });
+      const joinedA = await nextEvent(a, 'voice:joined');
+      // El anfitrión es el dueño del creator, y el aforo viaja con la sala para
+      // que el cliente pueda mostrar "N de 20 invitados".
+      assert.equal(joinedA.hostId, owner.user.id);
+      assert.ok(joinedA.guestLimit >= 1, 'la sala debe traer un aforo de invitados');
+
+      b.emit('voice:join', { slug: squad.slug, mesh: true });
+      const joinedB = await nextEvent(b, 'voice:joined');
+      assert.equal(joinedB.hostId, owner.user.id, 'el anfitrión no cambia al entrar otro');
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
+});
+
+test('el directo rechaza al invitado que pasa del aforo', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const member = await registerUser(agent);
+  const squad = await createSquad(agent, owner.token);
+  await agent.post(`/api/squads/${squad.slug}/join`).set('Authorization', `Bearer ${member.token}`);
+
+  const env = require('../src/config/env');
+  const original = env.liveGuestLimit;
+  env.liveGuestLimit = 1;
+
+  await withServer(async (url) => {
+    const a = await connect(url, owner.token);
+    const b = await connect(url, member.token);
+    try {
+      a.emit('voice:join', { slug: squad.slug, mesh: true });
+      await nextEvent(a, 'voice:joined');
+
+      // El invitado ocupa la única plaza.
+      b.emit('voice:join', { slug: squad.slug, mesh: true });
+      await nextEvent(b, 'voice:joined');
+
+      // Un tercero ya no cabe.
+      const third = await registerUser(agent);
+      await agent.post(`/api/squads/${squad.slug}/join`).set('Authorization', `Bearer ${third.token}`);
+      const c = await connect(url, third.token);
+      try {
+        const failed = nextEvent(c, 'voice:error');
+        c.emit('voice:join', { slug: squad.slug, mesh: true });
+        const err = await failed;
+        assert.match(err.error, /lleno/i);
+      } finally {
+        c.close();
+      }
+
+      // El anfitrión no cuenta para el aforo: si vuelve, sigue entrando.
+      a.emit('voice:leave', {});
+      await nextEvent(a, 'voice:left');
+      a.emit('voice:join', { slug: squad.slug, mesh: true });
+      const rejoined = await nextEvent(a, 'voice:joined');
+      assert.equal(rejoined.hostId, owner.user.id);
+    } finally {
+      env.liveGuestLimit = original;
+      a.close();
+      b.close();
+    }
+  });
+});
+
+test('el router del SFU anuncia vídeo además de audio', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const squad = await createSquad(agent, owner.token);
+
+  await withServer(async (url) => {
+    const a = await connect(url, owner.token);
+    try {
+      a.emit('voice:join', { slug: squad.slug });
+      const joined = await nextEvent(a, 'voice:joined');
+      if (!sfu.isAvailable() || joined.mode !== 'sfu') {
+        assert.ok(true, 'SFU no disponible: no aplica');
+        return;
+      }
+      const kinds = new Set((joined.routerRtpCapabilities?.codecs || []).map((c) => c.kind));
+      assert.ok(kinds.has('audio'), 'debe anunciar audio');
+      assert.ok(kinds.has('video'), 'debe anunciar vídeo para el directo');
     } finally {
       a.close();
     }

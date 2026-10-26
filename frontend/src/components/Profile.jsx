@@ -1,6 +1,163 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { attachVideoSource } from '../lib/video';
+import { formatCount } from '../lib/format';
+
+// Rejilla de vídeos del perfil, como en TikTok: miniaturas verticales en tres
+// columnas. Al tocar una se abre el vídeo a pantalla completa, en el mismo
+// reproductor que el feed (no una página aparte), y se puede pasar de uno a otro
+// deslizando. Sin miniatura se enseña el propio vídeo en silencio como cartel,
+// para que una rejilla de vídeos recién subidos no salga vacía.
+function VideoGrid({ videos, onOpen }) {
+  return (
+    <div className="profile-grid">
+      {videos.map((v) => (
+        <button
+          key={v._id}
+          type="button"
+          className="profile-thumb"
+          onClick={() => onOpen(v._id)}
+          aria-label={`Ver "${v.title}"`}
+        >
+          {v.thumbnailUrl ? (
+            <img src={v.thumbnailUrl} alt="" loading="lazy" />
+          ) : (
+            <video
+              className="profile-thumb-fallback"
+              src={v.hlsUrl || v.videoUrl}
+              muted
+              playsInline
+              preload="metadata"
+            />
+          )}
+          <span className="profile-thumb-views">▶ {formatCount(v.views)}</span>
+          {v.transcodeStatus === 'processing' && (
+            <span className="profile-thumb-state">⏳</span>
+          )}
+          {v.transcodeStatus === 'failed' && (
+            <span className="profile-thumb-state">⚠️</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Una diapositiva del reproductor. Solo la activa carga y reproduce el vídeo:
+// las demás muestran su miniatura, para no descargar en vano el perfil entero.
+function PlayerSlide({ video, active, onExport, onReprocess }) {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !active) return undefined;
+    const detach = attachVideoSource(el, video);
+    el.play().catch(() => {});
+    return detach;
+  }, [active, video]);
+
+  const needsOptimize = video.transcodeStatus === 'failed' || !video.hlsUrl;
+
+  return (
+    <section className="profile-player-slide" data-video-id={video._id}>
+      <video
+        ref={videoRef}
+        className="profile-player-video"
+        poster={video.thumbnailUrl}
+        loop
+        playsInline
+        preload={active ? 'auto' : 'none'}
+      />
+      <div className="profile-player-meta">
+        <strong>{video.title}</strong>
+        <small>
+          👁 {formatCount(video.views)} · ❤️ {formatCount(video.likes)}
+          {video.transcodeStatus === 'processing' && ' · ⏳ Optimizando…'}
+        </small>
+        {/* Las acciones de mantenimiento viven aquí, con el vídeo delante, en
+            vez de en una lista aparte: así se exporta o se reprocesa el vídeo
+            que se está viendo, sin buscarlo en una fila. */}
+        <div className="profile-player-actions">
+          {needsOptimize && video.transcodeStatus !== 'processing' && (
+            <button type="button" className="btn-ghost" onClick={() => onReprocess(video)}>
+              🔄 Reprocesar
+            </button>
+          )}
+          <button type="button" className="btn-ghost" onClick={() => onExport(video)}>
+            ⬇️ Exportar limpio
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Reproductor a pantalla completa de un vídeo del perfil. Reutiliza el mismo
+// patrón que el feed (HLS con reserva al original) y permite deslizar entre los
+// vídeos del perfil, como la lista de TikTok.
+function ProfilePlayer({ videos, startId, onClose, onExport, onReprocess }) {
+  const [index, setIndex] = useState(() => {
+    const i = videos.findIndex((v) => v._id === startId);
+    return i < 0 ? 0 : i;
+  });
+  const [muted, setMuted] = useState(true);
+  const containerRef = useRef(null);
+
+  // El silencio se aplica a todos los vídeos del reproductor, no solo al activo,
+  // porque al deslizar el que suena es otro. Se hace desde fuera con un query
+  // porque cada diapositiva gestiona su propio elemento.
+  useEffect(() => {
+    containerRef.current
+      ?.querySelectorAll('video')
+      .forEach((el) => {
+        el.muted = muted;
+      });
+  }, [muted, index]);
+
+  // Al cambiar de vídeo con el deslizamiento, el índice se recalcula desde la
+  // posición real del scroll (no se acumula), así que no se desincroniza.
+  function handleScroll() {
+    const container = containerRef.current;
+    if (!container) return;
+    const next = Math.round(container.scrollTop / container.clientHeight);
+    if (next !== index) setIndex(next);
+  }
+
+  return (
+    <div className="profile-player" role="dialog" aria-modal="true" aria-label="Reproductor de vídeo">
+      <button
+        type="button"
+        className="profile-player-close"
+        onClick={onClose}
+        aria-label="Cerrar el reproductor"
+      >
+        ✕
+      </button>
+      <button
+        type="button"
+        className="profile-player-sound"
+        onClick={() => setMuted((m) => !m)}
+        aria-pressed={!muted}
+        aria-label={muted ? 'Activar sonido' : 'Silenciar vídeo'}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
+
+      <div className="profile-player-scroll" ref={containerRef} onScroll={handleScroll}>
+        {videos.map((v, i) => (
+          <PlayerSlide
+            key={v._id}
+            video={v}
+            active={i === index}
+            onExport={onExport}
+            onReprocess={onReprocess}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Profile({ onNavigate }) {
   const { user, setUser } = useAuth();
@@ -9,6 +166,8 @@ export default function Profile({ onNavigate }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  // Vídeo abierto a pantalla completa, o null si se está viendo la rejilla.
+  const [playing, setPlaying] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -169,40 +328,19 @@ export default function Profile({ onNavigate }) {
         {videos.length === 0 ? (
           <p>Todavía no has subido videos.</p>
         ) : (
-          <ul>
-            {videos.map((v) => (
-              <li key={v._id}>
-                <span>{v.title}</span>
-                <small>
-                  👁 {v.views} · ❤️ {v.likes}
-                  {v.transcodeStatus === 'processing' && ' · ⏳ Optimizando…'}
-                  {v.transcodeStatus === 'failed' && ' · ⚠️ Sin optimizar'}
-                </small>
-                <div className="video-actions">
-                  {(v.transcodeStatus === 'failed' || !v.hlsUrl) &&
-                    v.transcodeStatus !== 'processing' && (
-                      <button
-                        type="button"
-                        className="btn-ghost"
-                        onClick={() => reprocessVideo(v)}
-                        title="Convertir el vídeo para que se reproduzca en todos los navegadores"
-                      >
-                        🔄 Reprocesar
-                      </button>
-                    )}
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() => exportVideo(v)}
-                  >
-                    ⬇️ Exportar limpio
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <VideoGrid videos={videos} onOpen={setPlaying} />
         )}
       </div>
+
+      {playing && (
+        <ProfilePlayer
+          videos={videos}
+          startId={playing}
+          onClose={() => setPlaying(null)}
+          onExport={exportVideo}
+          onReprocess={reprocessVideo}
+        />
+      )}
     </div>
   );
 }

@@ -61,6 +61,26 @@ wait_http() { # url, intentos, etiqueta
   err "$label no respondió en $url"; return 1
 }
 
+# --- 0. ffmpeg (optimización de vídeo) --------------------------------------
+#
+# Sin ffmpeg la subida funciona pero el vídeo no se optimiza: queda el original
+# tal cual y el creador ve "No se pudo optimizar" (el HLS devuelve 503). ffmpeg
+# se instala con apt, que vive en el sistema de archivos del contenedor, no en
+# /workspace: un reinicio del entorno se lo lleva. Por eso se comprueba aquí,
+# en cada arranque, y no una sola vez a mano.
+say "Comprobando ffmpeg (optimización de vídeo)"
+if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
+  ok "ffmpeg $(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')"
+else
+  say "ffmpeg no está; instalándolo (apt-get)"
+  sudo apt-get update -qq >/dev/null 2>&1
+  if sudo apt-get install -y ffmpeg >/dev/null 2>&1; then
+    ok "ffmpeg instalado"
+  else
+    err "no se pudo instalar ffmpeg: los vídeos se subirán sin optimizar"
+  fi
+fi
+
 # --- 1. Docker --------------------------------------------------------------
 say "Comprobando Docker"
 if ! $DOCKER info >/dev/null 2>&1; then

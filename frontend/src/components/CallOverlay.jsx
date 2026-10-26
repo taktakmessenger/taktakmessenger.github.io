@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCall } from '../contexts/CallContext';
-import { listAudioOutputs, applySink } from '../lib/sound';
+import TranslateIcon from './TranslateIcon';
+import { listAudioOutputs, applySink, applyVolume } from '../lib/sound';
 import { dragTo, cornerOf, cornerPosition } from '../lib/pipPosition';
 
 // Texto del estado actual, en lenguaje llano.
@@ -25,12 +26,26 @@ export default function CallOverlay() {
     camOff,
     minimized,
     remoteTick,
+    volume,
     acceptCall,
     rejectCall,
     hangUp,
     toggleMute,
     toggleCamera,
     toggleMinimize,
+    changeVolume,
+    translateLive,
+    translateStatus,
+    translateSpeaking,
+    captions,
+    toggleLiveTranslation,
+    canTranslateCalls,
+    // La traducción en vivo solo se ofrece en las llamadas que salen de WhaTaka.
+    isWhatakaCall,
+    // Si los dos hablan idiomas distintos, se ofrece la traducción de un toque.
+    needsTranslation,
+    peerLanguage,
+    showCallCaptions,
     remoteStreamRef,
     localStreamRef,
   } = useCall();
@@ -212,6 +227,22 @@ export default function CallOverlay() {
     if (earpiece) applySink(audio, earpiece.id);
   }, [speakerOn, outputs, remoteTick, minimized]);
 
+  // El volumen elegido se aplica a la voz que llega. Se hace en un efecto sobre
+  // los dos elementos (el `<audio>` de voz y el `<video>` remoto) porque el
+  // control debe responder en pantalla completa y en la burbuja, y el elemento
+  // de vídeo se vuelve a montar al cambiar entre las dos.
+  //
+  // Mientras el altavoz dice la traducción, la voz del otro baja a un susurro en
+  // vez de callarse del todo: si se cortara, se perdería el principio de la frase
+  // que el otro empieza mientras termina la traducción. La traducción suena
+  // limpia por encima y la voz original queda de fondo, que es lo que hace que se
+  // entienda de quién es cada cosa.
+  useEffect(() => {
+    const level = translateSpeaking ? volume * 0.15 : volume;
+    applyVolume(remoteAudioRef.current, level);
+    applyVolume(remoteVideoRef.current, level);
+  }, [volume, remoteTick, status, minimized, translateSpeaking]);
+
   // Engancha el stream remoto cuando llega. `remoteTick` cambia con cada stream
   // nuevo, así que el efecto se vuelve a ejecutar en la reconexión. `minimized`
   // entra en las dependencias porque al cambiar entre la pantalla completa y la
@@ -220,6 +251,11 @@ export default function CallOverlay() {
     const video = remoteVideoRef.current;
     if (video && remoteStreamRef.current) {
       video.srcObject = remoteStreamRef.current;
+      // El vídeo remoto va SIEMPRE en silencio. La voz se reproduce en el
+      // `<audio>`, que es el que lleva el control de volumen; si el `<video>`
+      // también sonara, se oiría por duplicado y el control de volumen solo
+      // afectaría a una de las dos copias.
+      video.muted = true;
       video.play().catch(() => {});
     }
 
@@ -273,7 +309,7 @@ export default function CallOverlay() {
           aria-label="Volver a la llamada"
         >
           {kind === 'video' ? (
-            <video ref={remoteVideoRef} className="call-bubble-video" autoPlay playsInline />
+            <video ref={remoteVideoRef} className="call-bubble-video" autoPlay playsInline muted />
           ) : (
             <span className="call-bubble-avatar">
               {peer?.username?.slice(0, 2).toUpperCase() || '??'}
@@ -298,7 +334,7 @@ export default function CallOverlay() {
         <audio ref={remoteAudioRef} autoPlay playsInline />
 
         {kind === 'video' && isActive ? (
-          <video ref={remoteVideoRef} className="call-remote" autoPlay playsInline />
+          <video ref={remoteVideoRef} className="call-remote" autoPlay playsInline muted />
         ) : (
           <div className="call-avatar">
             <span>{peer?.username?.slice(0, 2).toUpperCase() || '??'}</span>
@@ -333,6 +369,66 @@ export default function CallOverlay() {
           {error && <small className="error">{error}</small>}
           {!error && notice && <small className="notice">{notice}</small>}
         </div>
+
+        {/* Aviso de traducción. Cuando los dos hablan idiomas distintos, se
+            ofrece traducir la llamada con un toque en vez de esperar a que cada
+            uno encuentre el botón. Es lo que hace usable la función: quien
+            recibe una llamada en un idioma que no habla necesita saber que puede
+            entenderla, y saberlo en ese momento, no después. */}
+        {isWhatakaCall && needsTranslation && !translateLive && status !== 'incoming' && (
+          <div className="call-translate-prompt">
+            <span>
+              Habla otro idioma. ¿Traducir la llamada?
+            </span>
+            <button
+              type="button"
+              className="call-translate-accept"
+              onClick={toggleLiveTranslation}
+              disabled={!canTranslateCalls}
+              title={
+                canTranslateCalls
+                  ? 'Traducir la llamada en vivo'
+                  : 'Tu navegador no permite traducir llamadas'
+              }
+            >
+              <TranslateIcon size={16} active />
+              Traducir
+            </button>
+          </div>
+        )}
+
+        {/* Subtítulos de la traducción en vivo. Se enseñan las dos versiones:
+            el original, para poder comprobar qué se dijo de verdad, y la
+            traducción, que es lo que se está oyendo por el altavoz. Solo la
+            traducción sería una versión de lo dicho sin forma de verificarla. */}
+        {translateLive && showCallCaptions && captions && (
+          <div className="call-captions" role="status" aria-live="polite">
+            <span className="call-caption-original">{captions.original}</span>
+            {captions.translated && (
+              <span className="call-caption-translated">{captions.translated}</span>
+            )}
+          </div>
+        )}
+
+        {/* Control de volumen de la voz que se oye. Existe porque en una llamada
+            por navegador el sonido remoto es un MediaStream y en varios móviles
+            los botones del teléfono no lo alcanzan: sin este control, la única
+            forma de bajar el volumen sería colgar. Solo con la llamada en curso;
+            durante el timbrado no hay voz que regular. */}
+        {isActive && (
+          <div className="call-volume">
+            <span aria-hidden="true">{volume === 0 ? '🔇' : '🔊'}</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={volume}
+              onChange={(e) => changeVolume(e.target.value)}
+              aria-label="Volumen de la llamada"
+            />
+          </div>
+        )}
       </div>
 
       <div className="call-actions">
@@ -378,6 +474,32 @@ export default function CallOverlay() {
                 aria-label={speakerOn ? 'Desactivar altavoz' : 'Activar altavoz'}
               >
                 {speakerOn ? '🔊' : '📞'}
+              </button>
+            )}
+
+            {/* Traducir la llamada en vivo. Solo en las llamadas que nacieron en
+                WhaTaka: la función es del chat, y ofrecerla en una llamada que
+                salió del feed prometería algo que nadie pidió. Además, solo con
+                la llamada en curso (no durante el timbrado, no hay voz que
+                traducir) y solo si el navegador puede oír y hablar; si no, se
+                desactiva con su motivo en el `title` en vez de ofrecer un botón
+                que no hace nada. */}
+            {isActive && isWhatakaCall && (
+              <button
+                type="button"
+                className={`call-btn ${translateLive ? 'on' : ''}`}
+                onClick={toggleLiveTranslation}
+                disabled={!canTranslateCalls}
+                aria-pressed={translateLive}
+                title={
+                  canTranslateCalls
+                    ? 'Traducir la llamada en vivo'
+                    : 'Tu navegador no permite traducir llamadas'
+                }
+                aria-label="Traducir la llamada en vivo"
+              >
+                <TranslateIcon size={20} active={translateLive} />
+                {translateStatus === 'listening' && <span className="call-btn-dot" />}
               </button>
             )}
 

@@ -22,7 +22,12 @@ import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
 import ConnectionBanner from './components/ConnectionBanner';
 import VoiceRoomBar from './components/VoiceRoomBar';
+import VoiceRoomAudio from './components/VoiceRoomAudio';
+import LiveStage from './components/LiveStage';
 import Activity from './components/Activity';
+import Explore from './components/Explore';
+import BlockedUsers from './components/BlockedUsers';
+import PublicProfile from './components/PublicProfile';
 import CoinStore from './components/CoinStore';
 import PaymentResult from './components/PaymentResult';
 import PaymentMethods from './components/PaymentMethods';
@@ -149,6 +154,14 @@ function Shell() {
   // desde el marcador. Se muestra una vez y se recuerda el descarte para no
   // insistir en cada inicio de sesión.
   const [phonePrompt, setPhonePrompt] = useState(false);
+  // Vídeo que hay que abrir al arrancar, cuando se llega por un enlace
+  // compartido (`/?video=<id>`). Se pasa al feed, que lo coloca el primero.
+  const [focusVideoId, setFocusVideoId] = useState(null);
+  // Perfil público que se está mirando desde Explorar. Se guarda el nombre de
+  // usuario, no el objeto: así el perfil se recarga solo si cambia de dueño.
+  const [profileUsername, setProfileUsername] = useState(null);
+  // Término con el que reabrir Explorar al pulsar una etiqueta.
+  const [exploreQuery, setExploreQuery] = useState('');
   const { user, loading } = useAuth();
   const { startCall } = useCall();
 
@@ -190,6 +203,14 @@ function Shell() {
       setView('metodos-pago');
     }
     if (target === 'metodos-pago') setView('metodos-pago');
+    // Enlace compartido de un vídeo (`/?video=<id>`). Se guarda el id y se deja
+    // el feed como vista: el feed lo abre él mismo al cargar. No se cambia la
+    // URL después, para no ensuciar el historial del navegador.
+    const videoId = params.get('video');
+    if (videoId) {
+      setFocusVideoId(videoId);
+      setView('feed');
+    }
   }, []);
 
   function dismissPhonePrompt() {
@@ -209,12 +230,20 @@ function Shell() {
   // error anterior para que un fallo viejo no se confunda con el estado de la
   // llamada nueva.
   const callPeer = useCallback(
-    (person, kind) => {
+    (person, kind, origin = 'app') => {
       if (person?.id || person?._id) {
-        startCall({ ...person, id: person.id || person._id }, kind);
+        startCall({ ...person, id: person.id || person._id }, kind, origin);
       }
     },
     [startCall]
+  );
+
+  // Llamar desde WhaTaka. El origen no es decorativo: la traducción en vivo solo
+  // se ofrece en las llamadas que salen del chat, así que la pantalla de llamada
+  // necesita saber de dónde vino.
+  const callPeerFromChat = useCallback(
+    (person, kind) => callPeer(person, kind, 'whataka'),
+    [callPeer]
   );
 
   // Abrir el chat con un creador concreto desde el reel.
@@ -313,12 +342,44 @@ function Shell() {
         return <Wall onOpenProfile={() => setView('profile')} onMessage={messageCreator} />;
       case 'health':
         return <AccountHealth onBack={() => setView('settings')} />;
+      case 'blocked':
+        return <BlockedUsers onBack={() => setView('settings')} />;
+      case 'explore':
+        return (
+          <Explore
+            initialQuery={exploreQuery}
+            onOpenProfile={(person) => {
+              setProfileUsername(person?.username || null);
+              setView('public-profile');
+            }}
+            onOpenVideo={(video) => {
+              setFocusVideoId(video.id || video._id);
+              setView('feed');
+            }}
+            onOpenTag={(tag) => {
+              // Buscar una etiqueta es buscar por ella: se reabre Explorar con
+              // el término puesto en lugar de mantener un feed por etiqueta, que
+              // sería una pantalla más para el mismo resultado.
+              setExploreQuery(tag);
+              setView('explore');
+            }}
+          />
+        );
+      case 'public-profile':
+        return (
+          <PublicProfile
+            username={profileUsername}
+            onBack={() => setView('explore')}
+            onMessage={messageCreator}
+            onCall={callPeer}
+          />
+        );
       case 'verification':
         return <Verification onBack={() => setView('settings')} />;
       case 'messages':
         return (
           <Messages
-            onCall={callPeer}
+            onCall={callPeerFromChat}
             initialUser={chatTarget}
             onConsumeInitialUser={() => setChatTarget(null)}
           />
@@ -345,6 +406,7 @@ function Shell() {
             onCall={callPeer}
             onMessage={messageCreator}
             onOpenProfile={() => setView('profile')}
+            focusVideoId={focusVideoId}
           />
         );
     }
@@ -378,6 +440,17 @@ function Shell() {
           desmontara al cambiar de pestaña, el audio remoto se cortaría. Es lo
           que permite seguir en el feed mientras hablas con tu creator. */}
       {user && <VoiceRoomBar />}
+
+      {/* El sonido del directo, en su propio componente siempre montado. No
+          puede colgar ni de la barra (que se oculta al abrir la rejilla) ni de
+          la rejilla (que se cierra al minimizar): en los dos casos el elemento
+          se desmontaría y la voz se cortaría. */}
+      {user && <VoiceRoomAudio />}
+
+      {/* El directo a pantalla completa (rejilla tipo TikTok) también vive fuera
+          de las vistas, para que la sala no se desmonte al navegar. Cuando se
+          minimiza, la barra de arriba sigue mostrando el estado. */}
+      {user && <LiveStage />}
 
       {/* Se ofrece una sola vez tras entrar con correo o Google, porque esas
           cuentas no tienen teléfono y sin él no se las puede llamar por número.

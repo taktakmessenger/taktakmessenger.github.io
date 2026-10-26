@@ -120,6 +120,30 @@ const userSchema = new mongoose.Schema(
       hiddenCreators: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
       hiddenTags: [{ type: String, trim: true, maxlength: 30 }],
     },
+
+    // Cuentas bloqueadas por este usuario. Es distinto de `hiddenCreators`: una
+    // cosa es "no quiero ver sus vídeos en el feed" (una preferencia de
+    // recomendación) y otra "no quiero volver a saber de esta persona" (una
+    // decisión de seguridad). El bloqueo corta además el chat y las llamadas,
+    // por eso vive en su propio campo y no se mezcla con el feed.
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+    // Idioma en el que esta persona quiere leer y oír a los demás. Es lo que
+    // hace que la traducción de WhaTaka sirva para algo: quien llama o escribe
+    // no elige el idioma del otro, lo lee el destinatario de aquí.
+    //
+    // Se guarda como código canónico de `lib/language` ('es', 'en', 'zh-Hans').
+    // Vacío significa "no lo he elegido": en ese caso el cliente propone el
+    // idioma del navegador y la traducción usa ese como destino, en lugar de
+    // forzar un idioma que quizá no habla.
+    preferredLanguage: { type: String, default: null, trim: true },
+    // Si quiere que WhaTaka traduzca sola los mensajes y las llamadas que no
+    // estén en su idioma, sin tener que pulsar el botón cada vez. Apagado por
+    // defecto: traducir cuesta dinero y no se activa a espaldas de nadie.
+    autoTranslate: { type: Boolean, default: false },
+    // Si quiere subtítulos en las llamadas traducidas. Se puede querer oír la
+    // voz original con subtítulos, o solo la traducida.
+    callCaptions: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import Feed from './Feed';
 import Wall from './Wall';
+import { useCall } from '../contexts/CallContext';
+import { shouldPauseFeed } from '../lib/sound';
 
 // Inicio reúne las dos caras públicas de TAK TAK en un mismo sitio: el feed
 // vertical de vídeos (lo primero, como en TikTok) y las publicaciones de Facetak.
@@ -15,6 +17,12 @@ import Wall from './Wall';
 export default function Home(props) {
   const [tab, setTab] = useState('videos');
   const showingPosts = tab === 'posts';
+  // Durante una llamada el feed se pausa, como en TikTok: el vídeo de fondo
+  // seguiría sonando y compitiendo con la voz de la llamada, y en el móvil los
+  // botones de volumen acabarían regulando el vídeo en vez de la llamada.
+  const { status } = useCall();
+  // El feed se pausa por estar en Facetak o por haber una llamada en curso.
+  const feedPaused = shouldPauseFeed(showingPosts, status);
 
   return (
     <div className="home">
@@ -40,7 +48,7 @@ export default function Home(props) {
       </div>
 
       <div className="home-pane" hidden={showingPosts}>
-        <Feed {...props} paused={showingPosts} />
+        <Feed {...props} paused={feedPaused} />
       </div>
 
       {showingPosts && (

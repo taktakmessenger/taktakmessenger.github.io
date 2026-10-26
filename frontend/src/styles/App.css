@@ -523,6 +523,172 @@
 }
 
 /* ------------------------------------------------------------------
+   Rejilla de vídeos del perfil (estilo TikTok)
+   ------------------------------------------------------------------
+   Miniaturas verticales en tres columnas, con la proporción de un vídeo de
+   móvil. La proporción fija evita el salto de altura mientras cargan las
+   imágenes: sin ella, la rejilla crecería a medida que llegan las miniaturas. */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+
+.profile-thumb {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+}
+
+.profile-thumb img,
+.profile-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-thumb::after {
+  /* Velo inferior: sobre una miniatura clara, el contador en blanco no se
+     leería sin él. */
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+  pointer-events: none;
+}
+
+.profile-thumb-views,
+.profile-thumb-state {
+  position: absolute;
+  z-index: 1;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.profile-thumb-views {
+  left: 0.35rem;
+  bottom: 0.3rem;
+}
+
+.profile-thumb-state {
+  right: 0.35rem;
+  top: 0.3rem;
+}
+
+.profile-thumb:hover img,
+.profile-thumb:hover .profile-thumb-fallback {
+  transform: scale(1.04);
+  transition: transform 0.2s ease;
+}
+
+/* ------------------------------------------------------------------
+   Reproductor a pantalla completa del perfil
+   ------------------------------------------------------------------
+   Cubre la pantalla entera, por encima de la barra inferior, como al abrir un
+   vídeo en TikTok. El desplazamiento es por vídeo (snap), para pasar de uno a
+   otro con un gesto. */
+.profile-player {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: #000;
+}
+
+.profile-player-scroll {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+
+.profile-player-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.profile-player-slide {
+  position: relative;
+  height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.profile-player-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.profile-player-meta {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.2rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom));
+  color: #fff;
+  background: linear-gradient(transparent, rgba(7, 7, 13, 0.9));
+}
+
+.profile-player-meta strong {
+  font-size: 1.05rem;
+}
+
+.profile-player-meta small {
+  color: var(--muted);
+}
+
+.profile-player-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+
+/* Los controles flotan sobre el vídeo, así que se separan del borde para no
+   chocar con el recorte redondeado de la pantalla. */
+.profile-player-close,
+.profile-player-sound {
+  position: absolute;
+  top: calc(0.9rem + env(safe-area-inset-top));
+  z-index: 2;
+  width: 2.6rem;
+  height: 2.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.6);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.profile-player-close {
+  left: 0.9rem;
+}
+
+.profile-player-sound {
+  right: 0.9rem;
+}
+
+/* ------------------------------------------------------------------
    TAK Squads
    ------------------------------------------------------------------ */
 .squad-form,
@@ -843,40 +1009,34 @@
   background: rgba(176, 75, 251, 0.55);
 }
 
-/* Menú de señales negativas ("no me interesa", ocultar creador). */
-.reel-menu {
-  position: absolute;
-  right: 1.2rem;
-  bottom: 9rem;
-  display: flex;
-  flex-direction: column;
-  min-width: 13rem;
-  background: rgba(13, 10, 26, 0.97);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  overflow: hidden;
-  z-index: 5;
-  box-shadow: var(--shadow);
-}
-
-.reel-menu button {
-  background: none;
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 0.8rem 1rem;
-  text-align: left;
-}
-
-.reel-menu button:hover {
-  background: rgba(176, 75, 251, 0.35);
-}
-
 .reel-load {
   display: flex;
   justify-content: center;
   padding: 1.5rem;
+}
+
+/* Aviso flotante del feed (confirmación de descarga o error). Se coloca sobre
+   la barra inferior y por debajo del overlay de llamada. */
+.reel-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.2rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(90vw, 26rem);
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.92);
+  backdrop-filter: blur(12px);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.reel-toast.error {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* ------------------------------------------------------------------
@@ -1638,6 +1798,27 @@
   max-width: 16rem;
 }
 
+/* Control de volumen de la voz remota. Se separa de la info para que no parezca
+   parte del texto del estado, y se limita el ancho para que el deslizador no
+   cruce toda la pantalla. */
+.call-volume {
+  position: absolute;
+  bottom: 4.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.call-volume input[type='range'] {
+  width: 9rem;
+  accent-color: var(--primary);
+}
+
 .call-actions {
   display: flex;
   gap: 0.7rem;
@@ -1909,6 +2090,251 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   Directo del creator (rejilla tipo TikTok)
+   ------------------------------------------------------------------
+   El anfitrión ocupa la parte de arriba con una ventana algo más grande que
+   las demás; los invitados se reparten debajo en una rejilla que se adapta a
+   cuántos haya. Todo dentro de una capa fija, sobre el resto de la app. */
+.live-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0d0a1a 0%, #150a24 55%, #1a0f2e 100%);
+  animation: live-stage-in 0.22s ease-out;
+}
+
+@keyframes live-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.live-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: calc(0.7rem + env(safe-area-inset-top)) 0.9rem 0.7rem;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: linear-gradient(120deg, var(--pink), var(--primary));
+  box-shadow: 0 0 18px -4px var(--glow-purple);
+  flex-shrink: 0;
+}
+
+.live-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: voice-pulse 1.6s ease-in-out infinite;
+}
+
+.live-stage-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.live-stage-title strong {
+  font-size: 0.98rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-stage-title small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.live-stage-min {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.live-stage-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  overflow-y: auto;
+}
+
+/* Ventanas. La base es la misma para el anfitrión y para los invitados; el
+   modificador `.host` es lo que la agranda un poco, como se pidió. */
+.live-tile {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #05030c;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+}
+
+.live-tile.host {
+  /* Un punto más grande que las demás ventanas: ocupa el ancho entero y una
+     franja alta de la pantalla, mientras que los invitados van en rejilla. La
+     altura se mide en `vh` y no con `aspect-ratio` porque a ancho completo una
+     proporción 3:4 se comería la pantalla entera en un móvil. */
+  width: 100%;
+  height: clamp(200px, 42vh, 420px);
+  flex-shrink: 0;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 26px -10px var(--glow-cyan);
+}
+
+.live-tile.self {
+  border-color: var(--accent-strong);
+}
+
+.live-tile.empty {
+  color: var(--muted);
+}
+
+.live-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.live-tile-avatar {
+  width: 46%;
+  max-width: 120px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+}
+
+.live-tile-name {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(5, 3, 12, 0.66);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-tile-host-badge {
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0d0a1a;
+  background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+}
+
+.live-tile-muted {
+  font-size: 0.72rem;
+}
+
+/* Rejilla de invitados. `--live-cols` la fija el componente según cuántos
+   haya, para que cada ventana sea lo más grande posible. */
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--live-cols, 2), 1fr);
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.live-grid .live-tile {
+  aspect-ratio: 3 / 4;
+}
+
+.live-stage-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.7rem 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+}
+
+.live-ctrl {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1.25rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.live-ctrl.on {
+  background: rgba(255, 92, 138, 0.18);
+  border-color: var(--danger);
+}
+
+.live-ctrl.end {
+  background: rgba(255, 45, 141, 0.2);
+  border-color: var(--pink);
+}
+
+.live-ctrl:active {
+  transform: scale(0.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-stage,
+  .live-badge-dot {
+    animation: none;
+  }
+}
+
 .call-bubble-video {
   width: 54px;
   height: 54px;
@@ -2053,6 +2479,145 @@
   margin: 0.7rem 0 0;
   text-align: center;
   font-size: 0.85rem;
+}
+
+/* Hoja de compartir (la flecha curva del reel). Reutiliza el mismo telón y la
+   misma animación de subida que la hoja del creador: son el mismo gesto. */
+.share-sheet {
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(13, 10, 26, 0.98), rgba(7, 7, 13, 0.99));
+  border-top: 1px solid var(--border-strong);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow);
+  animation: comments-rise 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-sheet {
+    animation: none;
+  }
+}
+
+.share-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+
+.share-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.share-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 0.3rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.share-option:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--surface-2);
+}
+
+.share-option:disabled {
+  opacity: 0.45;
+}
+
+.share-option small {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.share-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.share-subtitle {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Fila de contactos recientes ("Enviar a"), con desplazamiento horizontal. */
+.share-friends {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.3rem;
+  scrollbar-width: none;
+}
+
+.share-friends::-webkit-scrollbar {
+  display: none;
+}
+
+.share-friend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: var(--text);
+  width: 4.2rem;
+}
+
+.share-friend:disabled {
+  opacity: 0.5;
+}
+
+.share-friend small {
+  font-size: 0.68rem;
+  color: var(--muted);
+  max-width: 4.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Señales negativas, al final de la hoja y separadas por una línea. */
+.share-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.share-rows button {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.75rem 0.2rem;
+  text-align: left;
+}
+
+.share-rows button:hover {
+  background: rgba(176, 75, 251, 0.2);
+}
+
+.share-notice {
+  margin: 0.7rem 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--accent);
 }
 
 /* El nombre del creador en el reel: parece texto, pero es un botón. */
@@ -3130,6 +3695,48 @@
 
 .settings-push-btn {
   width: 100%;
+}
+
+/* Selector de idioma. Se limita el ancho y se permite encoger porque la lista
+   tiene nombres largos ("Chino simplificado · 简体中文") que si no empujan el
+   resto de la fila fuera de la pantalla en un móvil. */
+.settings-select {
+  max-width: 60%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-solid);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.settings-select:disabled {
+  opacity: 0.6;
+}
+
+/* Interruptor de texto: "Activada" en turquesa cuando está encendido. Es texto
+   y no un deslizador porque hay que poder leer el estado sin interpretarlo. */
+.settings-toggle {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.settings-toggle.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(0, 247, 212, 0.08);
+}
+
+.settings-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Aviso para activar las notificaciones: una tarjeta flotante sobre el feed,
@@ -4608,4 +5215,807 @@
 @keyframes connection-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }
+}
+
+/* ------------------------------------------------------------------
+   Explorar: búsqueda de personas, vídeos y etiquetas
+   ------------------------------------------------------------------ */
+.explore {
+  padding: 1rem 1rem calc(var(--tabbar-h) + 1.5rem);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.explore-head h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.explore-search {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem 0.35rem 1rem;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  margin-bottom: 0.75rem;
+}
+
+.explore-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 1rem;
+  padding: 0.5rem 0;
+}
+
+.explore-search input:focus {
+  outline: none;
+}
+
+.explore-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
+  scrollbar-width: none;
+}
+
+.explore-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.explore-tab {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.explore-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.explore-empty {
+  padding: 2rem 0.5rem;
+  text-align: center;
+}
+
+.explore-section {
+  margin-bottom: 1.25rem;
+}
+
+.explore-section h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.explore-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.explore-tag {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: rgba(0, 247, 212, 0.08);
+  color: var(--accent);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.explore-tag small {
+  color: var(--muted);
+}
+
+.search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search-user,
+.search-video {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.search-user-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.search-user-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.search-user-id strong {
+  color: var(--text);
+}
+
+.search-user-id small {
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-video-thumb {
+  position: relative;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 84px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: #000;
+  cursor: pointer;
+}
+
+.search-video-thumb img,
+.search-video-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-video-pause {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 1.1rem;
+}
+
+.search-video-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.search-video-title {
+  text-align: left;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.search-video-body small {
+  font-size: 0.78rem;
+}
+
+.search-video-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* ------------------------------------------------------------------
+   Reportar y bloquear
+   ------------------------------------------------------------------ */
+.btn-link.danger,
+.btn-ghost.danger,
+.share-rows button.danger {
+  color: var(--danger);
+}
+
+.report-dialog,
+.confirm-dialog {
+  width: min(480px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 1.1rem;
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.report-help {
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+
+.report-reasons {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.report-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.report-reason.selected {
+  border-color: var(--danger);
+  background: rgba(255, 92, 138, 0.08);
+}
+
+.report-reason input {
+  accent-color: var(--danger);
+}
+
+.report-details {
+  width: 100%;
+  resize: vertical;
+  padding: 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: inherit;
+  margin-bottom: 0.75rem;
+}
+
+.report-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.report-done {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.report-block-link {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.btn-primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.creator-sheet-safety {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 0.85rem;
+}
+
+.blocked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.blocked-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.blocked-id {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.blocked-id small {
+  font-size: 0.78rem;
+}
+
+/* ------------------------------------------------------------------
+   Notas de voz
+   ------------------------------------------------------------------ */
+.composer-mic {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.composer-mic:disabled {
+  opacity: 0.4;
+}
+
+.voice-recording {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 92, 138, 0.12);
+  border: 1px solid var(--danger);
+}
+
+.voice-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: voice-blink 1s ease-in-out infinite;
+}
+
+@keyframes voice-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.voice-time {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-cancel,
+.voice-send {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.voice-send {
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+}
+
+.voice-error {
+  flex: 0 0 100%;
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+}
+
+.bubble-voice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 160px;
+}
+
+.voice-play {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.voice-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.voice-track-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+
+.voice-duration {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------
+   Perfil público
+   ------------------------------------------------------------------ */
+.public-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.avatar.big {
+  width: 64px;
+  height: 64px;
+  font-size: 1.4rem;
+}
+
+.public-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.public-profile-safety {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+/* Cabecera de sección del panel de administración, con sus filtros a la
+   derecha. Los filtros reutilizan el estilo de pestañas de Explorar para que
+   una misma idea (elegir un subconjunto) se vea igual en toda la app. */
+.admin-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-section-head h3 {
+  margin: 0;
+}
+
+.admin-filters {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.admin-filters .explore-tab {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.65rem;
+}
+
+/* ------------------------------------------------------------------
+   Traducción (WhaTaka, notas de voz y llamadas)
+   ------------------------------------------------------------------
+   El color hace el trabajo: turquesa cuando la traducción está activa, apagado
+   cuando no. Es la señal de estado de toda la función, así que se repite igual
+   en el chat, en la burbuja y en la llamada para que "encendido" se reconozca
+   de un vistazo en cualquier pantalla. */
+
+.translate-toggle.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--glow-cyan), 0 0 18px -6px var(--glow-cyan);
+}
+
+/* Aviso de que el hilo se está traduciendo. Es un recordatorio permanente, no
+   un mensaje de error: por eso va en turquesa y no en rojo. */
+.translate-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  margin: 0 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 247, 212, 0.07);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+/* --- Botón de traducir de una burbuja --- */
+.translate-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+}
+
+.translate-wrap.compact {
+  margin-top: 0.2rem;
+}
+
+.translate-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.translate-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: rgba(0, 247, 212, 0.1);
+}
+
+.translate-btn.active {
+  color: var(--accent);
+}
+
+.translate-btn:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* La traducción aparece DEBAJO del original, nunca en su lugar: quien la lee
+   necesita poder comparar con lo que se dijo. */
+.translate-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: rgba(0, 247, 212, 0.08);
+  animation: translate-in 0.18s ease-out;
+}
+
+@keyframes translate-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.translate-text {
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.translate-from {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-style: italic;
+}
+
+.translate-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+}
+
+/* --- Nota de voz: transcripción y traducción --- */
+.voice-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  margin-top: 0.3rem;
+}
+
+.voice-transcript-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  align-self: flex-start;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.voice-transcript-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.voice-transcript-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.voice-transcript-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: rgba(0, 247, 212, 0.08);
+}
+
+.voice-transcript-original {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+.voice-transcript-translated {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.voice-transcript-error {
+  color: var(--danger);
+  font-size: 0.72rem;
+}
+
+/* --- Llamada: subtítulos de la traducción en vivo --- */
+.call-captions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: min(92%, 30rem);
+  margin: 0.5rem auto 0;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 7, 13, 0.82);
+  backdrop-filter: blur(8px);
+  text-align: center;
+  animation: translate-in 0.18s ease-out;
+}
+
+.call-caption-original {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+.call-caption-translated {
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Aviso de traducir la llamada. Aparece cuando los dos hablan idiomas distintos
+   y la llamada salió de WhaTaka. Se pinta como una tarjeta y no como un simple
+   texto porque es una oferta accionable: el botón tiene que verse sin buscarlo,
+   que es justo lo que hace que la función se use. */
+.call-translate-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  max-width: min(92%, 30rem);
+  margin: 0.5rem auto 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 7, 13, 0.86);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 0.85rem;
+  text-align: center;
+  animation: translate-in 0.18s ease-out;
+}
+
+.call-translate-accept {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 0 18px -8px var(--glow-cyan);
+}
+
+.call-translate-accept:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.call-translate-accept:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Botón de traducir de la llamada: encendido en turquesa, y un punto que late
+   mientras escucha, para que se vea que está activo y no colgado. */
+.call-btn.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 18px -6px var(--glow-cyan);
+}
+
+.call-btn-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: call-dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes call-dot-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.75);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .translate-result,
+  .call-captions,
+  .call-translate-prompt,
+  .call-btn-dot {
+    animation: none;
+  }
 }

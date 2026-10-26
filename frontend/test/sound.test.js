@@ -5,8 +5,12 @@ import {
   readSoundOn,
   writeSoundOn,
   isMuted,
+  shouldPauseFeed,
   listAudioOutputs,
   applySink,
+  clampVolume,
+  applyVolume,
+  applyAudioSession,
 } from '../src/lib/sound.js';
 
 // Almacenamiento en memoria: en Node no existe localStorage, y lo que se prueba
@@ -59,6 +63,21 @@ test('solo suena la tarjeta visible con el sonido activado', () => {
   assert.equal(isMuted(false, false), true);
 });
 
+test('el feed se pausa con una llamada en curso', () => {
+  // Sin llamada y en la pestaña de vídeos, el feed suena.
+  assert.equal(shouldPauseFeed(false, 'idle'), false);
+  // En Facetak (publicaciones) siempre se pausa.
+  assert.equal(shouldPauseFeed(true, 'idle'), true);
+  // Cualquier estado de llamada pausa el feed, aunque se siga viendo: es lo que
+  // evita que el vídeo compita con la voz y que el volumen del móvil regule el
+  // vídeo en vez de la llamada.
+  for (const status of ['preparing', 'outgoing', 'incoming', 'active']) {
+    assert.equal(shouldPauseFeed(false, status), true, `debería pausar en ${status}`);
+  }
+  // Un estado nulo (aún sin contexto) no debe dejar el feed sonando por error.
+  assert.equal(shouldPauseFeed(false, undefined), true);
+});
+
 test('lista las salidas de audio del dispositivo', async () => {
   const mediaDevices = {
     enumerateDevices: async () => [
@@ -100,4 +119,50 @@ test('applySink devuelve false si el navegador rechaza la salida', async () => {
     },
   };
   assert.equal(await applySink(element, 'inexistente'), false);
+});
+
+test('clampVolume mantiene el volumen dentro de [0, 1]', () => {
+  assert.equal(clampVolume(0.5), 0.5);
+  assert.equal(clampVolume(0), 0);
+  assert.equal(clampVolume(1), 1);
+  // Fuera de rango: se recorta en vez de dejar un valor que el navegador
+  // ignoraría y que haría parecer muerto el control.
+  assert.equal(clampVolume(-1), 0);
+  assert.equal(clampVolume(2), 1);
+  assert.equal(clampVolume('0.25'), 0.25);
+  // Un valor no numérico cae al máximo: mejor sonar que quedar mudo.
+  assert.equal(clampVolume('x'), 1);
+  assert.equal(clampVolume(undefined), 1);
+  assert.equal(clampVolume(null), 1);
+});
+
+test('applyVolume escribe el volumen acotado en el elemento', () => {
+  const element = { volume: 1 };
+  assert.equal(applyVolume(element, 0.3), 0.3);
+  assert.equal(element.volume, 0.3);
+  // Sin elemento no lanza: el control puede cambiar antes de que el audio
+  // exista (por ejemplo, al aceptar la llamada).
+  assert.equal(applyVolume(null, 0.5), 0.5);
+  assert.doesNotThrow(() => applyVolume(undefined, 0.5));
+});
+
+test('applyAudioSession declara el tipo cuando la API existe', () => {
+  const session = { type: 'auto' };
+  assert.equal(applyAudioSession('play-and-record', { audioSession: session }), true);
+  assert.equal(session.type, 'play-and-record');
+});
+
+test('applyAudioSession no falla si el navegador no la soporta', () => {
+  assert.equal(applyAudioSession('play-and-record', {}), false);
+  assert.equal(applyAudioSession('play-and-record', null), false);
+  // Un navegador que expone la propiedad pero la rechaza tampoco debe romper la
+  // llamada: se informa con false y la app sigue.
+  const throwing = {
+    audioSession: {
+      set type(v) {
+        throw new Error('no permitido');
+      },
+    },
+  };
+  assert.equal(applyAudioSession('play-and-record', throwing), false);
 });

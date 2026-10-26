@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
+import { mediaErrorMessage } from '../lib/mediaErrors';
 
 const FILTERS = [
   { id: 'none', label: 'Normal' },
@@ -100,8 +101,8 @@ export default function Upload({ onUploaded }) {
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraReady(true);
-    } catch {
-      setError('No se pudo acceder a la cámara. Revisa los permisos del navegador.');
+    } catch (err) {
+      setError(mediaErrorMessage(err));
     }
   }
 

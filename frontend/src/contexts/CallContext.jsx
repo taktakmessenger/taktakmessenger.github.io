@@ -11,6 +11,18 @@ import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { startRingtone, stopRingtone, unlockAudio } from '../lib/ringtone';
+import { applyAudioSession, clampVolume } from '../lib/sound';
+import { mediaErrorMessage } from '../lib/mediaErrors';
+import { translateText } from '../lib/translateClient';
+import { resolveViewerLanguage, sameLanguage } from '../lib/translate';
+import {
+  canRecognize,
+  canSynthesize,
+  createRecognizer,
+  createSpeaker,
+  createSpeechSender,
+  createSpeechReceiver,
+} from '../lib/speech';
 
 const CallContext = createContext(null);
 
@@ -35,6 +47,11 @@ export function CallProvider({ children }) {
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
+  // Volumen de la voz que llega (0..1). Existe porque en una llamada por
+  // navegador el sonido remoto es un MediaStream: en varios móviles los botones
+  // de volumen del teléfono no lo alcanzan, así que hace falta un control propio
+  // que sí lo baje. Es independiente del mute del micrófono, que es lo que sale.
+  const [volume, setVolume] = useState(1);
   // Una llamada minimizada sigue activa pero deja ver el resto de la app, para
   // no perder el vídeo que se estaba viendo. Solo tiene sentido una vez
   // contestada: una llamada entrante sin aceptar debe verse entera.
@@ -46,6 +63,41 @@ export function CallProvider({ children }) {
   // Se incrementa cuando hay un stream remoto nuevo, para que la pantalla de
   // llamada vuelva a engancharlo.
   const [remoteTick, setRemoteTick] = useState(0);
+
+  // Traducción en vivo de la llamada. Va apagada por defecto: cuesta una llamada
+  // al proveedor por frase, y encenderla sola sorprendería a quien solo quiere
+  // hablar. Se enciende con el botón de la pantalla de llamada.
+  const [translateLive, setTranslateLive] = useState(false);
+  // Subtítulos: la última frase del otro, en su idioma y traducida. Se guarda la
+  // pareja para poder comprobar qué dijo de verdad.
+  const [captions, setCaptions] = useState(null);
+  // Por dónde va el motor: 'idle' | 'listening' | 'unsupported'.
+  const [translateStatus, setTranslateStatus] = useState('idle');
+  // ¿Está el altavoz diciendo una traducción ahora mismo? La pantalla lo usa
+  // para atenuar la voz del otro mientras habla la síntesis: si sonaran las dos
+  // a la vez no se entendería ninguna.
+  const [translateSpeaking, setTranslateSpeaking] = useState(false);
+  const translateOnRef = useRef(false);
+  // Piezas de la traducción en vivo: el reconocedor de mi voz, el altavoz de la
+  // traducción y los dos extremos del flujo. En refs y no en estado porque se
+  // crean y se destruyen con la llamada, sin renderizar nada por el camino.
+  const recognizerRef = useRef(null);
+  const speakerRef = useRef(null);
+  const senderRef = useRef(null);
+  const receiverRef = useRef(null);
+  const peerLanguageRef = useRef(null);
+
+  // De dónde salió la llamada: 'whataka' si nació en el chat, 'app' en cualquier
+  // otro sitio (el marcador, el feed, un perfil). La traducción en vivo es una
+  // función de WhaTaka, así que solo se ofrece en las llamadas que empiezan ahí.
+  // Se guarda en estado además de en un ref porque la pantalla lo lee para
+  // decidir si pinta el botón, y en ref porque los manejadores de socket creados
+  // una sola vez necesitan el valor vigente.
+  const [origin, setOrigin] = useState('app');
+  const originRef = useRef('app');
+  // Idioma del otro, aprendido del servidor al llamar o al recibir. Se usa para
+  // avisar de que hace falta traducir sin obligar a nadie a configurarlo antes.
+  const [peerLanguage, setPeerLanguage] = useState(null);
 
   // Lista ICE vigente. Empieza con los STUN públicos y se sustituye por la del
   // servidor, que puede incluir TURN. Se guarda en un ref además de en estado
@@ -197,6 +249,22 @@ export function CallProvider({ children }) {
   const cleanup = useCallback(() => {
     clearRingTimeout();
 
+    // La traducción en vivo se desmonta antes que el resto: el reconocedor deja
+    // el micrófono abierto y el altavoz puede estar a mitad de una frase. Si no
+    // se pararan aquí, seguirían vivos después de colgar.
+    try {
+      senderRef.current?.destroy?.();
+      receiverRef.current?.destroy?.();
+      recognizerRef.current?.destroy?.();
+      speakerRef.current?.stop?.();
+    } catch {
+      // Nada que hacer: los objetos se descartan igual.
+    }
+    senderRef.current = null;
+    receiverRef.current = null;
+    recognizerRef.current = null;
+    speakerRef.current = null;
+
     pcRef.current?.close();
     pcRef.current = null;
 
@@ -215,7 +283,27 @@ export function CallProvider({ children }) {
     setPeer(null);
     setMuted(false);
     setCamOff(false);
+    // El volumen vuelve al máximo para la siguiente llamada: si se quedara bajo,
+    // el usuario creería que la llamada nueva no tiene sonido.
+    setVolume(1);
     setNotice('');
+    // La traducción también vuelve a apagada: si se quedara encendida, la
+    // siguiente llamada empezaría gastando traducciones sin que nadie lo pida.
+    setTranslateLive(false);
+    translateOnRef.current = false;
+    setTranslateStatus('idle');
+    setTranslateSpeaking(false);
+    setCaptions(null);
+    peerLanguageRef.current = null;
+    // El origen y el idioma del otro son de la llamada que acaba de terminar. Si
+    // no se limpiaran, la pantalla de la siguiente llamada —aunque salga del
+    // feed— heredaría el "es de WhaTaka" de la anterior y ofrecería traducir.
+    setOrigin('app');
+    originRef.current = 'app';
+    setPeerLanguage(null);
+    // Se suelta el tipo de sesión de audio: fuera de una llamada la página no
+    // debe retener el canal de comunicación del móvil.
+    applyAudioSession('auto');
     // Si no se restaurase, la siguiente llamada nacería minimizada.
     setMinimized(false);
   }, [clearRingTimeout]);
@@ -295,7 +383,8 @@ export function CallProvider({ children }) {
   );
 
   // Pide cámara y/o micrófono. Si la cámara falla, la llamada sigue como voz en
-  // lugar de abortar.
+  // lugar de abortar. El fallo se traduce a algo accionable: el navegador manda
+  // "Permission denied" en inglés, que no dice qué hacer.
   const acquireMedia = useCallback(async (callKind) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('Tu navegador no permite llamadas');
@@ -307,19 +396,26 @@ export function CallProvider({ children }) {
         video: callKind === 'video' ? { facingMode: 'user' } : false,
       });
     } catch (err) {
+      // En videollamada, la cámara puede fallar y el micrófono no: se reintenta
+      // solo con voz en vez de dejar sin llamada. Si el permiso está denegado de
+      // verdad, el reintento también falla y el error se traduce abajo.
       if (callKind === 'video') {
-        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setError('Sin cámara: la llamada sigue solo con voz');
-        return audioOnly;
+        try {
+          const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
+          setError('Sin cámara: la llamada sigue solo con voz');
+          return audioOnly;
+        } catch {
+          throw new Error(mediaErrorMessage(err));
+        }
       }
-      throw new Error('No se pudo acceder al micrófono');
+      throw new Error(mediaErrorMessage(err));
     }
   }, []);
 
   // Quien llama: pide permiso, invita y espera. La oferta NO se envía todavía:
   // se manda cuando el otro acepta, para que nadie reciba medios sin decidir.
   const startCall = useCallback(
-    async (target, callKind = 'audio') => {
+    async (target, callKind = 'audio', callOrigin = 'app') => {
       if (!target?.id) return;
 
       // Sin conexión no se puede invitar a nadie. Se avisa en vez de fingir que
@@ -346,6 +442,15 @@ export function CallProvider({ children }) {
       kindRef.current = callKind;
       setPeer(target);
       peerIdRef.current = target.id;
+      // El origen se fija al empezar y no cambia en toda la llamada: si se
+      // recalculara al vuelo, minimizar la llamada y volver podría ofrecer
+      // traducir en una llamada que no salió de WhaTaka.
+      const safeOrigin = callOrigin === 'whataka' ? 'whataka' : 'app';
+      setOrigin(safeOrigin);
+      originRef.current = safeOrigin;
+      // El idioma del otro puede venir ya con la persona (el hilo de WhaTaka lo
+      // trae); si no, lo dirá el servidor al timbrar.
+      if (target.preferredLanguage) setPeerLanguage(target.preferredLanguage);
       setStatus('preparing');
 
       try {
@@ -354,7 +459,7 @@ export function CallProvider({ children }) {
         // usuario deniega el micrófono, no llegó a existir llamada y no debe
         // quedar una "perdida" en el historial.
         isCallerRef.current = true;
-        emit('call:invite', { to: target.id, kind: callKind });
+        emit('call:invite', { to: target.id, kind: callKind, origin: safeOrigin });
         setStatus('ringing');
 
         // Nadie contesta en 45 s: se cuelga y queda como perdida, como en
@@ -412,33 +517,39 @@ export function CallProvider({ children }) {
     if (!target) return;
 
     setError('');
-    clearRingTimeout();
     setStatus('connecting');
 
+    // Primero el permiso. Si falla, la llamada NO se cuelga: se deja sonando
+    // para que la persona lo conceda en el navegador y vuelva a pulsar Aceptar.
+    // Antes se rechazaba la llamada y el otro veía "Llamada rechazada", que es
+    // falso: nadie rechazó, faltaba un permiso.
+    let stream;
     try {
-      localStreamRef.current = await acquireMedia(kindRef.current);
-
-      // Si el socket se cayó entre el timbrado y la aceptación, el aviso no
-      // llegaría al llamante y la llamada quedaría a medias.
-      if (!connectedRef.current) {
-        fail('Sin conexión: no se pudo aceptar la llamada');
-        return;
-      }
-
-      emit('call:accept', { to: target });
-
-      // Si la oferta llegó antes de aceptar (red rápida), se contesta ya sin
-      // esperar el siguiente mensaje.
-      if (pendingOfferRef.current) {
-        const offer = pendingOfferRef.current;
-        pendingOfferRef.current = null;
-        await answerOffer(target, offer);
-      }
+      stream = await acquireMedia(kindRef.current);
     } catch (err) {
-      emit('call:reject', { to: target, reason: 'sin_permisos' });
-      fail(`No se pudo aceptar la llamada: ${err.message}`);
+      setError(err.message);
+      setStatus('incoming');
+      return;
     }
-  }, [acquireMedia, answerOffer, clearRingTimeout, emit, fail]);
+    localStreamRef.current = stream;
+
+    // Si el socket se cayó entre el timbrado y la aceptación, el aviso no
+    // llegaría al llamante y la llamada quedaría a medias.
+    if (!connectedRef.current) {
+      fail('Sin conexión: no se pudo aceptar la llamada');
+      return;
+    }
+
+    emit('call:accept', { to: target });
+
+    // Si la oferta llegó antes de aceptar (red rápida), se contesta ya sin
+    // esperar el siguiente mensaje.
+    if (pendingOfferRef.current) {
+      const offer = pendingOfferRef.current;
+      pendingOfferRef.current = null;
+      await answerOffer(target, offer);
+    }
+  }, [acquireMedia, answerOffer, emit, fail]);
 
   // El receptor rechaza. No registra nada: la entrada del hilo la escribe quien
   // llamó, al recibir el aviso, para que exista una sola.
@@ -470,6 +581,23 @@ export function CallProvider({ children }) {
     setCamOff(!track.enabled);
   }, []);
 
+  // Volumen de la voz que se oye. Se acota aquí, en el único punto que lo
+  // escribe, para que el estado nunca salga de [0, 1] y el control no muestre
+  // un valor imposible.
+  const changeVolume = useCallback((next) => {
+    setVolume(clampVolume(next));
+  }, []);
+
+  // Mientras la llamada está viva se declara la sesión como llamada
+  // (`play-and-record`). Es lo que hace que el móvil trate el audio como una
+  // conversación —y no como música de una pestaña—, de modo que los botones de
+  // volumen del teléfono la controlen. Se declara al empezar a timbrar y no al
+  // quedar activa: el tono de llamada ya debería responder al volumen.
+  useEffect(() => {
+    if (status === IDLE) return;
+    applyAudioSession('play-and-record');
+  }, [status]);
+
   // Minimizar solo tiene sentido con la llamada ya en curso: durante el
   // timbrado o una llamada entrante, el usuario tiene que ver qué está pasando
   // y poder aceptar o rechazar.
@@ -477,13 +605,137 @@ export function CallProvider({ children }) {
     setMinimized((prev) => !prev);
   }, []);
 
+  // ------------------------------------------------------------------
+  // Traducción en vivo de la llamada
+  // ------------------------------------------------------------------
+  //
+  // Cómo funciona, y por qué así
+  // ---------------------------
+  // Cada persona reconoce SU PROPIA voz con el micrófono de su dispositivo y
+  // manda el TEXTO. El otro lo traduce a su idioma y lo dice por su altavoz. Se
+  // elige este reparto por dos razones:
+  //
+  //   - Quien traduce es quien recibe, porque el idioma de destino es el suyo y
+  //     lo conoce con certeza. Si tradujera el emisor, tendría que adivinar en
+  //     qué idioma quiere leer el otro.
+  //   - Nadie necesita oír el audio del otro para transcribirlo. El respaldo del
+  //     navegador solo sabe reconocer del micrófono, así que transcribir la voz
+  //     ajena exigiría reproducirla en alto, lo que no funciona con auriculares
+  //     ni en un sitio silencioso. Reconociendo la voz propia, se oye limpia.
+  //
+  // Lo que se manda es texto y no audio: ocupa nada, y el otro lo dice con la
+  // voz que tiene instalada, que suena mejor que cualquier audio sintetizado que
+  // cruce la red. El audio de la llamada sigue yendo por WebRTC, sin tocarse: la
+  // traducción es una capa encima, no un doblaje.
+  //
+  // El motor de reconocimiento del navegador no existe en todos (solo en los
+  // basados en Chromium). Cuando no está, el botón se desactiva y se avisa, en
+  // vez de ofrecer algo que no va a funcionar.
+
+  // Monta las piezas de la traducción. Se hace al encenderla y no al empezar la
+  // llamada: crear un reconocedor abre el micrófono para escuchar, y no se debe
+  // hacer hasta que el usuario lo pida.
+  const buildTranslation = useCallback(
+    (target) => {
+      const myLanguage = resolveViewerLanguage({ preferred: user?.preferredLanguage });
+
+      const recognizer = createRecognizer({ language: myLanguage });
+      // El altavoz pausa el micrófono mientras habla. Sin esto, la traducción que
+      // se está diciendo entra por el micrófono, se reconoce como si fuera mía y
+      // se reenvía: la llamada entra en un bucle de frases repetidas. Es
+      // semi-dúplex a propósito, porque en una llamada traducida no se puede
+      // hablar y escuchar la síntesis a la vez sin oírse a uno mismo.
+      const speaker = createSpeaker({
+        onStart: () => {
+          senderRef.current?.pause?.();
+          setTranslateSpeaking(true);
+        },
+        onEnd: () => {
+          senderRef.current?.resume?.();
+          setTranslateSpeaking(false);
+        },
+      });
+
+      const sender = createSpeechSender({
+        recognizer,
+        // Segunda barrera, además de cerrar el micrófono: un resultado final
+        // puede llegar justo después de que el altavoz termine, ya con el
+        // micrófono reabierto. `isSpeaking` descarta esa frase rezagada.
+        isSpeaking: () => speaker.speaking,
+        send: ({ text }) => {
+          const to = peerIdRef.current;
+          if (to) emit('call:speech', { to, text });
+        },
+        onError: () => {
+          // Un fallo del reconocedor (permiso denegado, por ejemplo) apaga la
+          // traducción en vez de dejarla encendida sin hacer nada.
+          setTranslateStatus('unsupported');
+          setNotice('No se pudo activar el micrófono para traducir');
+        },
+      });
+
+      const receiver = createSpeechReceiver({
+        targetLanguage: myLanguage,
+        translate: ({ text, to, hint }) => translateText({ text, to, hint }),
+        speaker,
+        onCaption: (caption) => {
+          // El original se conserva junto a la traducción: el subtítulo enseña
+          // qué se dijo de verdad, no solo la interpretación.
+          setCaptions({ ...caption, at: Date.now() });
+        },
+        onError: () => setNotice('No se pudo traducir una frase'),
+      });
+
+      recognizerRef.current = recognizer;
+      speakerRef.current = speaker;
+      senderRef.current = sender;
+      receiverRef.current = receiver;
+
+      return { sender, receiver, recognizer };
+    },
+    [emit, user]
+  );
+
+  const startLiveTranslation = useCallback(() => {
+    if (!canRecognize() || !canSynthesize()) {
+      setTranslateStatus('unsupported');
+      setNotice('Tu navegador no permite traducir llamadas');
+      return;
+    }
+
+    setNotice('');
+    buildTranslation();
+    senderRef.current.start();
+    translateOnRef.current = true;
+    setTranslateLive(true);
+    setTranslateStatus('listening');
+  }, [buildTranslation]);
+
+  const stopLiveTranslation = useCallback(() => {
+    // El emisor se para primero: al parar el altavoz se dispara su `onEnd`, que
+    // reanudaría el micrófono si el emisor siguiera activo. Con `active` ya en
+    // falso, ese `resume` no hace nada y el micrófono queda cerrado.
+    senderRef.current?.stop?.();
+    receiverRef.current?.stop?.();
+    translateOnRef.current = false;
+    setTranslateLive(false);
+    setTranslateStatus('idle');
+    setTranslateSpeaking(false);
+    setCaptions(null);
+  }, []);
+
+  const toggleLiveTranslation = useCallback(() => {
+    if (translateOnRef.current) stopLiveTranslation();
+    else startLiveTranslation();
+  }, [startLiveTranslation, stopLiveTranslation]);
+
   // Señalización entrante, registrada mientras haya sesión para que una llamada
   // suene desde cualquier pantalla.
   useEffect(() => {
     if (!user) return undefined;
 
     const unsubs = [
-      subscribe('call:incoming', ({ from, kind: incomingKind }) => {
+      subscribe('call:incoming', ({ from, kind: incomingKind, origin: incomingOrigin }) => {
         if (statusRef.current !== IDLE) {
           emit('call:reject', { to: from.id, reason: 'ocupado' });
           return;
@@ -492,6 +744,14 @@ export function CallProvider({ children }) {
         setPeer(from);
         setKind(incomingKind);
         kindRef.current = incomingKind;
+        // El origen lo decide quien llama y el servidor lo reenvía ya validado.
+        // Así el receptor no puede "convertir" en llamada de WhaTaka una que
+        // salió del feed, y la traducción se ofrece donde toca.
+        const incomingSafe = incomingOrigin === 'whataka' ? 'whataka' : 'app';
+        setOrigin(incomingSafe);
+        originRef.current = incomingSafe;
+        setPeerLanguage(from.language || null);
+        peerLanguageRef.current = from.language || null;
         // Quien recibe nunca escribe la entrada del hilo: lo hace quien llamó.
         isCallerRef.current = false;
         setError('');
@@ -513,7 +773,14 @@ export function CallProvider({ children }) {
         pendingOfferRef.current = sdp;
       }),
 
-      subscribe('call:ringing', ({ reachable, pushed }) => {
+      subscribe('call:ringing', ({ reachable, pushed, language }) => {
+        // El idioma del otro llega aquí si no venía ya con la persona. Es lo que
+        // permite ofrecer la traducción al empezar la llamada en vez de esperar
+        // a que el usuario entre en Ajustes.
+        if (language) {
+          setPeerLanguage(language);
+          peerLanguageRef.current = language;
+        }
         // `pushed` significa que el otro no tiene la app abierta pero sí un
         // dispositivo suscrito: la llamada está sonando en su teléfono. No se
         // corta, se sigue timbrando hasta que conteste o venza el temporizador.
@@ -540,9 +807,21 @@ export function CallProvider({ children }) {
 
       subscribe('call:rejected', ({ reason }) => {
         const busy = reason === 'ocupado';
-        setError(busy ? 'Está en otra llamada' : 'Llamada rechazada');
+        // `sin_permisos` no es un rechazo: la otra persona pulsó aceptar pero su
+        // navegador le negó la cámara o el micrófono. Decir "rechazada" culparía
+        // a quien sí quiso contestar.
+        const noPerms = reason === 'sin_permisos';
+        setError(
+          busy
+            ? 'Está en otra llamada'
+            : noPerms
+              ? 'La otra persona no pudo dar permiso a su cámara o micrófono'
+              : 'Llamada rechazada'
+        );
         // Solo el llamante registra; el receptor no escribe nada al rechazar.
-        finalize(busy ? 'missed' : 'declined');
+        // `sin_permisos` se anota como perdida, no como rechazada: el hilo diría
+        // "Videollamada rechazada" y culparía a quien sí quiso contestar.
+        finalize(busy || noPerms ? 'missed' : 'declined');
       }),
 
       subscribe('call:ended', () => {
@@ -584,10 +863,32 @@ export function CallProvider({ children }) {
           // Un candidato suelto que falla no invalida la llamada.
         }
       }),
+
+      // Texto reconocido de la voz del otro. Se recibe siempre, pero solo se
+      // procesa si la traducción está encendida en este lado: el otro puede
+      // tenerla activada y yo no, y en ese caso no quiero que me hable una voz
+      // sintetizada que no he pedido.
+      subscribe('call:speech', ({ text }) => {
+        if (!translateOnRef.current) return;
+        receiverRef.current?.handle?.(text);
+      }),
     ];
 
     return () => unsubs.forEach((unsub) => unsub());
   }, [user, subscribe, emit, finalize, fail, createPeerConnection, answerOffer]);
+
+  // ¿La llamada nació en WhaTaka? Es la condición para ofrecer la traducción en
+  // vivo. La función es del chat, no del marcador ni del feed, así que ofrecerla
+  // en una llamada del feed sería prometer algo que no se pidió.
+  const isWhatakaCall = origin === 'whataka';
+
+  // ¿Hacen falta dos idiomas distintos? Se compara el idioma propio con el del
+  // otro. Sin el del otro no se puede saber, y entonces no se avisa de nada: es
+  // preferible callar a sugerir una traducción que puede no hacer falta.
+  const myLanguage = resolveViewerLanguage({ preferred: user?.preferredLanguage || null });
+  const needsTranslation = Boolean(
+    peerLanguage && myLanguage && !sameLanguage(myLanguage, peerLanguage)
+  );
 
   const value = useMemo(
     () => ({
@@ -600,6 +901,7 @@ export function CallProvider({ children }) {
       camOff,
       minimized,
       remoteTick,
+      volume,
       // Si la lista ICE trae TURN. La UI lo usa para avisar de que las llamadas
       // pueden cortarse fuera de la red local, en vez de dejar al usuario
       // adivinando por qué se le cae la llamada al salir de casa.
@@ -611,6 +913,26 @@ export function CallProvider({ children }) {
       toggleMute,
       toggleCamera,
       toggleMinimize,
+      changeVolume,
+      // Traducción en vivo
+      translateLive,
+      translateStatus,
+      // La pantalla lo usa para atenuar la voz del otro mientras habla la
+      // traducción. Sin esto, las dos voces se solaparían.
+      translateSpeaking,
+      captions,
+      toggleLiveTranslation,
+      canTranslateCalls: canRecognize() && canSynthesize(),
+      // La traducción en vivo es una función de WhaTaka. `isWhatakaCall` deja que
+      // la pantalla de llamada solo la ofrezca cuando la llamada salió del chat.
+      isWhatakaCall,
+      // Si los dos hablan idiomas distintos. La pantalla lo usa para ofrecer la
+      // traducción al empezar, en vez de esperar a que alguien entre en Ajustes.
+      needsTranslation,
+      peerLanguage,
+      // Preferencia de la cuenta: quien apaga los subtítulos en Ajustes no los
+      // quiere ver, aunque la traducción esté encendida y el otro hable.
+      showCallCaptions: user?.callCaptions !== false,
       remoteStreamRef,
       localStreamRef,
     }),
@@ -624,6 +946,7 @@ export function CallProvider({ children }) {
       camOff,
       minimized,
       remoteTick,
+      volume,
       hasTurn,
       startCall,
       acceptCall,
@@ -632,6 +955,17 @@ export function CallProvider({ children }) {
       toggleMute,
       toggleCamera,
       toggleMinimize,
+      changeVolume,
+      translateLive,
+      translateStatus,
+      translateSpeaking,
+      captions,
+      toggleLiveTranslation,
+      origin,
+      peerLanguage,
+      isWhatakaCall,
+      needsTranslation,
+      user,
     ]
   );
 
@@ -650,11 +984,12 @@ export function CallProvider({ children }) {
       hangUp,
       toggleMute,
       toggleCamera,
+      changeVolume,
     };
     return () => {
       delete window.__taktakCall;
     };
-  }, [status, kind, peer, startCall, acceptCall, rejectCall, hangUp, toggleMute, toggleCamera]);
+  }, [status, kind, peer, startCall, acceptCall, rejectCall, hangUp, toggleMute, toggleCamera, changeVolume]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

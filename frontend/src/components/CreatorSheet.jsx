@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 // lo que pide la idea de WhaTaka: hablar o llamar sin salir del video que se
 // está viendo. Es una acción contextual, no una pantalla nueva: el video sigue
 // detrás y al cerrar se vuelve exactamente donde estaba.
-export default function CreatorSheet({ creator, onClose, onMessage, onCall }) {
+export default function CreatorSheet({ creator, onClose, onMessage, onCall, onReport, onBlock }) {
   const { user } = useAuth();
   const [following, setFollowing] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -143,6 +143,28 @@ export default function CreatorSheet({ creator, onClose, onMessage, onCall }) {
           >
             {following ? 'Dejar de seguir' : 'Seguir'}
           </button>
+        )}
+
+        {/* Señales de seguridad, al pie de la hoja de contacto. Tienen que estar
+            aquí porque es donde se decide "no quiero nada de esta persona": en
+            el mismo sitio donde se ofrece hablarle. */}
+        {!isSelf && (
+          <div className="creator-sheet-safety">
+            <button
+              type="button"
+              className="btn-link danger"
+              onClick={() => guard(() => onReport?.(creator))}
+            >
+              ⚑ Reportar
+            </button>
+            <button
+              type="button"
+              className="btn-link danger"
+              onClick={() => guard(() => onBlock?.(creator))}
+            >
+              🚫 Bloquear
+            </button>
+          </div>
         )}
       </div>
     </div>

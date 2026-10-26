@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import { detachPushSubscription } from '../services/push';
+import { normalizeUser } from '../lib/user';
 import { getToken, saveSession, clearSession, onSessionChange, refreshSession, tokenExpiry } from '../lib/session';
 
 const AuthContext = createContext(null);
@@ -12,7 +13,7 @@ function readStoredUser() {
   const raw = localStorage.getItem('taktak_user');
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    return normalizeUser(JSON.parse(raw));
   } catch {
     localStorage.removeItem('taktak_user');
     return null;
@@ -50,8 +51,9 @@ export function AuthProvider({ children }) {
       .get('/users/me')
       .then((res) => {
         if (cancelled) return;
-        setUser(res.data.user);
-        localStorage.setItem('taktak_user', JSON.stringify(res.data.user));
+        const me = normalizeUser(res.data.user);
+        setUser(me);
+        localStorage.setItem('taktak_user', JSON.stringify(me));
       })
       .catch(() => {
         // Solo se cierra la sesión si de verdad ya no sirve. El interceptor
@@ -93,7 +95,7 @@ export function AuthProvider({ children }) {
 
   function persist(data) {
     setToken(data.token);
-    setUser(data.user);
+    setUser(normalizeUser(data.user));
     // El refresco es lo único que puede emitir un token nuevo; si se pierde al
     // recargar, la sesión se cae sola al caducar el token.
     saveSession(data);
@@ -118,8 +120,9 @@ export function AuthProvider({ children }) {
   async function verifyEmail({ email, code }) {
     const { data } = await api.post('/auth/verify-email', { email, code });
     if (data.user) {
-      setUser(data.user);
-      localStorage.setItem('taktak_user', JSON.stringify(data.user));
+      const me = normalizeUser(data.user);
+      setUser(me);
+      localStorage.setItem('taktak_user', JSON.stringify(me));
     }
     return data;
   }
@@ -177,8 +180,9 @@ export function AuthProvider({ children }) {
     // La respuesta trae el usuario ya con el teléfono: se refresca la sesión
     // para que Ajustes y el marcador lo vean sin recargar.
     if (data.user) {
-      setUser(data.user);
-      localStorage.setItem('taktak_user', JSON.stringify(data.user));
+      const me = normalizeUser(data.user);
+      setUser(me);
+      localStorage.setItem('taktak_user', JSON.stringify(me));
     }
     return data;
   }

@@ -408,6 +408,53 @@ const env = {
   // Tope de participantes por sala. 0 = sin tope. Existe para que una sala no
   // pueda agotar los puertos del rango de arriba.
   sfuMaxParticipants: Number(process.env.SFU_MAX_PARTICIPANTS ?? 0),
+  // Aforo del directo de un TAK Creator, sin contar al anfitrión. Es lo que pide
+  // la idea: el creador más hasta veinte invitados. Se aplica en cualquier modo
+  // (SFU o malla), porque es un límite de producto y no de infraestructura: una
+  // rejilla de más de veintiuna ventanas no se ve en un móvil.
+  liveGuestLimit: Number(process.env.LIVE_GUEST_LIMIT ?? 20),
+
+  // ------------------------------------------------------------------
+  // Traducción de WhaTaka
+  // ------------------------------------------------------------------
+  //
+  // Es lo que permite que dos personas que no comparten idioma hablen por el
+  // chat, por nota de voz y por llamada, cada una en el suyo. El proveedor es
+  // conmutable y opcional, igual que Stripe o PayPal:
+  //
+  //   TRANSLATE_PROVIDER=deepl|google|libretranslate|mymemory|local|auto
+  //
+  // `auto` (el valor por defecto) usa el primero que tenga clave y cae a
+  // MyMemory, que no necesita ninguna. MyMemory es peor que DeepL o Google,
+  // pero traduce de verdad: sin él, la app recién instalada no podría traducir
+  // nada y la función estrella de WhaTaka no se podría ni ver.
+  translateProvider: process.env.TRANSLATE_PROVIDER || 'auto',
+  translateApiKey: process.env.TRANSLATE_API_KEY || null,
+  // Base de la API, configurable para poder apuntar los tests a un servidor
+  // falso y para LibreTranslate, que se autoaloja.
+  translateApiBase: process.env.TRANSLATE_API_BASE || null,
+  // Apaga el proveedor sin clave. Quien no quiera mandar los mensajes a un
+  // servicio gratuito de terceros lo pone en `false` y la app solo traduce si
+  // hay un proveedor propio configurado. En una app de mensajería, mandar las
+  // conversaciones a un tercero es una decisión que debe poder tomarse.
+  translateKeyless: process.env.TRANSLATE_KEYLESS !== 'false',
+  // Correo de contacto para subir la cuota anónima de MyMemory. Opcional.
+  translateContactEmail: process.env.TRANSLATE_CONTACT_EMAIL || null,
+
+  // Voz para la traducción en vivo de las llamadas. La traducción de audio
+  // necesita reconocer la voz (STT) y volver a sintetizarla (TTS); sin estos
+  // proveedores, la llamada traducida se apoya en las APIs del navegador, que
+  // van en el dispositivo y no cuestan nada.
+  //
+  // `TRANSLATE_VOICE_MODE` decide dónde se hace el trabajo:
+  //   'browser' (por defecto): STT y TTS en el dispositivo, solo el texto pasa
+  //      por el servidor. Es lo que funciona hoy y no requiere claves.
+  //   'server': STT y TTS en el servidor, para cuando se contrate un proveedor.
+  translateVoiceMode: process.env.TRANSLATE_VOICE_MODE || 'browser',
+  sttProvider: process.env.STT_PROVIDER || null,
+  sttApiKey: process.env.STT_API_KEY || null,
+  ttsProvider: process.env.TTS_PROVIDER || null,
+  ttsApiKey: process.env.TTS_API_KEY || null,
 
   // Web Push: notificaciones que despiertan la app aunque esté cerrada. Es lo
   // que hace que una llamada suene como en WhatsApp cuando el otro no tiene la

@@ -11,6 +11,7 @@ import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { unlockAudio } from '../lib/ringtone';
+import { mediaErrorMessage } from '../lib/mediaErrors';
 
 const VoiceRoomContext = createContext(null);
 
@@ -44,23 +45,37 @@ export function VoiceRoomProvider({ children }) {
 
   const [room, setRoom] = useState(null); // { room, slug, name }
   const [mode, setMode] = useState(null); // 'sfu' | 'mesh'
-  const [peers, setPeers] = useState([]); // [{ id, username, muted }]
+  const [peers, setPeers] = useState([]); // [{ id, username, muted, cameraOff }]
+  const [hostId, setHostId] = useState(null); // dueño del creator: su ventana es mayor
+  const [guestLimit, setGuestLimit] = useState(null);
   const [muted, setMuted] = useState(false);
+  const [camOff, setCamOff] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
+  // Vista a pantalla completa del directo. Se abre al entrar (como TikTok: al
+  // entrar a un directo lo ves a pantalla completa) y se cierra al minimizar,
+  // que deja la barra flotante. La sala y el audio siguen igual en los dos
+  // estados; solo cambia lo que se pinta.
+  const [stageOpen, setStageOpen] = useState(false);
   // Se incrementa cuando entra un stream remoto nuevo, para que los elementos
-  // de audio vuelvan a enganchar su `srcObject`.
+  // de audio y vídeo vuelvan a enganchar su `srcObject`.
   const [streamTick, setStreamTick] = useState(0);
 
   const localStreamRef = useRef(null);
   const pcsRef = useRef(new Map()); // peerId -> RTCPeerConnection (malla)
   const sfuRef = useRef(null); // cliente SFU activo
-  const remoteStreamsRef = useRef(new Map()); // peerId -> MediaStream
+  // El audio y el vídeo de cada par se guardan por separado. En un directo con
+  // muchos invitados el vídeo se pinta en su ventana y el audio en un `<audio>`
+  // oculto; mezclarlos en un solo MediaStream obligaría a cada elemento a
+  // filtrar pistas y a los dos a pelearse por el mismo objeto.
+  const remoteStreamsRef = useRef(new Map()); // peerId -> MediaStream (audio)
+  const remoteVideoStreamsRef = useRef(new Map()); // peerId -> MediaStream (vídeo)
   const pendingCandidatesRef = useRef(new Map()); // peerId -> RTCIceCandidateInit[]
   const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
   const roomRef = useRef(null);
   const modeRef = useRef(null);
   const mutedRef = useRef(false);
+  const camOffRef = useRef(false);
   const connectedRef = useRef(connected);
   connectedRef.current = connected;
 
@@ -87,6 +102,7 @@ export function VoiceRoomProvider({ children }) {
       pcsRef.current.delete(peerId);
     }
     remoteStreamsRef.current.delete(peerId);
+    remoteVideoStreamsRef.current.delete(peerId);
     pendingCandidatesRef.current.delete(peerId);
     setPeers((prev) => prev.filter((p) => p.id !== peerId));
   }, []);
@@ -97,6 +113,7 @@ export function VoiceRoomProvider({ children }) {
     sfuRef.current?.close();
     sfuRef.current = null;
     remoteStreamsRef.current.clear();
+    remoteVideoStreamsRef.current.clear();
     pendingCandidatesRef.current.clear();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
@@ -104,22 +121,29 @@ export function VoiceRoomProvider({ children }) {
     modeRef.current = null;
     setRoom(null);
     setMode(null);
+    setHostId(null);
+    setGuestLimit(null);
     setPeers([]);
     setMuted(false);
+    setCamOff(false);
     mutedRef.current = false;
+    camOffRef.current = false;
+    setStageOpen(false);
     setConnecting(false);
   }, []);
 
-  // Un audio remoto llegó. Se agrupa por participante: en SFU cada uno manda su
-  // propia pista, así que se crea un MediaStream por persona. Así la barra puede
-  // pintar un `<audio>` por participante igual que en malla.
-  const attachRemoteTrack = useCallback((track, peerId) => {
+  // Un flujo remoto llegó. Se agrupa por participante y por tipo: en SFU cada
+  // pista es su propio productor, así que un mismo par puede tener audio y
+  // vídeo a la vez. El audio va a `remoteStreamsRef` (un `<audio>` oculto por
+  // persona) y el vídeo a `remoteVideoStreamsRef` (su ventana en la rejilla).
+  const attachRemoteTrack = useCallback((track, peerId, kind) => {
     const key = String(peerId);
-    const existing = remoteStreamsRef.current.get(key);
+    const map = kind === 'video' ? remoteVideoStreamsRef : remoteStreamsRef;
+    const existing = map.current.get(key);
     if (existing) {
       existing.addTrack(track);
     } else {
-      remoteStreamsRef.current.set(key, new MediaStream([track]));
+      map.current.set(key, new MediaStream([track]));
     }
     setStreamTick((n) => n + 1);
   }, []);
@@ -143,10 +167,12 @@ export function VoiceRoomProvider({ children }) {
       };
 
       pc.ontrack = (event) => {
-        const [stream] = event.streams;
-        if (!stream) return;
-        remoteStreamsRef.current.set(peerId, stream);
-        setStreamTick((n) => n + 1);
+        const track = event.track;
+        // En malla el par manda audio y vídeo por el mismo enlace, y `streams[0]`
+        // trae las dos pistas. Se separan a propósito en streams por tipo: si el
+        // `<video>` recibiera el stream completo, reproduciría también el audio
+        // y se oiría dos veces.
+        attachRemoteTrack(track, peerId, track.kind);
       };
 
       pc.onconnectionstatechange = () => {
@@ -163,7 +189,7 @@ export function VoiceRoomProvider({ children }) {
 
       return pc;
     },
-    [emit, teardownPeer]
+    [emit, teardownPeer, attachRemoteTrack]
   );
 
   // Quien entra ofrece a cada uno de los que ya estaban.
@@ -222,13 +248,29 @@ export function VoiceRoomProvider({ children }) {
 
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error('Tu navegador no permite la sala de voz');
+          throw new Error('Tu navegador no permite el directo');
         }
-        localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // El directo lleva cámara y voz. Si la cámara falla (permiso denegado
+        // solo para ella, o no hay ninguna), se entra igual como oyente con
+        // micrófono en vez de dejar al usuario fuera: es más útil estar en la
+        // sala hablando que no estar.
+        try {
+          localStreamRef.current = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          });
+        } catch (videoErr) {
+          localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+          camOffRef.current = true;
+          setCamOff(true);
+          setError('Sin cámara: entras solo con voz');
+          // El aviso se borra solo; no debe quedar tapando el directo.
+          setTimeout(() => setError(''), 4000);
+        }
         roomRef.current = { slug, name };
         emit('voice:join', { slug, mesh });
-      } catch {
-        setError('No se pudo acceder al micrófono');
+      } catch (err) {
+        setError(err?.message || mediaErrorMessage(err));
         cleanup();
       }
     },
@@ -249,6 +291,24 @@ export function VoiceRoomProvider({ children }) {
     emit('voice:mute', { muted: mutedRef.current });
   }, [emit]);
 
+  // Encender o apagar la cámara. Se desactiva la pista en vez de pararla: parar
+  // la pista cerraría el productor y para volver a encenderla habría que crear
+  // otro, con el parpadeo de renegociación que eso conlleva. Desactivándola, el
+  // flujo sigue publicado (negro) y el aviso a los demás les dice que muestren
+  // el avatar.
+  const toggleCamera = useCallback(() => {
+    const track = localStreamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    camOffRef.current = !track.enabled;
+    setCamOff(!track.enabled);
+    emit('voice:camera', { off: camOffRef.current });
+  }, [emit]);
+
+  // Abrir o cerrar la vista a pantalla completa del directo. No toca la sala ni
+  // el audio: solo cambia si se pinta la rejilla entera o la barra flotante.
+  const toggleStage = useCallback(() => setStageOpen((open) => !open), []);
+
   // Señalización entrante.
   useEffect(() => {
     if (!user) return undefined;
@@ -261,6 +321,8 @@ export function VoiceRoomProvider({ children }) {
           slug,
           name,
           mode: roomMode,
+          hostId: roomHostId,
+          guestLimit: limit,
           routerRtpCapabilities,
           producers = [],
           peers: existing = [],
@@ -270,10 +332,15 @@ export function VoiceRoomProvider({ children }) {
           roomRef.current = { slug, name };
           modeRef.current = roomMode;
           setMode(roomMode);
+          setHostId(roomHostId ? String(roomHostId) : null);
+          setGuestLimit(Number.isFinite(limit) ? limit : null);
+          // Entrar al directo lo abre a pantalla completa; desde ahí se puede
+          // minimizar a la barra para seguir en el feed.
+          setStageOpen(true);
 
           const others = existing
             .filter((p) => String(p.id) !== String(user.id))
-            .map((p) => ({ id: String(p.id), username: p.username, muted: false }));
+            .map((p) => ({ id: String(p.id), username: p.username, muted: false, cameraOff: false }));
           setPeers(others);
 
           if (roomMode === 'sfu') {
@@ -281,8 +348,8 @@ export function VoiceRoomProvider({ children }) {
               await startSfu({ routerRtpCapabilities, producers });
             } catch {
               // El SFU falló al montar el cliente (navegador sin soporte, worker
-              // caído). Se avisa en vez de fingir que se oye.
-              setError('No se pudo conectar el audio de la sala');
+              // caído). Se avisa en vez de fingir que se ve y se oye.
+              setError('No se pudo conectar el audio y el vídeo de la sala');
             }
           } else {
             // En malla, quien entra ofrece a cada uno de los presentes.
@@ -298,17 +365,17 @@ export function VoiceRoomProvider({ children }) {
         setPeers((prev) =>
           prev.some((p) => p.id === String(id))
             ? prev
-            : [...prev, { id: String(id), username, muted: false }]
+            : [...prev, { id: String(id), username, muted: false, cameraOff: false }]
         );
         // En malla no hacemos nada: él nos ofrecerá. En SFU tampoco: cuando
-        // publique su micrófono llegará `voice:new-producer`.
+        // publique su micrófono o su cámara llegará `voice:new-producer`.
       }),
 
-      // En SFU, alguien acaba de publicar su micrófono: nos suscribimos.
-      subscribe('voice:new-producer', ({ producerId, userId: owner }) => {
+      // En SFU, alguien acaba de publicar un flujo: nos suscribimos.
+      subscribe('voice:new-producer', ({ producerId, userId: owner, kind }) => {
         if (modeRef.current !== 'sfu' || !roomRef.current) return;
         if (String(owner) === String(user.id)) return;
-        sfuRef.current?.consume(producerId, String(owner)).catch(() => {});
+        sfuRef.current?.consume(producerId, String(owner), kind).catch(() => {});
       }),
 
       // --- Señalización de malla ---
@@ -374,6 +441,12 @@ export function VoiceRoomProvider({ children }) {
         );
       }),
 
+      subscribe('voice:peer-camera', ({ userId, off }) => {
+        setPeers((prev) =>
+          prev.map((p) => (p.id === String(userId) ? { ...p, cameraOff: !!off } : p))
+        );
+      }),
+
       subscribe('voice:left', () => {
         cleanup();
       }),
@@ -395,18 +468,42 @@ export function VoiceRoomProvider({ children }) {
       room,
       mode,
       peers,
+      hostId,
+      guestLimit,
       muted,
+      camOff,
       connecting,
       error,
       streamTick,
+      stageOpen,
       active: !!room,
       join,
       leave,
       toggleMute,
+      toggleCamera,
+      toggleStage,
       remoteStreamsRef,
+      remoteVideoStreamsRef,
       localStreamRef,
     }),
-    [room, mode, peers, muted, connecting, error, streamTick, join, leave, toggleMute]
+    [
+      room,
+      mode,
+      peers,
+      hostId,
+      guestLimit,
+      muted,
+      camOff,
+      connecting,
+      error,
+      streamTick,
+      stageOpen,
+      join,
+      leave,
+      toggleMute,
+      toggleCamera,
+      toggleStage,
+    ]
   );
 
   return <VoiceRoomContext.Provider value={value}>{children}</VoiceRoomContext.Provider>;

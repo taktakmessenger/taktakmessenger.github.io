@@ -215,6 +215,57 @@ async function newCtx(browser, token, user) {
       if (rb && rb.tracks > 0) ok(`Bob oye audio remoto (pistas=${rb.tracks}, ${rb.readyState})`);
       else bad(`Bob no tiene audio remoto -> ${JSON.stringify(rb)}`);
 
+      // Control de volumen de la voz. En un móvil los botones de volumen no
+      // siempre alcanzan un MediaStream, así que la app ofrece el suyo. Se
+      // comprueba que existe, que mueve de verdad el volumen del elemento de
+      // audio, y que el vídeo remoto no duplica el sonido.
+      const volUi = await pageA.evaluate(() => {
+        const el = document.querySelector('.call-volume input[type="range"]');
+        return el ? { min: el.min, max: el.max } : null;
+      });
+      if (volUi) ok('la llamada ofrece control de volumen');
+      else bad('no aparece el control de volumen en la llamada');
+
+      // React compara el valor contra su propio registro interno, así que hay
+      // que escribir con el setter nativo y luego emitir el evento, o el
+      // `onChange` no llega a dispararse.
+      const moved = await pageA.evaluate(() => {
+        const slider = document.querySelector('.call-volume input[type="range"]');
+        if (!slider) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(slider, '0.2');
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      });
+      await sleep(500);
+      const audioVol = await pageA.evaluate(() => {
+        const a = document.querySelector('audio');
+        return a ? a.volume : null;
+      });
+      if (moved && audioVol !== null && Math.abs(audioVol - 0.2) < 0.02) {
+        ok(`el control baja el volumen de la voz (${audioVol})`);
+      } else {
+        bad(`el control no cambió el volumen de la voz -> ${audioVol}`);
+      }
+
+      if (kind === 'video') {
+        const vidMuted = await pageA.evaluate(() => {
+          const v = document.querySelector('video.call-remote');
+          return v ? v.muted : null;
+        });
+        if (vidMuted === true) ok('el vídeo remoto no duplica el sonido');
+        else bad(`el vídeo remoto no está silenciado -> ${vidMuted}`);
+      }
+
+      // Se restaura el volumen para no arrastrarlo al resto de la prueba.
+      await pageA.evaluate(() => {
+        const slider = document.querySelector('.call-volume input[type="range"]');
+        if (!slider) return;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(slider, '1');
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
       if (kind === 'video') {
         const va = await remoteVideo(pageA);
         const vb = await remoteVideo(pageB);

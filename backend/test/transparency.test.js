@@ -158,3 +158,101 @@ test('clean export requires authentication', async () => {
   const res = await agent.get(`/api/videos/${video._id}/export`);
   assert.equal(res.status, 401);
 });
+
+// --- Descarga de vídeos de otros usuarios -----------------------------------
+// A diferencia de la exportación limpia, que es solo para el creador, cualquier
+// persona con sesión puede descargarse el vídeo de otra.
+
+test('cualquiera puede descargar el vídeo de otra persona', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const viewer = await registerUser(agent);
+  const video = await upload(agent, owner.token, { title: 'Baile de Verano' });
+
+  const res = await agent
+    .get(`/api/videos/${video._id}/download`)
+    .set('Authorization', `Bearer ${viewer.token}`);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.downloadUrl, video.videoUrl);
+  assert.equal(res.body.watermark, false);
+  assert.match(res.body.filename, /Baile-de-Verano/);
+  assert.match(res.body.filename, /\.mp4$/);
+});
+
+test('la descarga sube el contador del vídeo', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const viewer = await registerUser(agent);
+  const video = await upload(agent, owner.token);
+
+  await agent
+    .get(`/api/videos/${video._id}/download`)
+    .set('Authorization', `Bearer ${viewer.token}`);
+
+  const fresh = await Video.findById(video._id);
+  assert.equal(fresh.downloads, 1);
+});
+
+test('el propio creador también puede descargar su vídeo', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const video = await upload(agent, owner.token);
+
+  const res = await agent
+    .get(`/api/videos/${video._id}/download`)
+    .set('Authorization', `Bearer ${owner.token}`);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.downloadUrl, video.videoUrl);
+});
+
+test('descargar exige sesión', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const video = await upload(agent, owner.token);
+
+  const res = await agent.get(`/api/videos/${video._id}/download`);
+  assert.equal(res.status, 401);
+});
+
+test('no se descarga un vídeo rechazado', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const viewer = await registerUser(agent);
+  const video = await upload(agent, owner.token);
+
+  await Video.updateOne({ _id: video._id }, { moderationStatus: 'rejected' });
+
+  const res = await agent
+    .get(`/api/videos/${video._id}/download`)
+    .set('Authorization', `Bearer ${viewer.token}`);
+
+  assert.equal(res.status, 404);
+});
+
+test('el vídeo para adultos no se descarga sin verificar la edad', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const viewer = await registerUser(agent);
+  const video = await upload(agent, owner.token);
+  await Video.updateOne({ _id: video._id }, { isNSFW: true });
+
+  const res = await agent
+    .get(`/api/videos/${video._id}/download`)
+    .set('Authorization', `Bearer ${viewer.token}`);
+
+  // 404 y no 403: no se confirma que el vídeo exista.
+  assert.equal(res.status, 404);
+});
+
+test('un id inválido no llega a consultar', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+
+  const res = await agent
+    .get('/api/videos/no-es-un-id/download')
+    .set('Authorization', `Bearer ${user.token}`);
+
+  assert.equal(res.status, 400);
+});

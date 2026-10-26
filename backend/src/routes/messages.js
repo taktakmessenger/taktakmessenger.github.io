@@ -2,8 +2,10 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs/promises');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { body, param, query } = require('express-validator');
 const messages = require('../services/messageService');
+const transcriptionService = require('../services/transcriptionService');
 const liveSockets = require('../services/liveSockets');
 const env = require('../config/env');
 const attachments = require('../lib/attachments');
@@ -41,6 +43,18 @@ const upload = multer({
   storage,
   limits: { fileSize: Math.max(...Object.values(attachments.MAX_BYTES)) },
 });
+
+// Transcribir cuesta dinero por minuto de audio y lee un archivo del disco, así
+// que lleva su propio límite, más estrecho que el general. Se salta en tests.
+const transcribeLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 60 * 1000,
+      max: 20,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Demasiadas transcripciones seguidas, espera un momento' },
+    });
 
 // Every route here requires a session: messages are private by definition.
 router.use(auth);
@@ -250,6 +264,49 @@ router.post(
     liveSockets.broadcastMessage(result.message, result.participants, req.user.userId);
 
     res.status(201).json(result);
+  })
+);
+
+// Transcripción de una nota de voz, para poder traducirla.
+//
+// Va en el servidor y no en el navegador porque el archivo ya está aquí y porque
+// el respaldo del navegador necesita reproducir el audio en alto para que el
+// micrófono lo oiga, lo que no sirve con auriculares ni en un sitio silencioso.
+//
+// Se comprueba que el adjunto pertenece a una conversación del usuario antes de
+// tocar el archivo: sin eso, conocer la ruta de un adjunto (que se ve en el DOM
+// del chat) bastaría para pedir la transcripción del audio de otra persona.
+router.post(
+  '/transcribe',
+  transcribeLimiter,
+  [
+    body('url').isString().trim().notEmpty().withMessage('Falta el adjunto'),
+    body('language').optional({ nullable: true }).isString().trim().isLength({ max: 20 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const { url } = req.body;
+
+    const owns = await messages.ownsAttachment(url, req.user.userId);
+    if (!owns) throw new HttpError(404, 'Adjunto no encontrado');
+
+    // La ruta se resuelve contra la carpeta de subidas y se rechaza cualquier
+    // cosa que se salga de ella: el servicio nunca descarga una URL del cliente,
+    // lee un archivo del disco.
+    const resolved = transcriptionService.resolveAttachmentPath(url);
+
+    if (!transcriptionService.isConfigured()) {
+      // 503 y no un error genérico: el cliente usa este código para caer al
+      // reconocimiento local sin enseñar un error al usuario.
+      throw new HttpError(503, 'La transcripción en el servidor no está configurada');
+    }
+
+    const result = await transcriptionService.transcribeWithProvider({
+      ...resolved,
+      language: req.body.language || null,
+    });
+
+    res.json(result);
   })
 );
 

@@ -20,7 +20,7 @@ import { Device } from 'mediasoup-client';
  * @param {object} opts.routerRtpCapabilities  Capacidades del router del servidor.
  * @param {object} opts.iceServers  Servidores ICE (STUN/TURN) ya resueltos.
  * @param {string} opts.userId  El id propio, para no suscribirse a uno mismo.
- * @param {Function} opts.onRemoteTrack  Se llama con (track, peerId) por cada audio remoto.
+ * @param {Function} opts.onRemoteTrack  Se llama con (track, peerId, kind) por cada flujo remoto.
  */
 export async function createSfuClient({
   emitAck,
@@ -79,16 +79,27 @@ export async function createSfuClient({
       .catch(errback);
   });
 
-  // Publica el micrófono. Sin esto no se te oye.
-  const audioTrack = localStream.getAudioTracks()[0];
-  const producer = audioTrack
-    ? await sendTransport.produce({ track: audioTrack })
-    : null;
+  // Publica cámara y micrófono. Se publica cada pista como su propio productor
+  // para que quien entra pueda decidir qué consume: en un directo con veinte
+  // invitados, suscribirse a todos los vídeos satura el móvil, así que el
+  // cliente consume el vídeo de pocos (el del anfitrión siempre) y el audio de
+  // todos. Con una sola pista no habría esa elección.
+  const producers = [];
+  for (const track of localStream.getTracks()) {
+    // La cámara de un móvil puede venir a 1280x720 o más. Se pide al codificador
+    // que arranque razonable para una ventana de rejilla; el SFU y el cliente
+    // ajustan después con las capas.
+    const options = { track };
+    if (track.kind === 'video') {
+      options.encodings = [{ maxBitrate: 900_000 }];
+    }
+    producers.push(await sendTransport.produce(options));
+  }
 
   // Se guarda por productor para poder cerrarlos todos al salir.
   const consumers = new Map(); // producerId -> consumer
 
-  async function consume(producerId, userId) {
+  async function consume(producerId, userId, kind) {
     const response = await emitAck('voice:consume', {
       transportId: recvTransport.id,
       producerId,
@@ -106,28 +117,31 @@ export async function createSfuClient({
     consumers.set(producerId, consumer);
     consumer.on('transportclose', () => consumers.delete(producerId));
 
-    onRemoteTrack?.(consumer.track, userId);
+    // El `kind` viene del consumidor (fuente de verdad del servidor); el que
+    // llegó por parámetro solo es un respaldo para cuando el cliente ya sabía
+    // de antemano qué estaba pidiendo.
+    onRemoteTrack?.(consumer.track, userId, consumer.kind || kind);
     // El consumidor nace pausado; se reanuda cuando el cliente ya tiene la
-    // pista enganchada a un `<audio>`.
+    // pista enganchada a un `<audio>` o un `<video>`.
     await emitAck('voice:resume-consumer', { consumerId: consumer.id });
   }
 
   return {
     device,
-    producer,
-    // Suscribirse al audio de un participante. Idempotente: pedir dos veces el
+    producers,
+    // Suscribirse al flujo de un participante. Idempotente: pedir dos veces el
     // mismo productor no duplica el consumidor.
     consume,
     async consumeExisting(list) {
-      for (const { producerId, userId: owner } of list) {
+      for (const { producerId, userId: owner, kind } of list) {
         if (String(owner) === String(userId)) continue;
-        await consume(producerId, owner).catch(() => {});
+        await consume(producerId, owner, kind).catch(() => {});
       }
     },
     close() {
       for (const consumer of consumers.values()) consumer.close();
       consumers.clear();
-      producer?.close();
+      producers.forEach((p) => p.close());
       sendTransport.close();
       recvTransport.close();
     },

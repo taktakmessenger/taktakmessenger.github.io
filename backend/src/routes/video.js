@@ -9,6 +9,7 @@ const User = require('../models/User');
 const NewsSource = require('../models/NewsSource');
 const env = require('../config/env');
 const transcodeService = require('../services/transcodeService');
+const { isAcceptedVideo } = require('../lib/videoUpload');
 const feedService = require('../services/feedService');
 const newsService = require('../services/newsService');
 const commentService = require('../services/commentService');
@@ -36,13 +37,11 @@ const storage = multer.diskStorage({
   },
 });
 
-const VIDEO_MIME = /^video\/(mp4|webm|quicktime|x-matroska|ogg)$/;
-
 const upload = multer({
   storage,
   limits: { fileSize: env.maxVideoBytes },
   fileFilter: (req, file, cb) => {
-    if (!VIDEO_MIME.test(file.mimetype)) {
+    if (!isAcceptedVideo(file)) {
       return cb(new HttpError(400, 'Formato de video no soportado'));
     }
     return cb(null, true);
@@ -395,6 +394,50 @@ router.get(
   })
 );
 
+// Descarga de un video ajeno. A diferencia de `/:id/export`, que es solo para
+// el creador, aquí cualquiera puede bajarse el video de otra persona, que es lo
+// que se pidió. Se respeta la moderación: un video rechazado no existe y uno
+// para adultos sigue oculto a quien no verificó su edad, igual que en GET /:id.
+//
+// El fichero que se sirve es el original ya subido, así que no hay reencode ni
+// marca de agua que quitar.
+router.get(
+  '/:id/download',
+  auth,
+  [param('id').isMongoId().withMessage('ID inválido')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findById(req.params.id).select(
+      'title videoUrl creator moderationStatus isNSFW'
+    );
+    if (!video || video.moderationStatus === 'rejected') {
+      throw new HttpError(404, 'Video no encontrado');
+    }
+
+    // El contenido para adultos se oculta a quien no lo puede ver. Se responde
+    // 404 y no 403 para no confirmar que el video existe.
+    if (video.isNSFW && String(video.creator) !== String(req.user.userId)) {
+      if (!(await feedService.canViewAdultContent(req.user.userId))) {
+        throw new HttpError(404, 'Video no encontrado');
+      }
+    }
+
+    const ext = (video.videoUrl.split('.').pop() || 'mp4').split('?')[0];
+    const safeTitle = video.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 60);
+
+    // El contador sube solo cuando la descarga se concede, no en cada intento
+    // denegado. Es una señal de interés, como los "me gusta".
+    await Video.updateOne({ _id: video._id }, { $inc: { downloads: 1 } });
+
+    res.json({
+      downloadUrl: video.videoUrl,
+      filename: `${safeTitle || 'taktak'}-${video._id}.${ext}`,
+      watermark: false,
+      reencoded: false,
+    });
+  })
+);
+
 // Estado del transcode, sin efectos secundarios. Existe aparte de GET /:id
 // porque ese endpoint incrementa el contador de vistas: sondearlo desde la
 // pantalla de subida inflaría las vistas del propio creador.
@@ -462,6 +505,37 @@ router.post(
     startTranscode(video, inputPath, owner?.username);
 
     res.status(202).json({ queued: true, transcodeStatus: 'processing' });
+  })
+);
+
+// Compartir un vídeo. Antes el botón ➦ solo abría la hoja: el contador `shares`
+// nunca subía y el ranking le daba el mayor de sus pesos a una señal muerta.
+//
+// Es idempotente por persona (`sharedBy`, como `likedBy`): compartir el mismo
+// vídeo cinco veces no lo hace cinco veces más relevante, y sin la lista
+// cualquiera podría inflar el número a mano.
+router.post(
+  '/:id/share',
+  auth,
+  [param('id').isMongoId().withMessage('ID inválido')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findOneAndUpdate(
+      { _id: req.params.id, sharedBy: { $ne: req.user.userId } },
+      { $addToSet: { sharedBy: req.user.userId }, $inc: { shares: 1 } },
+      { new: true }
+    ).select('shares');
+
+    // Sin coincidencia puede ser "ya lo compartió" o "no existe". Se distingue
+    // para no inventar un contador en un vídeo inexistente.
+    if (!video) {
+      const exists = await Video.exists({ _id: req.params.id });
+      if (!exists) throw new HttpError(404, 'Video no encontrado');
+      const current = await Video.findById(req.params.id).select('shares');
+      return res.json({ shares: current.shares, shared: true });
+    }
+
+    res.json({ shares: video.shares, shared: true });
   })
 );
 

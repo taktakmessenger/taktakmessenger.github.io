@@ -4,9 +4,11 @@ const User = require('../models/User');
 const Video = require('../models/Video');
 const Transaction = require('../models/Transaction');
 const NewsSource = require('../models/NewsSource');
+const Report = require('../models/Report');
 const walletService = require('../services/walletService');
 const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
+const safetyService = require('../services/safetyService');
 const { auth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -230,6 +232,97 @@ router.post(
   asyncHandler(async (req, res) => {
     const video = await newsService.revokeBadge(req.params.id);
     res.json({ video });
+  })
+);
+
+// --- Cola de reportes ----------------------------------------------------
+//
+// Sin esto, un reporte era un agujero negro: el usuario lo enviaba y nadie lo
+// veía. La cola muestra lo abierto primero, con el contenido reportado y quién
+// lo publicó, que es lo que hace falta para decidir.
+
+router.get(
+  '/reports',
+  [query('status').optional().isIn(['open', 'reviewing', 'actioned', 'dismissed'])],
+  validate,
+  asyncHandler(async (req, res) => {
+    const filter = req.query.status ? { status: req.query.status } : { status: 'open' };
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .populate('reporter', 'username')
+      .lean();
+
+    // El objeto reportado se resuelve aquí y no con un `populate`: el `ref` de
+    // Mongoose no admite un valor dinámico, así que hay que buscarlo por tipo.
+    const enriched = await Promise.all(
+      reports.map(async (report) => {
+        let target = null;
+        try {
+          const { doc, owner } = await safetyService.resolveTarget(
+            report.targetType,
+            report.targetId
+          );
+          const ownerUser = await User.findById(owner).select('username');
+          target = {
+            id: doc._id,
+            owner: ownerUser ? { id: ownerUser._id, username: ownerUser.username } : null,
+            // Un recorte del contenido hace la cola legible sin abrir nada.
+            preview:
+              doc.title ||
+              doc.text ||
+              doc.username ||
+              (doc.attachment?.name ? `Adjunto: ${doc.attachment.name}` : null),
+          };
+        } catch {
+          // El contenido pudo borrarse entre el reporte y la revisión. El
+          // reporte se sigue mostrando, marcado como sin objeto.
+          target = null;
+        }
+        return {
+          id: report._id,
+          targetType: report.targetType,
+          targetId: report.targetId,
+          reason: report.reason,
+          details: report.details,
+          status: report.status,
+          reporter: report.reporter
+            ? { id: report.reporter._id, username: report.reporter.username }
+            : null,
+          target,
+          createdAt: report.createdAt,
+        };
+      })
+    );
+
+    res.json({ reports: enriched });
+  })
+);
+
+// Decisión sobre un reporte. `actioned` implica que se tomó una medida sobre el
+// contenido; `dismissed`, que no procedía. La nota es para el siguiente
+// moderador que lo mire.
+router.patch(
+  '/reports/:id',
+  [
+    param('id').isMongoId(),
+    body('status').isIn(['open', 'reviewing', 'actioned', 'dismissed']),
+    body('note').optional().trim().isLength({ max: 500 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const report = await Report.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: req.body.status,
+        resolutionNote: req.body.note || '',
+        reviewedBy: req.user.userId,
+        reviewedAt: new Date(),
+      },
+      { new: true }
+    );
+    if (!report) throw new HttpError(404, 'Reporte no encontrado');
+    res.json({ report });
   })
 );
 
