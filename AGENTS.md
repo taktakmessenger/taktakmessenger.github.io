@@ -696,6 +696,23 @@ Si vuelves a ver ese error, comprueba que el proxy sigue ahí.
   Para que se relance solo, el vigilante `scripts/dev-watch.sh`. Comprueba la
   pila cada `WATCH_INTERVAL` segundos (15 por defecto) y relanza `dev-up.sh` si
   el backend o el frontend no responden.
+- **El vigilante mira `"db":"connected"`, no solo el 200.** `/health` responde
+  200 aunque Mongo esté caído, así que vigilar el puerto dejaba la app colgada en
+  el splash durante minutos sin que nadie la levantara: el 200 tapaba la avería.
+  `api_ok()` exige la base conectada; si no, es una caída más y se relanza.
+- **Si el contenedor sigue arriba pero su puerto no responde, hay que
+  reiniciarlo.** El síntoma real que se vio: `docker-proxy` (el que publica el
+  27017 al host) murió, el contenedor seguía "Up", y `dev-up.sh` lo daba por
+  bueno. Antes de relanzar, el vigilante hace `docker restart` de Mongo, que
+  vuelve a levantar el proxy.
+- **La API se localiza por su respuesta, no por `SERVE_MODE`.** El vigilante
+  busca `"service":"TAK TAK API"` en el 4000 y el 12000. Depender de la variable
+  era frágil: un vigilante relanzado sin ella miraba el 12000 (Vite devuelve
+  HTML, no la API) y reiniciaba la pila en falso.
+- **`serverSelectionTimeoutMS: 5000` en `mongoose.connect`.** Sin esto, con
+  Mongo caído cada consulta espera 30 s (el valor por defecto) antes de fallar y
+  la app se queda en el splash todo ese rato. Con 5 s falla rápido y el cliente
+  puede reaccionar.
 
 ### Modo de servicio: `single` (por defecto) contra `split`
 

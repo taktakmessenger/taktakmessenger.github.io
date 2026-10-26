@@ -3,7 +3,11 @@ const env = require('./env');
 
 async function connect(uri = env.mongoUri) {
   mongoose.set('strictQuery', true);
-  await mongoose.connect(uri);
+  // Sin esto, con Mongo caído cada consulta espera 30 s (el
+  // `serverSelectionTimeoutMS` por defecto) antes de fallar. Durante esos 30 s
+  // la app queda en el splash: el usuario ve "no abre, se queda". Fallar en 5 s
+  // deja que el cliente muestre la app y su aviso en vez de colgarse.
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
   return mongoose.connection;
 }
 
