@@ -50,8 +50,23 @@ export function SocketProvider({ children }) {
       reconnectionDelayMax: 10_000,
     });
 
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      // Al conectar se informa de la visibilidad actual. El servidor solo manda
+      // la llamada en vivo a un socket que puede repicar (pestaña visible) y
+      // usa push para el resto: sin esto, una app en segundo plano dejaba el
+      // socket abierto, el servidor la daba por disponible y no sonaba nada.
+      instance.volatile.emit('app:visibility', { visible: document.visibilityState === 'visible' });
+    };
     const onDisconnect = () => setConnected(false);
+
+    // Cada cambio de primer plano/segundo plano se comunica. `volatile` a
+    // propósito: es un dato efímero, y encolarlo mientras no hay conexión solo
+    // reenviaría un estado viejo (el `onConnect` ya manda el actual).
+    const onVisibility = () => {
+      instance.volatile.emit('app:visibility', { visible: document.visibilityState === 'visible' });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     // El handshake solo lleva el token al conectar. Si este caducó, el servidor
     // rechaza la conexión con "Token inválido" y el socket reintentaría en vano
@@ -84,6 +99,7 @@ export function SocketProvider({ children }) {
       instance.off('connect', onConnect);
       instance.off('disconnect', onDisconnect);
       instance.off('connect_error', onConnectError);
+      document.removeEventListener('visibilitychange', onVisibility);
       instance.disconnect();
       setSocket(null);
       setConnected(false);

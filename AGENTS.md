@@ -326,6 +326,20 @@ no está disponible". Con Web Push suena como WhatsApp: el servicio de push
   llamada entra en vivo y **no se manda push** (sería un aviso duplicado). Si no
   lo hay, se manda el push, se guarda la invitación en `pendingCalls` y se
   responde `call:ringing { reachable: false, pushed: true }`.
+- **Un socket oculto no cuenta como disponible.** El cliente manda
+  `app:visibility { visible }` al conectar y en cada `visibilitychange`
+  (`SocketContext`). El servidor filtra con `s.data.visible !== false`: solo
+  repica en vivo quien tiene la pestaña visible. Contar el socket oculto como
+  disponible era el fallo de "no repica con la app cerrada": en segundo plano el
+  socket sigue abierto, el servidor daba la llamada por entregada y no mandaba
+  push, así que el teléfono nunca sonaba. Al volver al frente se reentrega la
+  invitación pendiente (el mismo `takePendingCall`, sin duplicar: la primera
+  lectura lo borra).
+- **El push de una llamada va con `urgency: 'high'` y `TTL`**
+  (`CALL_PUSH_OPTIONS`). Sin urgencia alta, Android agrupa los push en reposo
+  (Doze) y los entrega minutos después, cuando la llamada ya caducó: eso también
+  se veía como "no repica". La opción de `web-push` se llama `TTL` en
+  **mayúsculas**; cualquier otro nombre (`ttl`) lanza error de opción inválida.
 - **`call:ringing` se emite una sola vez, al final, ya con la decisión tomada.**
   Emitirlo antes de intentar el push rompe la función: el cliente ve
   `reachable: false` y cuelga como "no disponible" justo antes de que llegue el

@@ -267,6 +267,19 @@ function initLiveSockets(server) {
       const pendingCall = takePendingCall(id);
       if (pendingCall) socket.emit('call:incoming', pendingCall);
 
+      // El cliente informa de si su pestaña está en primer plano. Es lo que
+      // permite distinguir "tiene la app abierta y puede sonar" de "tiene el
+      // socket abierto pero está en segundo plano". Al volver al frente se le
+      // reentrega la invitación que se le mandó por push, para que suene en la
+      // app sin depender de que pulse la notificación.
+      socket.on('app:visibility', ({ visible } = {}) => {
+        socket.data.visible = visible !== false;
+        if (socket.data.visible) {
+          const pending = takePendingCall(id);
+          if (pending) socket.emit('call:incoming', pending);
+        }
+      });
+
       socket.on('disconnect', () => {
         const current = (onlineSockets.get(id) || 1) - 1;
         if (current <= 0) {
@@ -457,7 +470,17 @@ function initLiveSockets(server) {
       io.in(userRoom(to))
         .fetchSockets()
         .then(async (sockets) => {
-          if (sockets.length > 0) {
+          // Un socket oculto no puede repicar: la pestaña existe, pero el
+          // usuario no la está mirando y el tono no suena. Contarlo como
+          // "disponible" era justo el fallo: la app cerrada o en segundo plano
+          // dejaba el socket abierto, el servidor daba la llamada por entregada
+          // y no mandaba push, así que el teléfono no repicaba nunca.
+          //
+          // `visible !== false` deja pasar a quien aún no ha informado: una
+          // pestaña recién abierta, antes de mandar su primer `app:visibility`.
+          const canRing = sockets.filter((s) => s.data?.visible !== false);
+
+          if (canRing.length > 0) {
             socket.emit('call:ringing', {
               to,
               reachable: true,
@@ -484,7 +507,11 @@ function initLiveSockets(server) {
               from: { id: me.id, username: me.username },
               kind: callKind,
               conversationId: payload.conversationId,
-            })
+            }),
+            // Urgencia alta: es lo que despierta el teléfono al instante con la
+            // pantalla apagada. Con urgencia normal Android lo aplaza en reposo
+            // y la llamada llega cuando ya caducó.
+            pushService.CALL_PUSH_OPTIONS
           );
 
           if (sent > 0) {

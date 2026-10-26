@@ -245,3 +245,90 @@ test('accepting clears the pending invite so it does not ring twice', async () =
     await server.close();
   }
 });
+
+// El fallo que reportó el usuario: con la app en segundo plano, el socket sigue
+// abierto, así que el servidor creía que el otro estaba disponible, emitía la
+// llamada por socket y no mandaba push. El teléfono no repicaba. Ahora un
+// socket que se declara oculto no cuenta como "puede sonar" y se manda push.
+test('a callee with the app in the background gets a push, not a live ring', async () => {
+  const server = await startServer();
+  const restore = stubPush({ sent: 1 });
+  let pushCalls = 0;
+  let pushOptions = null;
+  const realSend = pushService.sendToUser;
+  pushService.sendToUser = (...args) => {
+    pushCalls += 1;
+    pushOptions = args[2];
+    return realSend(...args);
+  };
+
+  try {
+    const agent = require('./helpers').app();
+    const { token: tokenA } = await registerUser(agent, { username: 'bga' });
+    const { token: tokenB, user: userB } = await registerUser(agent, { username: 'bgb' });
+
+    const socketA = await connect(server.url, tokenA);
+    const socketB = await connect(server.url, tokenB);
+
+    // B pasa a segundo plano: el socket sigue vivo, pero ya no puede repicar.
+    socketB.emit('app:visibility', { visible: false });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const ringing = once(socketA, 'call:ringing');
+    socketA.emit('call:invite', { to: String(userB.id || userB._id), kind: 'video' });
+    const status = await ringing;
+
+    // La llamada no se da por "en vivo": se despierta el teléfono con push.
+    assert.equal(status.reachable, false, 'un socket oculto no puede repicar');
+    assert.equal(status.pushed, true, 'debe sonar por push aunque el socket esté abierto');
+    assert.equal(pushCalls, 1, 'el push tiene que enviarse aunque haya socket oculto');
+    // Urgencia alta: sin esto Android aplaza el push en reposo y la llamada
+    // llega cuando ya caducó, que es el "no repica" reportado.
+    assert.equal(pushOptions?.urgency, 'high', 'la llamada debe enviarse con urgencia alta');
+    assert.ok(pushOptions?.TTL > 0, 'debe llevar un TTL para no sonar cuando ya venció');
+
+    socketA.close();
+    socketB.close();
+  } finally {
+    restore();
+    await server.close();
+  }
+});
+
+// Al volver al primer plano, la invitación que se mandó por push se reentrega
+// en vivo: así suena en la app sin depender de que el usuario pulse la
+// notificación, que es como se comporta WhatsApp.
+test('the pending invite is delivered when the app returns to the foreground', async () => {
+  const server = await startServer();
+  const restore = stubPush({ sent: 1 });
+
+  try {
+    const agent = require('./helpers').app();
+    const { token: tokenA } = await registerUser(agent, { username: 'fga' });
+    const { token: tokenB, user: userB } = await registerUser(agent, { username: 'fgb' });
+
+    const socketA = await connect(server.url, tokenA);
+    const socketB = await connect(server.url, tokenB);
+    socketB.emit('app:visibility', { visible: false });
+    await new Promise((r) => setTimeout(r, 150));
+
+    // A llama con B en segundo plano: se manda push y se guarda la invitación.
+    const ringing = once(socketA, 'call:ringing');
+    socketA.emit('call:invite', { to: String(userB.id || userB._id), kind: 'audio' });
+    const status = await ringing;
+    assert.equal(status.pushed, true);
+
+    // B vuelve al primer plano: la invitación pendiente llega a su socket.
+    const incoming = once(socketB, 'call:incoming');
+    socketB.emit('app:visibility', { visible: true });
+    const payload = await incoming;
+    assert.equal(payload.kind, 'audio');
+
+    socketA.close();
+    socketB.close();
+  } finally {
+    restore();
+    await server.close();
+  }
+});
+

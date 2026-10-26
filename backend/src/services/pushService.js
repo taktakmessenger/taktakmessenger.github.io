@@ -79,8 +79,20 @@ async function removeSubscription({ userId, endpoint }) {
  *
  * Una suscripción caducada responde 404/410 y se borra en el momento: son
  * cientos acumulándose con el tiempo y dejarlas ahí hace cada llamada más lenta.
+ *
+ * `options` viaja al servicio de push:
+ *
+ *  - `urgency: 'high'` es lo que hace que el teléfono suene **al instante** con
+ *    la pantalla apagada. Android agrupa los push de urgencia normal en reposo
+ *    (Doze) y los entrega minutos después, cuando la llamada ya venció: era
+ *    justo el "no repica" que se reportaba. Una llamada es urgente por
+ *    definición.
+ *  - `TTL` corto para una llamada: si el teléfono está apagado o sin red más de
+ *    lo que dura el timbre, la notificación no debe aparecer después, ya muerta.
+ *    (La opción se llama `TTL` en mayúsculas: `web-push` rechaza cualquier otro
+ *    nombre, así que un `ttl` minúsculo aquí fallaría en silencio o de plano.)
  */
-async function sendToUser(userId, payload) {
+async function sendToUser(userId, payload, options = {}) {
   if (!isConfigured()) return { sent: 0, total: 0 };
 
   ensureReady();
@@ -99,7 +111,8 @@ async function sendToUser(userId, payload) {
             endpoint: sub.endpoint,
             keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
           },
-          body
+          body,
+          options
         );
         sent += 1;
         sub.lastUsedAt = new Date();
@@ -118,6 +131,15 @@ async function sendToUser(userId, payload) {
 
   return { sent, total: subs.length };
 }
+
+/**
+ * Opciones de envío de una llamada entrante.
+ *
+ * Una llamada no es un aviso cualquiera: tiene que despertar el teléfono ya y
+ * dejar de valer en cuanto pasa el timbre. `high` evita el aplazamiento de
+ * Android en reposo, y el `TTL` evita que suene una llamada de hace un minuto.
+ */
+const CALL_PUSH_OPTIONS = { urgency: 'high', TTL: 45000 };
 
 /**
  * Payload de una llamada entrante.
@@ -152,4 +174,5 @@ module.exports = {
   removeSubscription,
   sendToUser,
   incomingCallPayload,
+  CALL_PUSH_OPTIONS,
 };
