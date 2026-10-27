@@ -70,6 +70,19 @@ check('arranca en Vídeos', (await videoTab.getAttribute('aria-selected')) === '
 check('el feed de vídeos está a la vista', (await page.locator('.reels').count()) > 0);
 check('Facetak no se ve todavía', (await page.locator('.wall').count()) === 0);
 
+// --- La lupa está en la barra superior -------------------------------------
+console.log('\n▸ La lupa está arriba, junto al selector');
+const search = page.locator('.home-search');
+check('la lupa está en la barra superior', (await search.count()) > 0);
+check('la lupa está en el mismo renglón que el selector', (await page.locator('.home-topbar .home-search').count()) > 0);
+// Al pulsarla debe abrirse Explorar, que es quien busca.
+await search.click();
+await page.waitForTimeout(1000);
+check('la lupa abre Explorar', (await page.locator('.explore, .search-panel, .explore-search').count()) > 0);
+// Se vuelve a Inicio para seguir con el resto de la prueba.
+await page.locator('.tabbar-btn', { hasText: 'Inicio' }).click();
+await page.waitForTimeout(1200);
+
 // --- Pasar a Publicaciones -------------------------------------------------
 console.log('\n▸ Se pasa a Publicaciones');
 await postsTab.click();

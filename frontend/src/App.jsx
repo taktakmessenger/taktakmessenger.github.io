@@ -406,6 +406,10 @@ function Shell() {
             onCall={callPeer}
             onMessage={messageCreator}
             onOpenProfile={() => setView('profile')}
+            onSearch={() => {
+              setExploreQuery('');
+              setView('explore');
+            }}
             focusVideoId={focusVideoId}
           />
         );

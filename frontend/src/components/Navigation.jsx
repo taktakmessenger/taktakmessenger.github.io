@@ -5,9 +5,10 @@ import api from '../api/client';
 
 const TABS = [
   { id: 'feed', label: 'Inicio', icon: '🏠' },
-  { id: 'explore', label: 'Explorar', icon: '🔍' },
   { id: 'wall', label: 'Facetak', icon: '📰' },
-  { id: 'squads', label: 'Creators', icon: '👥' },
+  // El nombre de la pestaña va en inglés a propósito: es la marca del producto
+  // ("TAK Live Creator"), no una traducción de la interfaz.
+  { id: 'squads', label: 'TAK Live Creator', icon: '👥' },
   { id: 'upload', label: 'Subir', icon: '＋', primary: true },
   { id: 'messages', label: 'WhaTaka', icon: '💬' },
   { id: 'profile', label: 'Perfil', icon: '👤' },
@@ -89,13 +90,13 @@ export default function Navigation({ currentView, setCurrentView }) {
         type="button"
         className={`tabbar-btn ${currentView === 'activity' ? 'active' : ''}`}
         onClick={() => setCurrentView('activity')}
-        aria-label={alerts > 0 ? `Actividad, ${alerts} sin leer` : 'Actividad'}
+        aria-label={alerts > 0 ? `Notificaciones, ${alerts} sin leer` : 'Notificaciones'}
         aria-current={currentView === 'activity' ? 'page' : undefined}
       >
         <span className="tabbar-icon" aria-hidden="true">
           🔔
         </span>
-        <span className="tabbar-label">Avisos</span>
+        <span className="tabbar-label">Notificaciones</span>
         {alerts > 0 && (
           <span className="nav-badge" aria-hidden="true">
             {alerts > 9 ? '9+' : alerts}

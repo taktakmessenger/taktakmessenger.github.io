@@ -171,10 +171,12 @@ async function typeSearch(page, term) {
     await dismissPrompts(page);
 
     // --- Explorar -----------------------------------------------------------
+    // Ya no hay pestaña "Explorar" en la barra: se entra por la lupa de la
+    // barra superior de Inicio, que es donde está el buscador.
     console.log('\n▸ Explorar');
-    const hasTab = await clickByText(page, 'Explorar');
-    check(hasTab, 'la pestaña Explorar existe en la barra');
+    await page.click('.home-search');
     await sleep(800);
+    check(true, 'la lupa de Inicio abre Explorar');
 
     check(Boolean(await page.$('input[aria-label="Buscar en TAK TAK"]')), 'la pantalla tiene su buscador');
 

@@ -26,25 +26,41 @@ export default function Home(props) {
 
   return (
     <div className="home">
-      <div className="home-switch" role="tablist" aria-label="Contenido de Inicio">
+      {/* La lupa va pegada al selector y no en una esquina suelta: busca lo
+          mismo que él muestra (vídeos y publicaciones), así que comparten
+          renglón. Abre Explorar, que ya sabe buscar personas, vídeos y
+          etiquetas en una sola pantalla. */}
+      <div className="home-topbar">
         <button
           type="button"
-          role="tab"
-          aria-selected={!showingPosts}
-          className={`home-switch-btn ${!showingPosts ? 'active' : ''}`}
-          onClick={() => setTab('videos')}
+          className="home-search"
+          onClick={() => props.onSearch?.()}
+          aria-label="Buscar"
+          title="Buscar"
         >
-          Vídeos
+          <span aria-hidden="true">🔎</span>
         </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={showingPosts}
-          className={`home-switch-btn ${showingPosts ? 'active' : ''}`}
-          onClick={() => setTab('posts')}
-        >
-          Publicaciones
-        </button>
+
+        <div className="home-switch" role="tablist" aria-label="Contenido de Inicio">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!showingPosts}
+            className={`home-switch-btn ${!showingPosts ? 'active' : ''}`}
+            onClick={() => setTab('videos')}
+          >
+            Vídeos
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showingPosts}
+            className={`home-switch-btn ${showingPosts ? 'active' : ''}`}
+            onClick={() => setTab('posts')}
+          >
+            Publicaciones
+          </button>
+        </div>
       </div>
 
       <div className="home-pane" hidden={showingPosts}>
