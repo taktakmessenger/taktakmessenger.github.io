@@ -144,6 +144,11 @@ const userSchema = new mongoose.Schema(
     // Si quiere subtítulos en las llamadas traducidas. Se puede querer oír la
     // voz original con subtítulos, o solo la traducida.
     callCaptions: { type: Boolean, default: true },
+    // Si quiere que el teléfono suene y vibre cuando entra una llamada. Va
+    // activado por defecto (como WhatsApp): una llamada que no se oye no sirve
+    // de nada. Se puede apagar para quien trabaja en silencio y prefiere ver
+    // solo la notificación.
+    callRingtone: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

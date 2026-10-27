@@ -385,6 +385,26 @@ test('la traducción automática está apagada por defecto', async () => {
   assert.equal(res.body.user.callCaptions, true);
 });
 
+test('el repique de llamada está activado por defecto y se puede apagar', async () => {
+  const agent = app();
+  const { token } = await registerUser(agent);
+
+  // Por defecto suena: una llamada que no se oye no sirve de nada.
+  const initial = await agent.get('/api/users/me').set('Authorization', `Bearer ${token}`);
+  assert.equal(initial.body.user.callRingtone, true);
+
+  const off = await agent
+    .patch('/api/users/me')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ callRingtone: false });
+  assert.equal(off.status, 200);
+  assert.equal(off.body.user.callRingtone, false);
+
+  // Y se persiste, no solo se refleja en la respuesta.
+  const stored = await User.findOne({ callRingtone: false });
+  assert.ok(stored, 'la preferencia debe quedar guardada');
+});
+
 // --- Proveedor sin clave ----------------------------------------------------
 //
 // MyMemory es lo que hace que la app traduzca de verdad recién instalada, sin

@@ -195,7 +195,17 @@ export function CallProvider({ children }) {
   // Tono y vibración mientras la llamada timbra. Suena en 'incoming' (alguien
   // llama) y en 'ringing' (estamos llamando), y para en cuanto la llamada se
   // contesta, se rechaza o se cuelga: cualquier otro estado apaga el timbre.
+  //
+  // Se puede apagar desde Ajustes (`callRingtone`). El valor por defecto es
+  // sonar: una llamada que no se oye no sirve de nada. Cuando está apagado, la
+  // pantalla de llamada sigue apareciendo —lo que se silencia es el timbre, no
+  // el aviso—, que es justo lo que quiere quien trabaja en silencio.
+  const ringtoneOn = user?.callRingtone !== false;
   useEffect(() => {
+    if (!ringtoneOn) {
+      stopRingtone();
+      return;
+    }
     if (status === 'incoming') {
       startRingtone('incoming');
       return;
@@ -205,7 +215,7 @@ export function CallProvider({ children }) {
       return;
     }
     stopRingtone();
-  }, [status]);
+  }, [status, ringtoneOn]);
 
   // Al desmontar no debe quedar un tono sonando para siempre.
   useEffect(() => () => stopRingtone(), []);

@@ -85,16 +85,18 @@ router.patch(
     body('preferredLanguage').optional({ nullable: true }).isString().trim(),
     body('autoTranslate').optional().isBoolean(),
     body('callCaptions').optional().isBoolean(),
+    body('callRingtone').optional().isBoolean(),
   ],
   validate,
   asyncHandler(async (req, res) => {
-    const { displayName, bio, avatar, autoTranslate, callCaptions } = req.body;
+    const { displayName, bio, avatar, autoTranslate, callCaptions, callRingtone } = req.body;
     const update = {};
     if (displayName !== undefined) update['profile.displayName'] = displayName;
     if (bio !== undefined) update['profile.bio'] = bio;
     if (avatar !== undefined) update['profile.avatar'] = avatar;
     if (autoTranslate !== undefined) update.autoTranslate = autoTranslate;
     if (callCaptions !== undefined) update.callCaptions = callCaptions;
+    if (callRingtone !== undefined) update.callRingtone = callRingtone;
 
     if (req.body.preferredLanguage !== undefined) {
       // Cadena vacía o null significa "sin preferencia": se guarda null en vez

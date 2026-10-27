@@ -29,7 +29,33 @@ export default function Settings({ onBack, onNavigate }) {
   const [language, setLanguage] = useState(normalizeLanguage(user?.preferredLanguage) || '');
   const [autoTranslate, setAutoTranslate] = useState(Boolean(user?.autoTranslate));
   const [callCaptions, setCallCaptions] = useState(user?.callCaptions !== false);
+  // El timbre de llamada. Va en el perfil y no en el dispositivo: quien apaga el
+  // sonido lo espera apagado también en el otro teléfono. Por defecto suena.
+  const [callRingtone, setCallRingtone] = useState(user?.callRingtone !== false);
   const [savingLanguage, setSavingLanguage] = useState(false);
+
+  // Guarda una preferencia de llamada suelta sin tocar el resto. Se separa de
+  // `saveLanguage` para que el botón del timbre no reenvíe el idioma ni los
+  // subtítulos: mandar campos que no cambiaron es una vía de sorpresas.
+  async function saveCallPrefs(patch) {
+    setSavingLanguage(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await api.patch('/users/me', patch);
+      if (data?.user) {
+        const me = normalizeUser(data.user);
+        setUser(me);
+        localStorage.setItem('taktak_user', JSON.stringify(me));
+      }
+      setNotice('Preferencia guardada');
+    } catch (err) {
+      setError(err?.message || 'No se pudieron guardar las preferencias');
+      setCallRingtone(user?.callRingtone !== false);
+    } finally {
+      setSavingLanguage(false);
+    }
+  }
 
   async function saveLanguage(nextLanguage, nextAuto, nextCaptions = callCaptions) {
     setSavingLanguage(true);
@@ -241,6 +267,26 @@ export default function Settings({ onBack, onNavigate }) {
         <p className="settings-hint">
           Con las notificaciones activadas, una llamada suena aunque tengas la app cerrada,
           como en WhatsApp. Si no, solo sonará con la app abierta.
+        </p>
+        <div className="settings-row">
+          <span>Repique de llamada</span>
+          <button
+            type="button"
+            className={`settings-toggle ${callRingtone ? 'on' : ''}`}
+            onClick={() => {
+              const nextValue = !callRingtone;
+              setCallRingtone(nextValue);
+              saveCallPrefs({ callRingtone: nextValue });
+            }}
+            disabled={savingLanguage || !user}
+            aria-pressed={callRingtone}
+          >
+            {callRingtone ? 'Activado' : 'Desactivado'}
+          </button>
+        </div>
+        <p className="settings-hint">
+          El repique hace sonar y vibrar el teléfono cuando entra una llamada. Al
+          desactivarlo, la pantalla de llamada sigue apareciendo, pero en silencio.
         </p>
         {pushPermission === 'granted' ? (
           <div className="settings-row">
