@@ -95,6 +95,31 @@ function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGi
 
       <div className="reel-overlay">
         <div className="reel-author">
+          {/* Avatar del creador con el botón "+" de seguir, como TikTok: es lo
+              primero que identifica de quién es el vídeo. */}
+          <div className="reel-avatar-wrap">
+            <button
+              type="button"
+              className="reel-avatar"
+              onClick={() => onOpenCreator(video.creator)}
+              aria-label={`Ver perfil de @${video.creator?.username || 'creador'}`}
+            >
+              {video.creator?.profile?.avatar ? (
+                <img src={video.creator.profile.avatar} alt="" />
+              ) : (
+                <span aria-hidden="true">{(video.creator?.username || '?').charAt(0).toUpperCase()}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="reel-follow"
+              onClick={() => onOpenCreator(video.creator)}
+              aria-label={`Seguir a @${video.creator?.username || 'creador'}`}
+              title="Seguir"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>
           <button
             type="button"
             className="reel-author-name"
@@ -128,6 +153,11 @@ function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGi
           {video.transcodeStatus === 'processing' && (
             <small className="reel-badge">Procesando calidad…</small>
           )}
+          {/* Disco de audio girando, la marca visual de TikTok. Solo gira
+              cuando el vídeo está activo y el sonido está encendido. */}
+          <div className={`reel-disc ${active && soundOn ? 'spin' : ''}`} aria-hidden="true">
+            <span>♪</span>
+          </div>
         </div>
 
         <div className="reel-actions">

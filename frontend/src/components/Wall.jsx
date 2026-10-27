@@ -325,16 +325,29 @@ function PostCard({ post, currentUser, onOpenProfile }) {
       {error && <p className="wall-error">{error}</p>}
 
       <footer className="wall-post-actions">
+        {/* Fila de acciones como en Facebook: icono + etiqueta, con el número
+            al lado. Los separadores verticales entre botones son parte del
+            aspecto de la barra. */}
         <button
           type="button"
           className={`wall-action ${liked ? 'liked' : ''}`}
           onClick={toggleLike}
           disabled={!currentUser}
+          aria-pressed={liked}
         >
-          ❤️ {likes}
+          <span aria-hidden="true">{liked ? '❤️' : '🤍'}</span>
+          <span className="wall-action-label">Me gusta</span>
+          <span className="wall-action-count">{likes}</span>
         </button>
-        <button type="button" className="wall-action" onClick={() => setShowComments((v) => !v)}>
-          💬 {commentCount}
+        <button
+          type="button"
+          className="wall-action"
+          onClick={() => setShowComments((v) => !v)}
+          aria-expanded={showComments}
+        >
+          <span aria-hidden="true">💬</span>
+          <span className="wall-action-label">Comentar</span>
+          <span className="wall-action-count">{commentCount}</span>
         </button>
       </footer>
 

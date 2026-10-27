@@ -662,8 +662,14 @@ function Thread({ conversationId, onBack, onCall }) {
           maxLength={2000}
           aria-label="Mensaje"
         />
-        <button type="submit" className="btn-primary" disabled={(!text.trim() && !attachment) || uploading}>
-          Enviar
+        <button
+          type="submit"
+          className="btn-primary composer-send"
+          disabled={(!text.trim() && !attachment) || uploading}
+          aria-label="Enviar"
+          title="Enviar"
+        >
+          <span aria-hidden="true">➤</span>
         </button>
       </form>
     </div>
