@@ -11,6 +11,12 @@ TAK TAK: plataforma de video con economía de tokens TTC.
 ## Comandos
 
 ```bash
+# Recuperación tras reinicio del contenedor (síntoma: 502 Bad Gateway).
+# Arranca Docker, levanta la pila, comprueba la URL pública y el vigilante.
+# Idempotente. Preferir esto a `dev-up.sh` cuando Docker también se ha caído:
+# dev-up.sh no arranca el daemon de forma fiable y parece colgado.
+bash scripts/revive.sh
+
 # Pila completa (Docker + MongoDB + web + API). Idempotente, y arranca además
 # el vigilante. Por defecto sirve todo desde un solo proceso (SERVE_MODE=single).
 bash scripts/dev-up.sh
@@ -69,6 +75,20 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   el mismo engagement. La sub-comunidad privada se llama **TAK Creators** en la
   UI, pero internamente sigue siendo `squads` (modelo, ruta `/api/squads`,
   componente `Squads.jsx`); no renombres esos identificadores sin migración.
+- **Dos colores base: violeta y turquesa.** La identidad visual de TAK TAK son
+  el violeta (`--primary` `#b04bfb`) y el turquesa (`--turquoise` `#00f7d4`).
+  El turquesa se usa en lo que hay que leer de un vistazo (precios, ticks de
+  leído, estados activos, títulos de sección); el violeta, en superficies y
+  cabeceras. No introduzcas un tercer color de marca: el rosa (`--pink`) queda
+  solo para el "me gusta" y los corazones.
+- **Cada sección imita a su referente sin perder la paleta.** Feed≈TikTok
+  (avatar circular con "+", acciones en discos sin caja, disco de audio
+  girando), Facetak≈Facebook (barra de acciones con icono+etiqueta y
+  separadores, comentario en píldora), Marketak≈marketplace (tarjeta que se
+  eleva, precio grande, vendido con velo), WhaTaka≈WhatsApp (burbujas con
+  colita, ticks turquesa, cabecera en degradado violeta), Ajustes≈TikTok
+  (filas altas con chevron atenuado). Mantén los nombres de clase existentes:
+  los e2e los usan como selectores.
 
 ## Reglas importantes
 
@@ -198,6 +218,13 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
 - Los ficheros de test comparten una base de datos y la vacían en
   `beforeEach`, por eso se ejecutan en serie (`--test-concurrency=1`). Si
   añades un fichero nuevo, mantén la convención `test/*.test.js`.
+- Los e2e de navegador (`frontend/test/e2e-*.mjs`, `scripts/e2e-*.js`) traen
+  puertos por defecto que no son los del entorno: pásales
+  `E2E_BASE_URL=http://127.0.0.1:12000` y, los que llaman a la API,
+  `API=http://127.0.0.1:12000/api`. Sin eso fallan con `ECONNREFUSED`.
+- El registro tiene un límite de 20 por IP cada 15 min (`routes/auth.js`). Tras
+  varias tandas de e2e se agota y los tests fallan con "Demasiados intentos";
+  reiniciar el backend lo limpia (el contador es en memoria).
 
 ## Identidad de usuario en el frontend
 
@@ -1008,37 +1035,50 @@ Por eso la estrategia es tapar con la marca propia, no borrar.
 
 ## Navegación y pantallas
 
-- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene siete pestañas —Inicio,
-  Explorar, Facetak, Creators, Subir, WhaTaka, Perfil— y **cada sección es su
-  propia pantalla**. TAK TAK es una sola aplicación con tres secciones grandes,
-  cada una inspirada en una app conocida: el feed vertical (como TikTok), el chat
-  WhaTaka (como WhatsApp) y Facetak (como Facebook). El resto de accesos
-  (Ajustes, Monedero, Verificación, Salud de la cuenta) van dentro del perfil,
-  que es donde TikTok los esconde.
-- No añadas más pestañas a la barra por encima de estas siete: con siete botones
-  la etiqueta ya hubo que encogerla (`font-size: 0.6rem` y `white-space:
-  nowrap` en `.tabbar-label`). Si algo nuevo no es una app en sí, va al perfil.
-- La única excepción es la **campana de Avisos**, que va la primera en la barra.
-  No es una sección más sino una acción con estado (el contador), y tiene que
-  estar visible desde cualquier pantalla: escondida en el perfil, un aviso de
-  regalo pasaría desapercibido, que es justo el fallo que se corrigió. Si añades
-  otra cosa a la barra, pregúntate si de verdad necesita estar siempre a la
-  vista; si no, va al perfil.
+- La barra inferior (`.tabbar`, `Navigation.jsx`) tiene siete botones —la campana
+  de **Notificaciones** y seis pestañas: Inicio, Facetak, TAK Live Creator, Subir,
+  WhaTaka, Perfil— y **cada sección es su propia pantalla**. TAK TAK es una sola
+  aplicación con tres secciones grandes, cada una inspirada en una app conocida:
+  el feed vertical (como TikTok), el chat WhaTaka (como WhatsApp) y Facetak (como
+  Facebook). El resto de accesos (Ajustes, Monedero, Verificación, Salud de la
+  cuenta) van dentro del perfil, que es donde TikTok los esconde.
+- **No hay pestaña "Explorar"**: se entra por la **lupa 🔎 de la barra superior
+  de Inicio** (`.home-topbar .home-search`), pegada al selector
+  Vídeos/Publicaciones. Busca lo mismo que muestra el selector, así que comparten
+  renglón; la lupa abre `Explorar` con el buscador. Al quitarla de la barra, las
+  etiquetas largas que pidió el producto ("Notificaciones", "TAK Live Creator")
+  pasaron a caber sin desbordar el ancho del móvil.
+- **No añadas más botones a la barra.** Con estos siete, las etiquetas largas
+  ocupan dos líneas en pantallas de 320–360px: `.tabbar-label` usa
+  `font-size: 0.55rem`, `line-height: 1.05`, `text-align: center` y
+  `overflow-wrap: anywhere`, y `.tabbar-btn` lleva `min-width: 0` para que los
+  botones se repartan el ancho en vez de desbordarlo (sin `min-width: 0` un
+  flex-item nunca baja de su contenido y la barra se salía de la pantalla). Si
+  algo nuevo no es una app en sí, va al perfil.
+- La **campana de Notificaciones** va la primera en la barra. No es una sección
+  más sino una acción con estado (el contador), y tiene que estar visible desde
+  cualquier pantalla: escondida en el perfil, un aviso de regalo pasaría
+  desapercibido, que es justo el fallo que se corrigió. Si añades otra cosa a la
+  barra, pregúntate si de verdad necesita estar siempre a la vista; si no, va al
+  perfil.
 - **Inicio tiene dos pestañas por dentro**, no una: `Vídeos | Publicaciones`
-  (`Home.jsx`, selector flotante `.home-switch`). El feed de vídeo manda y va
-  primero; Publicaciones pinta Facetak ahí mismo, sin cambiar de pestaña en la
-  barra. El selector flota **sobre** el vídeo en vez de empujarlo hacia abajo a
-  propósito: `.reels` mide `calc(100dvh - var(--tabbar-h))` y restarle altura
-  descuadraría el encaje de cada tarjeta con el snap. Es el mismo recurso que
-  usa TikTok con su "Para ti / Siguiendo".
+  (`Home.jsx`, selector flotante `.home-switch` dentro de `.home-topbar`). El
+  feed de vídeo manda y va primero; Publicaciones pinta Facetak ahí mismo, sin
+  cambiar de pestaña en la barra. La barra superior flota **sobre** el vídeo en
+  vez de empujarlo hacia abajo a propósito: `.reels` mide
+  `calc(100dvh - var(--tabbar-h))` y restarle altura descuadraría el encaje de
+  cada tarjeta con el snap. Es el mismo recurso que usa TikTok con su
+  "Para ti / Siguiendo". El contenedor es `pointer-events: none` y solo sus hijos
+  (lupa y selector) lo reactivan, para no bloquear el vídeo de debajo.
 - Al cambiar a Publicaciones el feed **no se desmonta, se pausa** (`Feed` acepta
   `paused`): si se desmontara, el vídeo seguiría sonando por detrás y al volver
   cada uno habría perdido su sitio. Con `paused`, `active` se apaga en todas las
   tarjetas y el efecto de reproducción pausa y rebobina la que estaba puesta.
 - La barra es `position: fixed`. El alto vive en la variable `--tabbar-h`
-  (`index.css`) y tanto `.app` como `.reels`/`.reel` lo descuentan para que el
-  feed no quede tapado. Si cambias el padding de `.tabbar`, actualiza
-  `--tabbar-h` o el último reel se cortará por abajo.
+  (`index.css`, 72px) y tanto `.app` como `.reels`/`.reel` lo descuentan para que
+  el feed no quede tapado. Con las etiquetas en dos líneas la barra mide ~69px,
+  de ahí el presupuesto de 72. Si cambias el padding de `.tabbar` o el tamaño de
+  `.tabbar-label`, actualiza `--tabbar-h` o el último reel se cortará por abajo.
 - El feed es la única vista sin `padding` ni `max-width` (clase `app-feed`): el
   reel ocupa toda la pantalla y la barra flota encima.
 - Las pantallas que cuelgan del perfil (Ajustes, Monedero, Verificación, Salud)
