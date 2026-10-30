@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import axios from 'axios';
 import { useStore } from '../store/useStore';
 
@@ -9,7 +9,7 @@ export default function Upload() {
 
   const token = typeof window !== 'undefined' ? window.localStorage.getItem('taktak_token') : null;
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!isAuthenticated || !currentUser || !token) {
@@ -40,9 +40,10 @@ export default function Upload() {
       } else {
         throw new Error('Respuesta del servidor no válida');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Fallo desconocido';
       console.error('❌ Error en el proceso de subida:', err);
-      window.alert(err?.message || 'Fallo desconocido');
+      window.alert(message);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -63,6 +64,7 @@ export default function Upload() {
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
         className="px-4 py-2 bg-[#FE2C55] text-white rounded-lg font-bold hover:opacity-90 transition-opacity"
+        type="button"
       >
         {uploading ? 'Subiendo...' : 'Subir vídeo'}
       </button>
