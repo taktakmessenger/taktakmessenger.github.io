@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Tak Tak — Boom in buying and selling. Publica anuncios rápidos, seguros y sencillos con pagos por PayPal o Zinli."
+    />
+    <title>Tak Tak | Boom in buying and selling</title>
+    <style>
+      :root {
+        --bg: #0f0f0f;
+        --panel: #171717;
+        --panel-2: #1f1f1f;
+        --line: #2c2c2c;
+        --text: #f5f5f5;
+        --muted: #b6b6b6;
+        --orange: #ff6b00;
+        --orange-2: #ff9200;
+        --yellow: #ffd166;
+        --shadow: rgba(255, 107, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      img {
+        max-width: 100%;
+        display: block;
+      }
+
+      .container {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: linear-gradient(90deg, #1a1a1a, #2a1a00);
+        border-bottom: 3px solid var(--orange);
+      }
+
+      .header-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 74px;
+      }
+
+      .logo {
+        font-size: clamp(1.5rem, 2vw, 2rem);
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        background: linear-gradient(90deg, var(--orange), var(--yellow));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      nav {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+      }
+
+      nav a {
+        color: #ddd;
+        font-weight: 600;
+        transition: color 0.2s ease;
+      }
+
+      nav a:hover,
+      nav a:focus-visible {
+        color: var(--orange);
+      }
+
+      .hero {
+        background: radial-gradient(circle at center, #2a1500, #0f0f0f 60%);
+        padding: 90px 0 80px;
+        text-align: center;
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: clamp(2.8rem, 5vw, 5rem);
+        line-height: 1.05;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-shadow: 0 0 25px rgba(255, 107, 0, 0.48);
+      }
+
+      .slogan1 {
+        margin-top: 14px;
+        font-size: clamp(1.2rem, 2vw, 1.6rem);
+        font-weight: 800;
+        color: var(--orange);
+      }
+
+      .slogan2 {
+        max-width: 700px;
+        margin: 12px auto 30px;
+        color: #d8d8d8;
+        font-size: 1.08rem;
+        font-style: italic;
+      }
+
+      .btn {
+        display: inline-block;
+        min-width: 210px;
+        border: none;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--orange), var(--orange-2));
+        color: #121212;
+        padding: 16px 34px;
+        font-size: 1.05rem;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 10px 28px var(--shadow);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .btn:hover,
+      .btn:focus-visible {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 30px rgba(255, 107, 0, 0.42);
+      }
+
+      .section {
+        padding: 72px 0;
+      }
+
+      .section-title {
+        margin: 0 0 12px;
+        text-align: center;
+        font-size: clamp(2rem, 3vw, 2.5rem);
+        color: var(--orange);
+      }
+
+      .section-subtitle {
+        margin: 0 0 38px;
+        text-align: center;
+        color: #aaa;
+        font-size: 1.03rem;
+      }
+
+      .categories {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 18px;
+      }
+
+      .cat-card {
+        background: var(--panel);
+        border: 2px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        padding: 26px 12px;
+        text-align: center;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .cat-card:hover,
+      .cat-card:focus-within {
+        transform: translateY(-5px);
+        border-color: var(--orange);
+      }
+
+      .cat-card .icon {
+        font-size: 2.5rem;
+        margin-bottom: 12px;
+      }
+
+      .cat-card h3 {
+        margin: 0;
+        font-size: 1.08rem;
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+      }
+
+      .step {
+        background: var(--panel);
+        border-left: 5px solid var(--orange);
+        border-radius: 16px;
+        padding: 28px;
+      }
+
+      .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: var(--orange);
+        color: #111;
+        font-weight: 900;
+        margin-bottom: 12px;
+      }
+
+      .step h3 {
+        margin: 0 0 8px;
+        font-size: 1.3rem;
+      }
+
+      .step p {
+        margin: 0;
+        color: #d3d3d3;
+      }
+
+      .form-box {
+        max-width: 620px;
+        margin: 0 auto;
+        background: var(--panel);
+        border: 2px solid var(--line);
+        border-radius: 22px;
+        padding: 36px 28px;
+      }
+
+      .price-tag {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--orange), var(--orange-2));
+        color: #111;
+        font-weight: 900;
+        padding: 10px 22px;
+        border-radius: 30px;
+        letter-spacing: 0.03em;
+        margin-bottom: 22px;
+      }
+
+      .form-box label {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--yellow);
+        font-weight: 700;
+      }
+
+      .form-box input,
+      .form-box select,
+      .form-box textarea {
+        width: 100%;
+        padding: 13px 14px;
+        margin-bottom: 18px;
+        border: 1px solid #444;
+        border-radius: 10px;
+        background: #111;
+        color: var(--text);
+        font: inherit;
+      }
+
+      .form-box textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      .payment-box {
+        background: #141414;
+        border: 2px solid var(--line);
+        border-radius: 18px;
+        padding: 28px 20px;
+        text-align: center;
+        margin-top: 18px;
+      }
+
+      .payment-box h3 {
+        margin: 0 0 6px;
+      }
+
+      .payment-box p {
+        margin: 0 0 14px;
+        color: #b9b9b9;
+      }
+
+      .pay-row {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .btn-paypal,
+      .btn-zinli {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 14px 26px;
+        font-weight: 800;
+        color: #fff;
+        min-width: 200px;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+
+      .btn-paypal:hover,
+      .btn-zinli:hover,
+      .btn-paypal:focus-visible,
+      .btn-zinli:focus-visible {
+        opacity: 0.95;
+        transform: translateY(-2px);
+      }
+
+      .btn-paypal {
+        background: #0070ba;
+      }
+
+      .btn-zinli {
+        background: linear-gradient(90deg, #7b2cbf, #9b59b6);
+      }
+
+      .form-status {
+        margin-top: 12px;
+        min-height: 24px;
+        font-weight: 600;
+        color: var(--yellow);
+      }
+
+      footer {
+        background: #090909;
+        text-align: center;
+        color: #9d9d9d;
+        padding: 42px 20px 48px;
+        border-top: 1px solid #1d1d1d;
+      }
+
+      .logo-footer {
+        font-size: 1.5rem;
+        font-weight: 900;
+        background: linear-gradient(90deg, var(--orange), var(--yellow));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      @media (max-width: 640px) {
+        nav {
+          display: none;
+        }
+
+        .hero {
+          padding-top: 60px;
+        }
+
+        .form-box {
+          padding: 26px 18px;
+        }
+
+        .btn,
+        .btn-paypal,
+        .btn-zinli {
+          width: 100%;
+        }
+
+        .pay-row {
+          display: block;
+        }
+
+        .pay-row a + a {
+          margin-top: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container header-inner">
+        <div class="logo">Tak Tak</div>
+        <nav aria-label="Menu principal">
+          <a href="#inicio">Inicio</a>
+          <a href="#categorias">Categorías</a>
+          <a href="#como">Cómo funciona</a>
+          <a href="#publicar">Publicar</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero" id="inicio">
+      <div class="container">
+        <h1>TAK TAK</h1>
+        <p class="slogan1">BOOM in buying and selling</p>
+        <p class="slogan2">Publica cualquier cosa: desde un clavo hasta un elefante. Solo $1 al mes.</p>
+        <a href="#publicar" class="btn">Publicar anuncio ahora</a>
+      </div>
+    </section>
+
+    <section class="section" id="categorias">
+      <div class="container">
+        <h2 class="section-title">Categorías</h2>
+        <p class="section-subtitle">Vende o compra de todo</p>
+
+        <div class="categories">
+          <div class="cat-card"><div class="icon">📱</div><h3>Electrónica</h3></div>
+          <div class="cat-card"><div class="icon">🚗</div><h3>Vehículos</h3></div>
+          <div class="cat-card"><div class="icon">🏠</div><h3>Hogar</h3></div>
+          <div class="cat-card"><div class="icon">👕</div><h3>Ropa</h3></div>
+          <div class="cat-card"><div class="icon">🛠️</div><h3>Herramientas</h3></div>
+          <div class="cat-card"><div class="icon">🐘</div><h3>¡Hasta elefantes!</h3></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="como" style="background:#121212;">
+      <div class="container">
+        <h2 class="section-title">Cómo funciona</h2>
+        <p class="section-subtitle">Simple y rápido</p>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <h3>Paga $1 al mes</h3>
+            <p>Activa tu cuenta con PayPal o Zinli. Solo 1 dólar mensual.</p>
+          </div>
+
+          <div class="step">
+            <div class="step-number">2</div>
+            <h3>Publica tu anuncio</h3>
+            <p>Sube fotos, escribe la descripción y el precio. ¡Listo!</p>
+          </div>
+
+          <div class="step">
+            <div class="step-number">3</div>
+            <h3>Recibe mensajes</h3>
+            <p>Los interesados te contactan directamente. ¡Boom!</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="publicar">
+      <div class="container">
+        <h2 class="section-title">Publicar anuncio</h2>
+        <p class="section-subtitle">Completa el formulario (después de pagar el mes)</p>
+
+        <div class="form-box">
+          <div class="price-tag">$1 / mes</div>
+
+          <form id="leadForm" novalidate>
+            <label for="title">Título del anuncio</label>
+            <input id="title" name="title" type="text" placeholder="Ej: iPhone 13 en buen estado" required />
+
+            <label for="category">Categoría</label>
+            <select id="category" name="category">
+              <option>Electrónica</option>
+              <option>Vehículos</option>
+              <option>Hogar</option>
+              <option>Ropa</option>
+              <option>Herramientas</option>
+              <option>Otros</option>
+            </select>
+
+            <label for="price">Precio (USD)</label>
+            <input id="price" name="price" type="number" min="0" step="0.01" placeholder="0.00" required />
+
+            <label for="description">Descripción</label>
+            <textarea id="description" name="description" placeholder="Describe tu artículo..."></textarea>
+
+            <label for="phone">Tu WhatsApp o teléfono</label>
+            <input id="phone" name="phone" type="text" placeholder="+58 412..." required />
+
+            <button type="submit" class="btn" style="width:100%;">Publicar anuncio</button>
+            <div id="formStatus" class="form-status" aria-live="polite"></div>
+          </form>
+
+          <div class="payment-box">
+            <h3>Pagar los $1 del mes</h3>
+            <p>Elige tu método de pago:</p>
+            <div class="pay-row">
+              <a href="https://paypal.me/eliecerdepablos/1" class="btn-paypal" target="_blank" rel="noopener noreferrer">Pagar con PayPal</a>
+              <a href="https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt" class="btn-zinli" target="_blank" rel="noopener noreferrer">Pagar con Zinli</a>
+            </div>
+            <p style="margin-top:16px; margin-bottom:0; color:#888;">Las ganancias van a: eliecerdepablos@gmail.com</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="logo-footer">Tak Tak</div>
+      <p>Boom in buying and selling</p>
+      <p style="margin-top: 12px;">© 2026 Tak Tak. Todos los derechos reservados.</p>
+    </footer>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('leadForm');
+        const status = document.getElementById('formStatus');
+
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+
+          const title = document.getElementById('title').value.trim();
+          const price = document.getElementById('price').value.trim();
+          const phone = document.getElementById('phone').value.trim();
+
+          if (!title || !price || !phone) {
+            status.textContent = 'Completa al menos título, precio y WhatsApp/Teléfono.';
+            return;
+          }
+
+          const category = document.getElementById('category').value;
+          const description = document.getElementById('description').value.trim();
+
+          const subject = encodeURIComponent('Nuevo anuncio Tak Tak: ' + title);
+          const body = encodeURIComponent(
+            'Título: ' + title + '\n' +
+            'Categoría: ' + category + '\n' +
+            'Precio: $' + price + ' USD\n' +
+            'Descripción: ' + (description || 'Sin descripción') + '\n' +
+            'WhatsApp o teléfono: ' + phone
+          );
+
+          window.location.href = 'mailto:eliecerdepablos@gmail.com?subject=' + subject + '&body=' + body;
+          status.textContent = 'Tu anuncio se abrió en tu cliente de correo para enviarlo.';
+          form.reset();
+        });
+      });
+    </script>
+  </body>
+</html>
