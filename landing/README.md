@@ -1,33 +1,30 @@
-# Tak Tak landing page
+# Tak Tak — landing final para Netlify
 
-Esta carpeta contiene la landing page estática de Tak Tak para publicar sin afectar la app principal del repositorio.
+Esta carpeta está lista para desplegar en Netlify sin tocar la app principal del repositorio.
 
-## Archivos
-- `index.html`: portada principal
+## Archivos incluidos
+- `index.html`: landing final de Tak Tak
 - `404.html`: página de error
+- `netlify.toml`: configuración adicional de Netlify
+- `_redirects`: redirecciones útiles
 
-## Publicación recomendada
-
-### Opción 1: Netlify (recomendada)
-1. Entra en https://app.netlify.com/drop
+## Cómo desplegar en Netlify
+1. Ve a https://app.netlify.com/drop
 2. Arrastra esta carpeta `landing/`
-3. Netlify te dará una URL pública
-4. En Unstoppable Domains configura el DNS para apuntar a Netlify
-5. Si quieres, puedes añadir el dominio `taktak.brave`
+3. Netlify te generará una URL pública
+4. En `Site settings` > `Domain management` añade `taktak.brave`
+5. En Unstoppable Domains configura DNS para que apunte al dominio generado por Netlify
 
-### Opción 2: GitHub Pages (si prefieres usar GitHub)
-1. Crea un repo nuevo o usa uno existente
-2. Sube esta carpeta como sitio estático
-3. Configura la rama y la carpeta correspondiente en Pages
-4. En Unstoppable Domains añade el dominio o configura DNS
+## DNS recomendado para `.brave`
+- Usa la opción de DNS de Unstoppable Domains
+- Apunta el dominio a la URL de Netlify
+- Espera la propagación (puede tardar unos minutos u horas)
 
-### Opción 3: Carga directa en Unstoppable Domains
-1. Entra a `https://unstoppabledomains.com/manage?page=website&domain=taktak.brave`
-2. Busca la opción “Website”
-3. Sube `index.html` y `404.html`
-4. Verifica que el sitio se vea bien
+## Pago y formulario
+- PayPal: https://paypal.me/eliecerdepablos/1
+- Zinli: https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt
+- El formulario de anuncio prepara un mensaje para `eliecerdepablos@gmail.com` usando el cliente de correo del usuario
 
-## Nota útil
-El formulario de anuncios está configurado para abrir el cliente de email del usuario y preparar el mensaje para `eliecerdepablos@gmail.com`, para que funcione sin depender de un backend externo.
-
-Si deseas conectar un servicio real como Formspree, Google Forms o un webhook, te dejo ese ajuste listo en el HTML.
+## Si quieres conectar Formspree o Google Forms
+- Puedes cambiar el bloque del formulario y el script en `index.html`
+- Si me pasas el endpoint exacto, lo dejo completamente conectado

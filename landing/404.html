@@ -5,47 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tak Tak — Página no encontrada</title>
     <style>
+      :root {
+        --bg: #0f0f0f;
+        --panel: #171717;
+        --line: #2d2d2d;
+        --orange: #ff6b00;
+        --gold: #ffd166;
+        --text: #f5f5f5;
+      }
+
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background: #0f0f0f;
-        color: #fff;
+        background: var(--bg);
+        color: var(--text);
         font-family: "Segoe UI", Tahoma, sans-serif;
       }
 
       .box {
-        max-width: 640px;
-        padding: 48px 28px;
-        background: #171717;
-        border: 2px solid #2b2b2b;
+        width: min(92vw, 640px);
+        background: var(--panel);
+        border: 2px solid var(--line);
         border-radius: 20px;
+        padding: 46px 28px;
         text-align: center;
       }
 
       h1 {
-        margin: 0 0 12px;
-        font-size: clamp(2.2rem, 5vw, 4rem);
-        background: linear-gradient(90deg, #ff6b00, #ffcc00);
+        margin: 0 0 10px;
+        font-size: clamp(2.3rem, 7vw, 4.8rem);
+        background: linear-gradient(90deg, var(--orange), var(--gold));
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
       }
 
       p {
-        color: #d6d6d6;
+        color: #d9d9d9;
         margin-bottom: 22px;
       }
 
       a {
         display: inline-block;
+        background: linear-gradient(90deg, var(--orange), #ff9300);
+        color: #111;
         padding: 14px 28px;
         border-radius: 999px;
-        background: linear-gradient(90deg, #ff6b00, #ff9500);
-        color: #111;
+        font-weight: 900;
         text-decoration: none;
-        font-weight: 800;
       }
     </style>
   </head>
