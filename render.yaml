@@ -1,7 +1,6 @@
-# TAK TAK en Render: un servicio web (la web y la API juntas) y un worker que
-# lo mantiene despierto.
+# TAK TAK en Render: un solo servicio web (la web y la API juntas).
 #
-# Por qué un solo servicio web:
+# Despliegue estrictamente gratuito: nada de pago, nada que consuma de más.
 #
 #  - El frontend llama a `/api` y a Socket.IO con rutas relativas, así que todo
 #    tiene que salir del mismo origen. Con dos servicios habría que proxear.
@@ -10,12 +9,15 @@
 #    15 y Render suspende los dos hasta el mes siguiente. Con uno solo hay
 #    margen para el mes entero.
 #
-# Por qué el keep-alive va como worker y no como un temporizador dentro de la
-# API: Render apaga la instancia que duerme, y un `setInterval` dentro de ese
-# proceso muere con él. El worker vive aparte, así que sigue haciendo peticiones
-# y es él quien la despierta. Un worker gratuito no se duerme.
+# Por qué NO hay worker keep-alive:
 #
-# El keep-alive cuesta ~1 hora de instancia al mes, así que cabe de sobra.
+#  Los background workers no tienen plan gratuito (Render solo da instancia Free
+#  a web services, static sites, Postgres y Key Value). Añadirlo obliga a pagar.
+#  Y de todos modos no serviría: con el plan free el servicio web se duerme a
+#  los 15 min de inactividad, y despierta en ~1 min al primer acceso. Para el
+#  cobro manual eso no rompe nada: no hay webhooks esperando respuesta, el pago
+#  lo confirma un administrador al entrar. Si algún día quieres 24/7, descomenta
+#  el bloque del final y asume el coste.
 #
 # La base de datos no está aquí a propósito: la app usa transacciones y eso
 # exige un replica set, así que Mongo va en Atlas y su cadena llega en
@@ -93,25 +95,29 @@ services:
       - key: MANUAL_AUTO_APPROVE
         value: false
 
-  # --- Keep-alive: pide la app cada 10 minutos para que no se duerma ---
-  - type: worker
-    name: taktak-keepalive
-    runtime: docker
-    dockerfilePath: ./scripts/keepalive.Dockerfile
-    dockerContext: ./scripts
-    region: oregon
-    plan: free
-    envVars:
-      # La base se rellena sola desde la URL del servicio web, así que renombrar
-      # el servicio no deja el keep-alive apuntando a un host inexistente. El
-      # script le añade /health. Cualquier petición de entrada cuenta como
-      # actividad; el health además confirma que el servicio responde de verdad.
-      - key: KEEPALIVE_BASE_URL
-        fromService:
-          name: taktak
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: KEEPALIVE_INTERVAL_MS
-        value: 600000
+  # --- Keep-alive (OPCIONAL, DE PAGO) ---------------------------------------
+  # Comentado a propósito: los background workers no tienen plan gratuito, así
+  # que dejarlo activo obliga a pagar (~7 USD/mes). Descomenta el bloque entero
+  # (y quita la indentación del comentario) si algún día quieres 24/7.
+  #
+  # - type: worker
+  #   name: taktak-keepalive
+  #   runtime: docker
+  #   dockerfilePath: ./scripts/keepalive.Dockerfile
+  #   dockerContext: ./scripts
+  #   region: oregon
+  #   plan: starter
+  #   envVars:
+  #     # La base se rellena sola desde la URL del servicio web, así que renombrar
+  #     # el servicio no deja el keep-alive apuntando a un host inexistente. El
+  #     # script le añade /health. Cualquier petición de entrada cuenta como
+  #     # actividad; el health además confirma que el servicio responde de verdad.
+  #     - key: KEEPALIVE_BASE_URL
+  #       fromService:
+  #         name: taktak
+  #         type: web
+  #         envVarKey: RENDER_EXTERNAL_URL
+  #     - key: KEEPALIVE_INTERVAL_MS
+  #       value: 600000
 
 
