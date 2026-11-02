@@ -78,6 +78,20 @@ services:
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
+      # Cobro manual (Zinli, pago móvil…). Va con valor y no como secreto porque
+      # son los datos de pago que se le muestran al usuario, no credenciales.
+      # Edítalo con tus cuentas reales antes de cobrar.
+      - key: MANUAL_PAYMENT_METHODS
+        value: '[{"id":"zinli","label":"Zinli","details":"Envía el importe a tu cuenta Zinli y pega el número de referencia."}]'
+      # Asistente de revisión (opcional). Sin clave queda apagado y el panel
+      # manual funciona igual.
+      - key: ASSISTANT_API_KEY
+        sync: false
+      - key: ASSISTANT_MODEL
+        value: gpt-4o-mini
+      # Aprobación automática: déjalo en false hasta que confíes en el asistente.
+      - key: MANUAL_AUTO_APPROVE
+        value: false
 
   # --- Keep-alive: pide la app cada 10 minutos para que no se duerma ---
   - type: worker
