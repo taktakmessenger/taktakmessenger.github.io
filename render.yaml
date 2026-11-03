@@ -67,6 +67,13 @@ services:
       # su coste en runtime en el plan gratuito.
       - key: TRANSCODE_ENABLED
         value: false
+      # Tamaño máximo por vídeo. El valor por defecto (50 MB) se queda corto: un
+      # vídeo normal de móvil pesa más y la subida fallaba con 413. El plan free
+      # tiene 512 MB de RAM, pero multer escribe a disco en streaming, así que el
+      # tope real lo pone el proxy de Render, no la memoria. 200 MB da margen sin
+      # acercarse a ese tope.
+      - key: MAX_VIDEO_BYTES
+        value: 209715200
       # Render no ofrece puertos UDP: el SFU de mediasoup no puede funcionar y
       # el modo malla es el único disponible.
       - key: SFU_ENABLED
