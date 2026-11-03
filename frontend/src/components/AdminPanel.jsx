@@ -252,7 +252,8 @@ export default function AdminPanel() {
         <p className="hint">
           Pídele tareas en lenguaje natural: «busca al usuario elidep», «qué vídeos hay
           pendientes», «aprueba el vídeo …», «acredita 500 monedas a …». Puede consultar y
-          ejecutar acciones reales.
+          ejecutar acciones reales. Recuerda la conversación, así que puedes seguir donde
+          lo dejaste aunque cierres el panel o entres desde otro móvil.
         </p>
 
         {chatMessages.length > 0 && (
