@@ -87,11 +87,14 @@ services:
       - key: MANUAL_PAYMENT_METHODS
         value: '[{"id":"paypal","label":"PayPal","link":"https://paypal.me/eliecerdepablos","details":"Paga el importe exacto en PayPal y pega aquí el número de operación."},{"id":"zinli","label":"Zinli","link":"https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt","details":"Recarga con Zinli usando el enlace y pega aquí el número de referencia."}]'
       # Asistente de revisión (opcional). Sin clave queda apagado y el panel
-      # manual funciona igual.
+      # manual funciona igual. La base y el modelo deben ir juntos: el modelo es
+      # el que entiende esa base (gpt-oss-120b es de Groq, gpt-4o-mini de OpenAI).
       - key: ASSISTANT_API_KEY
         sync: false
+      - key: ASSISTANT_API_BASE
+        value: https://api.groq.com/openai/v1
       - key: ASSISTANT_MODEL
-        value: gpt-4o-mini
+        value: openai/gpt-oss-120b
       # Aprobación automática: déjalo en false hasta que confíes en el asistente.
       - key: MANUAL_AUTO_APPROVE
         value: false
