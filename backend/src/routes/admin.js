@@ -11,6 +11,7 @@ const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
 const manualPaymentService = require('../services/manualPaymentService');
 const adminAssistant = require('../services/adminAssistant');
+const assistantThreadService = require('../services/assistantThreadService');
 const { auth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -60,15 +61,22 @@ router.get(
 //
 // Chat con el que el dueño pide tareas en lenguaje natural. Solo responde a
 // administradores (todo este router ya pasa por `requireAdmin`). El historial
-// lo lleva el cliente: aquí llega la conversación completa y se reenvía al
-// modelo, que puede ejecutar acciones mediante herramientas.
+// vive en la base por administrador (AssistantThread), así la conversación
+// sobrevive a recargas y cambios de dispositivo; el cliente solo manda el turno
+// nuevo.
+
+router.get(
+  '/assistant',
+  asyncHandler(async (req, res) => {
+    const messages = await assistantThreadService.load(req.user.userId);
+    res.json({ messages });
+  })
+);
 
 router.post(
   '/assistant',
   [
-    body('messages').isArray({ min: 1, max: 40 }).withMessage('Conversación inválida'),
-    body('messages.*.role').isIn(['user', 'assistant']),
-    body('messages.*.content').isString().trim().isLength({ min: 1, max: 4000 }),
+    body('message').isString().trim().isLength({ min: 1, max: 4000 }),
   ],
   validate,
   asyncHandler(async (req, res) => {
@@ -78,10 +86,21 @@ router.post(
       });
     }
     const result = await adminAssistant.chat({
-      messages: req.body.messages,
+      message: req.body.message,
       adminId: req.user.userId,
     });
     res.json(result);
+  })
+);
+
+// Borra el hilo del administrador. El botón "Limpiar" del panel lo usa para
+// empezar de cero; sin esto, limpiar solo vaciaba la pantalla y el asistente
+// seguía recordando todo.
+router.delete(
+  '/assistant',
+  asyncHandler(async (req, res) => {
+    await assistantThreadService.clear(req.user.userId);
+    res.json({ cleared: true });
   })
 );
 

@@ -81,7 +81,7 @@ test('the assistant is closed to non-admin accounts', async () => {
   const res = await agent
     .post('/api/admin/assistant')
     .set('Authorization', `Bearer ${reg.token}`)
-    .send({ messages: [{ role: 'user', content: 'hola' }] });
+    .send({ message: 'hola' });
   assert.equal(res.status, 403, JSON.stringify(res.body));
 });
 
@@ -89,7 +89,7 @@ test('the assistant requires a session', async () => {
   const agent = app();
   const res = await agent
     .post('/api/admin/assistant')
-    .send({ messages: [{ role: 'user', content: 'hola' }] });
+    .send({ message: 'hola' });
   assert.equal(res.status, 401, JSON.stringify(res.body));
 });
 
@@ -101,19 +101,19 @@ test('without an api key the assistant reports it is not configured', async () =
     const res = await app()
       .post('/api/admin/assistant')
       .set('Authorization', `Bearer ${signToken(admin)}`)
-      .send({ messages: [{ role: 'user', content: 'hola' }] });
+      .send({ message: 'hola' });
     assert.equal(res.status, 503, JSON.stringify(res.body));
   } finally {
     env.assistantApiKey = original;
   }
 });
 
-test('an empty conversation is rejected', async () => {
+test('an empty message is rejected', async () => {
   const admin = await makeAdmin();
   const res = await app()
     .post('/api/admin/assistant')
     .set('Authorization', `Bearer ${signToken(admin)}`)
-    .send({ messages: [] });
+    .send({ message: '' });
   assert.equal(res.status, 400, JSON.stringify(res.body));
 });
 
@@ -127,7 +127,7 @@ test('a plain answer is returned without tools', async () => {
     const res = await app()
       .post('/api/admin/assistant')
       .set('Authorization', `Bearer ${signToken(admin)}`)
-      .send({ messages: [{ role: 'user', content: 'hola' }] });
+      .send({ message: 'hola' });
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.match(res.body.reply, /en qué te ayudo/);
     assert.equal(res.body.executed.length, 0);
@@ -157,7 +157,7 @@ test('the model can search a user through a tool', async () => {
       const res = await app()
         .post('/api/admin/assistant')
         .set('Authorization', `Bearer ${signToken(admin)}`)
-        .send({ messages: [{ role: 'user', content: 'busca a buscame' }] });
+        .send({ message: 'busca a buscame' });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.equal(res.body.executed[0].tool, 'buscar_usuario');
       assert.equal(res.body.executed[0].result.usuarios[0].username, 'buscame');
@@ -198,7 +198,7 @@ test('the model can approve a pending video', async () => {
       const res = await app()
         .post('/api/admin/assistant')
         .set('Authorization', `Bearer ${signToken(admin)}`)
-        .send({ messages: [{ role: 'user', content: 'aprueba ese vídeo' }] });
+        .send({ message: 'aprueba ese vídeo' });
       assert.equal(res.status, 200, JSON.stringify(res.body));
 
       const updated = await Video.findById(video._id);
@@ -239,7 +239,7 @@ test('the model can credit coins and a ledger entry is written', async () => {
       const res = await app()
         .post('/api/admin/assistant')
         .set('Authorization', `Bearer ${signToken(admin)}`)
-        .send({ messages: [{ role: 'user', content: 'dale 500 monedas a premiado' }] });
+        .send({ message: 'dale 500 monedas a premiado' });
       assert.equal(res.status, 200, JSON.stringify(res.body));
 
       const updated = await User.findById(target._id);
@@ -299,10 +299,100 @@ test('the tool loop is bounded so a stuck model cannot hang the request', async 
       const res = await app()
         .post('/api/admin/assistant')
         .set('Authorization', `Bearer ${signToken(admin)}`)
-        .send({ messages: [{ role: 'user', content: 'bucle' }] });
+        .send({ message: 'bucle' });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.match(res.body.reply, /demasiados pasos/i);
       assert.ok(fake.calls.length <= 6, `se hicieron ${fake.calls.length} llamadas`);
     }
   );
+});
+
+/* ------------------------------------------------------------------ */
+/* Memoria de la conversación                                          */
+/* ------------------------------------------------------------------ */
+
+test('el historial se guarda y se recupera tras la recarga', async () => {
+  const admin = await makeAdmin();
+  await withModel([{ role: 'assistant', content: 'Hola, ¿en qué te ayudo?' }], async () => {
+    await app()
+      .post('/api/admin/assistant')
+      .set('Authorization', `Bearer ${signToken(admin)}`)
+      .send({ message: 'hola' });
+  });
+
+  // Un panel recién abierto pide el hilo: debe traer los dos turnos.
+  const res = await app()
+    .get('/api/admin/assistant')
+    .set('Authorization', `Bearer ${signToken(admin)}`);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.messages.length, 2);
+  assert.equal(res.body.messages[0].role, 'user');
+  assert.equal(res.body.messages[0].content, 'hola');
+  assert.equal(res.body.messages[1].role, 'assistant');
+});
+
+test('el segundo turno recibe la conversación anterior como contexto', async () => {
+  const admin = await makeAdmin();
+  await withModel(
+    [
+      { role: 'assistant', content: 'Anotado.' },
+      { role: 'assistant', content: 'Seguimos donde lo dejamos.' },
+    ],
+    async (fake) => {
+      await app()
+        .post('/api/admin/assistant')
+        .set('Authorization', `Bearer ${signToken(admin)}`)
+        .send({ message: 'recuerda que estamos con los pagos' });
+      await app()
+        .post('/api/admin/assistant')
+        .set('Authorization', `Bearer ${signToken(admin)}`)
+        .send({ message: '¿dónde quedamos?' });
+
+      // La segunda llamada al modelo debe llevar el turno anterior del usuario.
+      const sent = fake.calls[1].messages.map((m) => m.content).join('\n');
+      assert.match(sent, /recuerda que estamos con los pagos/);
+      assert.match(sent, /dónde quedamos/);
+    }
+  );
+});
+
+test('limpiar borra el hilo guardado, no solo la pantalla', async () => {
+  const admin = await makeAdmin();
+  await withModel([{ role: 'assistant', content: 'Hola.' }], async () => {
+    await app()
+      .post('/api/admin/assistant')
+      .set('Authorization', `Bearer ${signToken(admin)}`)
+      .send({ message: 'hola' });
+  });
+
+  await app()
+    .delete('/api/admin/assistant')
+    .set('Authorization', `Bearer ${signToken(admin)}`);
+
+  const res = await app()
+    .get('/api/admin/assistant')
+    .set('Authorization', `Bearer ${signToken(admin)}`);
+  assert.equal(res.body.messages.length, 0);
+});
+
+test('el historial es de cada administrador, no compartido', async () => {
+  const uno = await makeAdmin();
+  const dos = await User.create({
+    username: 'otroadmin',
+    email: 'otro@example.com',
+    password: 'clave12345',
+    role: 'admin',
+  });
+
+  await withModel([{ role: 'assistant', content: 'Hola.' }], async () => {
+    await app()
+      .post('/api/admin/assistant')
+      .set('Authorization', `Bearer ${signToken(uno)}`)
+      .send({ message: 'soy el primero' });
+  });
+
+  const res = await app()
+    .get('/api/admin/assistant')
+    .set('Authorization', `Bearer ${signToken(dos)}`);
+  assert.equal(res.body.messages.length, 0);
 });

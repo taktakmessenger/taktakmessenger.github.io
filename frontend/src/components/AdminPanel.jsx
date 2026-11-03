@@ -15,11 +15,25 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  // Asistente del administrador: el historial vive aquí y se manda entero en
-  // cada turno, porque el backend no guarda conversaciones.
+  // Asistente del administrador. El historial vive en el servidor (uno por
+  // administrador), así que aquí solo se guarda el mensaje nuevo; al montar el
+  // panel se pide el hilo para que reaparezca tras recargar o cambiar de móvil.
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+
+  const loadChat = useCallback(async () => {
+    try {
+      const { data } = await api.get('/admin/assistant');
+      setChatMessages(data.messages || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadChat();
+  }, [loadChat]);
 
   const load = useCallback(async () => {
     try {
@@ -134,32 +148,44 @@ export default function AdminPanel() {
     }
   }
 
-  // Envía un turno al asistente. Se manda todo el historial porque el backend
-  // no lo guarda; al volver, se añade la respuesta y se recargan los datos del
-  // panel, ya que el asistente pudo haber cambiado algo (aprobado un vídeo,
+  // Envía un turno al asistente. Solo se manda el mensaje nuevo: el historial
+  // lo guarda el servidor por administrador, así que la conversación no depende
+  // de esta pestaña. Al volver, se añade la respuesta y se recargan los datos
+  // del panel, ya que el asistente pudo haber cambiado algo (aprobado un vídeo,
   // acreditado monedas) y las listas deben reflejarlo.
   async function sendChat(e) {
     e.preventDefault();
     const text = chatInput.trim();
     if (!text || chatBusy) return;
 
-    const next = [...chatMessages, { role: 'user', content: text }];
-    setChatMessages(next);
+    setChatMessages((prev) => [...prev, { role: 'user', content: text }]);
     setChatInput('');
     setChatBusy(true);
     setError('');
     try {
-      const { data } = await api.post('/admin/assistant', { messages: next });
-      setChatMessages([...next, { role: 'assistant', content: data.reply }]);
+      const { data } = await api.post('/admin/assistant', { message: text });
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       if (data.executed?.length) await load();
     } catch (err) {
       setError(err.message);
-      setChatMessages([
-        ...next,
+      setChatMessages((prev) => [
+        ...prev,
         { role: 'assistant', content: `No pude responder: ${err.message}` },
       ]);
     } finally {
       setChatBusy(false);
+    }
+  }
+
+  // Limpiar borra el hilo en el servidor, no solo la pantalla: si solo se
+  // vaciara aquí, al recargar volvería todo y el asistente seguiría recordando.
+  async function clearChat() {
+    if (chatBusy) return;
+    try {
+      await api.delete('/admin/assistant');
+      setChatMessages([]);
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -216,7 +242,7 @@ export default function AdminPanel() {
             <button
               type="button"
               className="btn-link"
-              onClick={() => setChatMessages([])}
+              onClick={clearChat}
               disabled={chatBusy}
             >
               Limpiar

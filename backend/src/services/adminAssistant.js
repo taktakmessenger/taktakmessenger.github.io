@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const walletService = require('../services/walletService');
 const manualPaymentService = require('../services/manualPaymentService');
 const assistantClient = require('./assistantClient');
+const assistantThreadService = require('./assistantThreadService');
 
 // Asistente conversacional del administrador.
 //
@@ -335,21 +336,30 @@ async function runTool(name, args) {
  * ejecutan aquí, se le devuelven los resultados y vuelve a decidir, hasta que
  * contesta en texto o se agota `MAX_TOOL_ROUNDS` (que corta un bucle infinito
  * si el modelo se atasca pidiendo la misma herramienta).
+ *
+ * El historial ya no lo manda el cliente: se lee de la base por administrador,
+ * así la conversación sobrevive a recargas y cambios de dispositivo. `message`
+ * es solo el turno nuevo del usuario.
  */
-async function chat({ messages, adminId }) {
+async function chat({ message, adminId }) {
   if (!isConfigured()) {
     throw new Error('El asistente no está configurado (falta ASSISTANT_API_KEY)');
   }
 
+  // Hilo previo (sin el mensaje nuevo) para reconstruir el contexto.
+  const history = await assistantThreadService.load(adminId);
+
   const conversation = [
     { role: 'system', content: SYSTEM_PROMPT },
-    ...messages.map((m) => ({
+    ...history.map((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: String(m.content || '').slice(0, 4000),
     })),
+    { role: 'user', content: String(message || '').slice(0, 4000) },
   ];
 
   const executed = [];
+  let reply = null;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const data = await assistantClient.callAssistant({
@@ -363,15 +373,16 @@ async function chat({ messages, adminId }) {
       log: '[ASISTENTE]',
     });
 
-    const message = data.choices?.[0]?.message;
-    if (!message) throw new Error('El asistente no devolvió respuesta');
+    const responseMessage = data.choices?.[0]?.message;
+    if (!responseMessage) throw new Error('El asistente no devolvió respuesta');
 
-    const toolCalls = message.tool_calls || [];
+    const toolCalls = responseMessage.tool_calls || [];
     if (!toolCalls.length) {
-      return { reply: message.content || '(sin respuesta)', executed };
+      reply = responseMessage.content || '(sin respuesta)';
+      break;
     }
 
-    conversation.push(message);
+    conversation.push(responseMessage);
 
     for (const call of toolCalls) {
       let args = {};
@@ -392,11 +403,19 @@ async function chat({ messages, adminId }) {
     }
   }
 
-  return {
-    reply:
-      'He necesitado demasiados pasos para completar eso. Prueba a pedírmelo en pasos más pequeños.',
-    executed,
-  };
+  if (reply === null) {
+    reply =
+      'He necesitado demasiados pasos para completar eso. Prueba a pedírmelo en pasos más pequeños.';
+  }
+
+  // Se guardan solo los turnos de texto: el usuario y la respuesta final. Las
+  // llamadas a herramientas son andamiaje de esta petición, no conversación.
+  await assistantThreadService.append(adminId, [
+    { role: 'user', content: message },
+    { role: 'assistant', content: reply },
+  ]);
+
+  return { reply, executed };
 }
 
 module.exports = { isConfigured, chat, runTool, TOOLS };
