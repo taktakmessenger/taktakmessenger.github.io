@@ -178,11 +178,14 @@ function assertPackagesCoverPayout(packages) {
  * El operador declara, en `MANUAL_PAYMENT_METHODS`, dónde cobra y con qué
  * etiqueta. Es JSON para poder añadir un método sin tocar código:
  *
- *   [{"id":"zinli","label":"Zinli","details":"Zinli: +58 412 000 0000 (a nombre de TAK TAK)"}]
+ *   [{"id":"paypal","label":"PayPal","link":"https://paypal.me/ejemplo",
+ *     "details":"Paga con PayPal y pega el número de operación."}]
  *
  * `id` es lo que se guarda en la orden; `label` es lo que ve el usuario; `details`
- * son las instrucciones de pago que se le muestran. Sin lista, la tienda no
- * ofrece cobro manual y la única vía son las pasarelas.
+ * son las instrucciones de pago que se le muestran y `link` es un enlace directo
+ * a la página de pago (opcional) para que el usuario no tenga que buscar a quién
+ * pagar. Sin lista, la tienda no ofrece cobro manual y la única vía son las
+ * pasarelas.
  */
 function resolveManualPaymentMethods() {
   if (!process.env.MANUAL_PAYMENT_METHODS) return [];
@@ -210,8 +213,19 @@ function resolveManualPaymentMethods() {
       id: String(method.id).slice(0, 40),
       label: String(method.label).slice(0, 60),
       details: method.details ? String(method.details).slice(0, 500) : '',
+      link: resolvePaymentLink(method.link),
     };
   });
+}
+
+// Solo se aceptan enlaces http(s): un valor como `javascript:` acabaría siendo
+// un botón ejecutable en la tienda, así que se descarta en el servidor y no se
+// confía en que el front lo filtre.
+function resolvePaymentLink(link) {
+  if (!link) return '';
+  const value = String(link).trim();
+  if (!/^https?:\/\//i.test(value)) return '';
+  return value.slice(0, 300);
 }
 
 const env = {

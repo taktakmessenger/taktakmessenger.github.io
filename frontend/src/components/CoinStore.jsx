@@ -251,6 +251,19 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       ))}
                     </select>
                   )}
+                  {/* Enlace directo a la cuenta de cobro: sin esto el usuario
+                      tendría que adivinar a quién pagar. Solo se pinta si el
+                      servidor envió un enlace http(s) válido. */}
+                  {selectedManual?.link && (
+                    <a
+                      className="manual-pay-link"
+                      href={selectedManual.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      👉 Ir a pagar con {selectedManual.label}
+                    </a>
+                  )}
                   <input
                     type="text"
                     placeholder="Número de referencia"

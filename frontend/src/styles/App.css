@@ -4241,6 +4241,24 @@
   font-size: 0.85rem;
 }
 
+/* Enlace directo a la cuenta de cobro. Va como botón ancho y llamativo porque
+   es el paso que el usuario no podía resolver antes: saber a quién pagar. */
+.manual-pay-link {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.manual-pay-link:active {
+  filter: brightness(0.92);
+}
+
 /* Sugerencia del asistente en la cola de pagos manuales. Se colorea según lo
    que propone para que el ojo distinga de un vistazo aprobar de rechazar. */
 .assistant-hint {

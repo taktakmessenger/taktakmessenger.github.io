@@ -77,6 +77,20 @@ test('con métodos configurados la tienda los publica', async () => {
   }
 });
 
+test('la tienda publica el enlace de pago del método', async () => {
+  const restore = withManualMethods([
+    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
+  ]);
+  try {
+    const agent = app();
+    const res = await agent.get('/api/payments/config');
+
+    assert.equal(res.body.manualMethods[0].link, 'https://paypal.me/ejemplo');
+  } finally {
+    restore();
+  }
+});
+
 test('crear una orden exige sesión', async () => {
   const restore = withManualMethods();
   try {

@@ -81,11 +81,11 @@ services:
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
-      # Cobro manual (Zinli, pago móvil…). Va con valor y no como secreto porque
+      # Cobro manual (PayPal, Zinli…). Va con valor y no como secreto porque
       # son los datos de pago que se le muestran al usuario, no credenciales.
-      # Edítalo con tus cuentas reales antes de cobrar.
+      # `link` es la página de pago a la que el usuario va directo.
       - key: MANUAL_PAYMENT_METHODS
-        value: '[{"id":"zinli","label":"Zinli","details":"Envía el importe a tu cuenta Zinli y pega el número de referencia."}]'
+        value: '[{"id":"paypal","label":"PayPal","link":"https://paypal.me/eliecerdepablos","details":"Paga el importe exacto en PayPal y pega aquí el número de operación."},{"id":"zinli","label":"Zinli","link":"https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt","details":"Recarga con Zinli usando el enlace y pega aquí el número de referencia."}]'
       # Asistente de revisión (opcional). Sin clave queda apagado y el panel
       # manual funciona igual.
       - key: ASSISTANT_API_KEY
