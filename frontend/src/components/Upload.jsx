@@ -68,7 +68,10 @@ export default function Upload({ onUploaded }) {
       tries += 1;
       try {
         const { data } = await api.get(`/videos/${id}/status`);
-        if (data.transcodeStatus === 'ready') {
+        // `none` es terminal: el servidor no tiene la optimización activada y
+        // sirve el original. Se trata como listo; si no, la pantalla se quedaría
+        // "optimizando" cinco minutos por algo que ya terminó.
+        if (data.transcodeStatus === 'ready' || data.transcodeStatus === 'none') {
           setOptimizing({ id, status: 'ready' });
           return;
         }

@@ -287,6 +287,21 @@ const env = {
   // Where uploaded originals and their HLS renditions are written. Served
   // read-only at /uploads.
   uploadsDir: process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads'),
+  // Almacenamiento externo compatible con S3 (Cloudflare R2). Con esto activo,
+  // los ficheros subidos se copian a un bucket y se sirven desde su URL pública,
+  // en vez de quedarse en el disco efímero del contenedor. Render borra ese disco
+  // en cada despliegue o reinicio, así que sin esto los vídeos desaparecen.
+  //
+  // Vacío = modo local (desarrollo y tests), exactamente como antes.
+  r2: {
+    endpoint: process.env.R2_ENDPOINT || null,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || null,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || null,
+    bucket: process.env.R2_BUCKET || null,
+    // Base pública del bucket (https://pub-xxxx.r2.dev o el dominio propio). Sin
+    // barra final. Es lo que se antepone a la clave para formar la URL servible.
+    publicBaseUrl: (process.env.R2_PUBLIC_BASE_URL || '').replace(/\/+$/, '') || null,
+  },
   // Built frontend to serve from the same process. Empty means "API only", so
   // the development setup and the test suite are unaffected.
   publicDir: process.env.PUBLIC_DIR || null,

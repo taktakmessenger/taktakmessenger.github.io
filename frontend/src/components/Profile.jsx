@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { attachVideoSource } from '../lib/video';
+import { exportVideo as downloadExport } from '../lib/download';
 import { formatCount } from '../lib/format';
 
 // Rejilla de vídeos del perfil, como en TikTok: miniaturas verticales en tres
@@ -57,7 +58,9 @@ function PlayerSlide({ video, active, onExport, onReprocess }) {
     return detach;
   }, [active, video]);
 
-  const needsOptimize = video.transcodeStatus === 'failed' || !video.hlsUrl;
+  // Solo se ofrece reprocesar cuando la conversión falló de verdad. Con
+  // `none` (servidor sin ffmpeg) no hay nada que reprocesar: el botón daría 503.
+  const needsOptimize = video.transcodeStatus === 'failed';
 
   return (
     <section className="profile-player-slide" data-video-id={video._id}>
@@ -202,14 +205,9 @@ export default function Profile({ onNavigate }) {
     setError('');
     setNotice('');
     try {
-      const { data } = await api.get(`/videos/${video._id}/export`);
-      // Straight to the original file: no watermark, no re-encode.
-      const link = document.createElement('a');
-      link.href = data.downloadUrl;
-      link.download = data.filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      // Descarga con la sesión puesta (blob) y no con un enlace directo: el
+      // endpoint exige estar autenticado y un `<a>` no manda la cabecera.
+      const data = await downloadExport(video._id);
       setNotice(`Exportando "${data.filename}" sin marca de agua`);
     } catch (err) {
       setError(err.message);

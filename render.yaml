@@ -74,6 +74,22 @@ services:
       # acercarse a ese tope.
       - key: MAX_VIDEO_BYTES
         value: 209715200
+      # Almacenamiento externo compatible con S3 (Cloudflare R2). Sin esto los
+      # vídeos viven en el disco del contenedor, que Render borra en cada
+      # despliegue: se pierden y sus enlaces quedan rotos. Con el bucket
+      # configurado, original y HLS se publican ahí y sobreviven a los reinicios.
+      # Mientras estas variables falten, la app sigue en modo local sin fallar.
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      # URL pública del bucket (https://pub-xxxx.r2.dev), sin barra final.
+      - key: R2_PUBLIC_BASE_URL
+        sync: false
       # Render no ofrece puertos UDP: el SFU de mediasoup no puede funcionar y
       # el modo malla es el único disponible.
       - key: SFU_ENABLED
