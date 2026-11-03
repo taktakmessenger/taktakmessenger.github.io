@@ -15,6 +15,12 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  // Asistente del administrador: el historial vive aquí y se manda entero en
+  // cada turno, porque el backend no guarda conversaciones.
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes] =
@@ -128,6 +134,35 @@ export default function AdminPanel() {
     }
   }
 
+  // Envía un turno al asistente. Se manda todo el historial porque el backend
+  // no lo guarda; al volver, se añade la respuesta y se recargan los datos del
+  // panel, ya que el asistente pudo haber cambiado algo (aprobado un vídeo,
+  // acreditado monedas) y las listas deben reflejarlo.
+  async function sendChat(e) {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text || chatBusy) return;
+
+    const next = [...chatMessages, { role: 'user', content: text }];
+    setChatMessages(next);
+    setChatInput('');
+    setChatBusy(true);
+    setError('');
+    try {
+      const { data } = await api.post('/admin/assistant', { messages: next });
+      setChatMessages([...next, { role: 'assistant', content: data.reply }]);
+      if (data.executed?.length) await load();
+    } catch (err) {
+      setError(err.message);
+      setChatMessages([
+        ...next,
+        { role: 'assistant', content: `No pude responder: ${err.message}` },
+      ]);
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   // Pide al asistente que revise las pendientes. Solo trae sugerencias: no
   // aprueba nada, eso lo decide el administrador con el botón de cada orden.
   async function runAssistantReview() {
@@ -171,6 +206,54 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* Asistente del administrador. Solo aparece aquí, detrás de la sesión de
+          admin: no hay forma de llegar a él con una cuenta normal. */}
+      <div className="moderation admin-assistant">
+        <div className="admin-section-head">
+          <h3>🤖 Asistente del administrador</h3>
+          {chatMessages.length > 0 && (
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => setChatMessages([])}
+              disabled={chatBusy}
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+        <p className="hint">
+          Pídele tareas en lenguaje natural: «busca al usuario elidep», «qué vídeos hay
+          pendientes», «aprueba el vídeo …», «acredita 500 monedas a …». Puede consultar y
+          ejecutar acciones reales.
+        </p>
+
+        {chatMessages.length > 0 && (
+          <div className="admin-chat-log">
+            {chatMessages.map((m, i) => (
+              <div key={i} className={`admin-chat-msg ${m.role}`}>
+                <strong>{m.role === 'user' ? 'Tú' : 'Asistente'}</strong>
+                <p>{m.content}</p>
+              </div>
+            ))}
+            {chatBusy && <p className="hint">Pensando…</p>}
+          </div>
+        )}
+
+        <form className="admin-chat-form" onSubmit={sendChat}>
+          <input
+            type="text"
+            placeholder="Escribe una instrucción…"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            disabled={chatBusy}
+          />
+          <button type="submit" className="btn-primary" disabled={chatBusy || !chatInput.trim()}>
+            {chatBusy ? '…' : 'Enviar'}
+          </button>
+        </form>
+      </div>
 
       {/* Cobro manual: el administrador comprueba el ingreso por fuera y
           aprueba. Aprobar acredita las monedas de verdad. */}
