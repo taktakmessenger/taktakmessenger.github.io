@@ -318,6 +318,10 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
   // (no SMTP/SMS provider, development). Shown on screen so the flow is
   // usable; in production the field is always absent.
   const [devCode, setDevCode] = useState('');
+  // Si el SMS no salió (sin proveedor), la pantalla no puede decir "enviamos un
+  // código": sería mentirle al usuario y mandarlo a esperar un mensaje que no
+  // va a llegar.
+  const [smsFailed, setSmsFailed] = useState(false);
 
   // Which optional providers this deployment actually has, so buttons that
   // would only fail are hidden. Con reintentos: es la primera llamada de la
@@ -548,12 +552,24 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       setCooldown(RESEND_SECONDS);
       setView('phone-code');
       // A deployment without an SMS provider must say so, instead of showing a
-      // "check your phone" screen for a message that will never arrive.
+      // "check your phone" screen for a message that will never arrive. Solo se
+      // ofrece "usa el código de abajo" cuando el servidor lo mandó de verdad
+      // (desarrollo); en producción no viene y prometerlo deja al usuario en un
+      // callejón sin salida, así que se le indica la vía que sí funciona.
       if (data.delivered === false) {
-        setNotice(
-          'El envío de SMS no está configurado en este servidor. Usa el código que aparece abajo.'
-        );
-        if (data.code) setDevCode(data.code);
+        setSmsFailed(true);
+        if (data.code) {
+          setNotice(
+            'El envío de SMS no está configurado en este servidor. Usa el código que aparece abajo.'
+          );
+          setDevCode(data.code);
+        } else {
+          setNotice(
+            'El envío de SMS no está disponible todavía. Regístrate con tu correo, que funciona al momento, o inténtalo más tarde.'
+          );
+        }
+      } else {
+        setSmsFailed(false);
       }
     });
   };
@@ -581,9 +597,17 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       setCode('');
       setDevCode('');
       if (data.delivered === false) {
-        setNotice('El envío de SMS no está configurado en este servidor.');
-        if (data.code) setDevCode(data.code);
+        setSmsFailed(true);
+        if (data.code) {
+          setNotice('El envío de SMS no está configurado en este servidor.');
+          setDevCode(data.code);
+        } else {
+          setNotice(
+            'El envío de SMS no está disponible todavía. No se puede verificar el número ahora mismo; inténtalo más tarde.'
+          );
+        }
       } else {
+        setSmsFailed(false);
         setNotice('Te enviamos otro código por SMS.');
       }
     });
@@ -959,7 +983,11 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
 
       {view === 'phone-code' && (
         <form onSubmit={handlePhoneVerify}>
-          <p className="hint">Enviamos un código a {maskedPhone || 'tu teléfono'}.</p>
+          <p className="hint">
+            {smsFailed
+              ? `No pudimos enviar el SMS a ${maskedPhone || 'tu teléfono'}.`
+              : `Enviamos un código a ${maskedPhone || 'tu teléfono'}.`}
+          </p>
           {notice && <p className="notice" role="status">{notice}</p>}
           <DevCodeBox code={devCode} onUse={setCode} />
           <CodeInput value={code} onChange={setCode} disabled={busy} />

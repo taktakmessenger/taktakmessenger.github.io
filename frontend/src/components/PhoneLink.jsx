@@ -64,6 +64,9 @@ export default function PhoneLink({ onDone, onSkip, skipLabel = 'Ahora no', auto
   // El código solo lo devuelve la API cuando el SMS no pudo salir (sin
   // proveedor, desarrollo). Se muestra para que el flujo sea usable.
   const [devCode, setDevCode] = useState('');
+  // Si el SMS no salió (sin proveedor), la pantalla no puede decir "enviamos un
+  // código": sería mandar al usuario a esperar un mensaje que no va a llegar.
+  const [smsFailed, setSmsFailed] = useState(false);
 
   // La lista de países viene de la misma fuente que el registro, para que el
   // selector cubra el mundo entero y no una tabla mantenida a mano. Con
@@ -119,11 +122,19 @@ export default function PhoneLink({ onDone, onSkip, skipLabel = 'Ahora no', auto
 
       setMaskedPhone(data.phone);
       setStep('code');
+      // En producción el servidor no manda el código (sería un secuestro de
+      // cuenta), así que solo se promete "usa el código de abajo" en desarrollo.
       if (data.delivered === false) {
-        setNotice(
-          'El envío de SMS no está configurado en este servidor. Usa el código que aparece abajo.'
-        );
-        if (data.code) setDevCode(data.code);
+        if (data.code) {
+          setNotice(
+            'El envío de SMS no está configurado en este servidor. Usa el código que aparece abajo.'
+          );
+          setDevCode(data.code);
+        } else {
+          setNotice(
+            'El envío de SMS no está disponible todavía. No se puede vincular el número ahora mismo; inténtalo más tarde.'
+          );
+        }
       }
     });
   };
@@ -175,7 +186,11 @@ export default function PhoneLink({ onDone, onSkip, skipLabel = 'Ahora no', auto
 
       {step === 'code' && (
         <form className="settings-form" onSubmit={handleVerify}>
-          <p className="hint">Enviamos un código a {maskedPhone || 'tu teléfono'}.</p>
+          <p className="hint">
+            {smsFailed
+              ? `No pudimos enviar el SMS a ${maskedPhone || 'tu teléfono'}.`
+              : `Enviamos un código a ${maskedPhone || 'tu teléfono'}.`}
+          </p>
           {notice && <p className="notice" role="status">{notice}</p>}
           {devCode && (
             <div className="dev-code" role="status">
