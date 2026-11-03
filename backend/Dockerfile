@@ -2,7 +2,7 @@
 # recién bajado compile sin tener que ejecutar antes `npm run build` a mano.
 # Node en Debian, no Alpine, para no arrastrar dos bases distintas: el backend ya
 # necesita Debian por mediasoup.
-FROM node:20-slim AS web
+FROM node:22-trixie-slim AS web
 
 WORKDIR /web
 
@@ -13,7 +13,7 @@ RUN npm ci || npm install
 COPY frontend/ ./
 RUN npm run build
 
-FROM node:20-slim
+FROM node:22-trixie-slim
 
 WORKDIR /app
 
@@ -22,9 +22,13 @@ WORKDIR /app
 # The base image is Debian and not Alpine on purpose. mediasoup (the voice room)
 # ships a prebuilt worker binary that does not run on musl, so on Alpine npm
 # falls back to compiling it from source and fails: the build stops with
-# "/bin/sh: python: not found". On Debian the prebuilt binary is used as is and
-# the install finishes in seconds. Do not switch back to alpine without
-# installing python3, make and g++ in the image.
+# "/bin/sh: python: not found".
+#
+# The Debian release matters too. mediasoup picks the prebuilt by the host's
+# major kernel version, and the kernel7 build needs glibc 2.38. bookworm (glibc
+# 2.36) cannot run it, so npm falls back to compiling and dies on the missing
+# python. trixie (glibc 2.41) runs it as is. Keep the base on trixie, or install
+# python3, make and g++ to build from source.
 #
 # ffmpeg es la optimización de vídeo (el HLS y la miniatura). Sin él la subida
 # sigue funcionando, pero el vídeo se sirve tal cual y el creador ve "No se pudo
