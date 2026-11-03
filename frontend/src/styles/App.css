@@ -4259,6 +4259,31 @@
   filter: brightness(0.92);
 }
 
+/* El enlace también como texto copiable: el usuario tiene que llevárselo a otra
+   app para pagar, así que tiene que poder leerlo y copiarlo en un toque. */
+.manual-pay-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.manual-pay-value {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.manual-pay-copy-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 /* Sugerencia del asistente en la cola de pagos manuales. Se colorea según lo
    que propone para que el ojo distinga de un vistazo aprobar de rechazar. */
 .assistant-hint {
