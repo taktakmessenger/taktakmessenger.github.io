@@ -10,6 +10,7 @@ const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
 const manualPaymentService = require('../services/manualPaymentService');
+const adminAssistant = require('../services/adminAssistant');
 const { auth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -50,6 +51,37 @@ router.get(
       .sort({ createdAt: -1 })
       .limit(Number(req.query.limit) || 50);
     res.json({ users });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Asistente del administrador                                         */
+/* ------------------------------------------------------------------ */
+//
+// Chat con el que el dueño pide tareas en lenguaje natural. Solo responde a
+// administradores (todo este router ya pasa por `requireAdmin`). El historial
+// lo lleva el cliente: aquí llega la conversación completa y se reenvía al
+// modelo, que puede ejecutar acciones mediante herramientas.
+
+router.post(
+  '/assistant',
+  [
+    body('messages').isArray({ min: 1, max: 40 }).withMessage('Conversación inválida'),
+    body('messages.*.role').isIn(['user', 'assistant']),
+    body('messages.*.content').isString().trim().isLength({ min: 1, max: 4000 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    if (!adminAssistant.isConfigured()) {
+      return res.status(503).json({
+        error: 'El asistente no está configurado (falta ASSISTANT_API_KEY).',
+      });
+    }
+    const result = await adminAssistant.chat({
+      messages: req.body.messages,
+      adminId: req.user.userId,
+    });
+    res.json(result);
   })
 );
 
