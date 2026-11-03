@@ -351,6 +351,13 @@ const env = {
   // La API es compatible con OpenAI (sirve OpenAI, Groq, OpenRouter…): solo
   // cambia `ASSISTANT_API_BASE` y `ASSISTANT_MODEL`.
   assistantApiKey: process.env.ASSISTANT_API_KEY || null,
+  // Claves de respaldo, separadas por comas. Si la principal falla (caducada,
+  // límite agotado, proveedor caído), el asistente prueba estas en orden antes
+  // de rendirse. Se listan de la más a la menos preferida.
+  assistantFallbackApiKeys: (process.env.ASSISTANT_API_KEY_FALLBACK || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean),
   assistantApiBase: (process.env.ASSISTANT_API_BASE || 'https://api.openai.com/v1').replace(/\/+$/, ''),
   assistantModel: process.env.ASSISTANT_MODEL || 'gpt-4o-mini',
   // Aprobación automática. Apagada por defecto y a propósito: aprobar es

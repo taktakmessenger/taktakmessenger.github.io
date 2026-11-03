@@ -91,6 +91,10 @@ services:
       # el que entiende esa base (gpt-oss-120b es de Groq, gpt-4o-mini de OpenAI).
       - key: ASSISTANT_API_KEY
         sync: false
+      # Claves de respaldo separadas por comas. Si la principal falla, se prueba
+      # la siguiente antes de rendirse.
+      - key: ASSISTANT_API_KEY_FALLBACK
+        sync: false
       - key: ASSISTANT_API_BASE
         value: https://api.groq.com/openai/v1
       - key: ASSISTANT_MODEL

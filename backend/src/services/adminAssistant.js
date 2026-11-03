@@ -5,6 +5,7 @@ const Report = require('../models/Report');
 const Transaction = require('../models/Transaction');
 const walletService = require('../services/walletService');
 const manualPaymentService = require('../services/manualPaymentService');
+const assistantClient = require('./assistantClient');
 
 // Asistente conversacional del administrador.
 //
@@ -22,7 +23,7 @@ const manualPaymentService = require('../services/manualPaymentService');
 const MAX_TOOL_ROUNDS = 6;
 
 function isConfigured() {
-  return Boolean(env.assistantApiKey);
+  return assistantClient.isConfigured();
 }
 
 /* ------------------------------------------------------------------ */
@@ -351,29 +352,17 @@ async function chat({ messages, adminId }) {
   const executed = [];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const response = await fetch(`${env.assistantApiBase}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.assistantApiKey}`,
-      },
-      body: JSON.stringify({
+    const data = await assistantClient.callAssistant({
+      body: {
         model: env.assistantModel,
         temperature: 0,
         messages: conversation,
         tools: TOOLS,
-      }),
-      signal: AbortSignal.timeout(30000),
+      },
+      timeoutMs: 30000,
+      log: '[ASISTENTE]',
     });
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(
-        `El proveedor del asistente respondió ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`
-      );
-    }
-
-    const data = await response.json();
     const message = data.choices?.[0]?.message;
     if (!message) throw new Error('El asistente no devolvió respuesta');
 
