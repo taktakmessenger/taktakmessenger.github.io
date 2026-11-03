@@ -50,6 +50,9 @@ export function VoiceRoomProvider({ children }) {
   const [guestLimit, setGuestLimit] = useState(null);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
+  // Espectador: entra a ver y comentar, sin publicar cámara ni micrófono. Es el
+  // rol de quien solo mira el directo, como en TikTok.
+  const [spectate, setSpectate] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
   // Vista a pantalla completa del directo. Se abre al entrar (como TikTok: al
@@ -76,6 +79,7 @@ export function VoiceRoomProvider({ children }) {
   const modeRef = useRef(null);
   const mutedRef = useRef(false);
   const camOffRef = useRef(false);
+  const spectateRef = useRef(false);
   const connectedRef = useRef(connected);
   connectedRef.current = connected;
 
@@ -128,6 +132,8 @@ export function VoiceRoomProvider({ children }) {
     setCamOff(false);
     mutedRef.current = false;
     camOffRef.current = false;
+    spectateRef.current = false;
+    setSpectate(false);
     setStageOpen(false);
     setConnecting(false);
   }, []);
@@ -185,6 +191,12 @@ export function VoiceRoomProvider({ children }) {
         localStreamRef.current.getTracks().forEach((track) => {
           pc.addTrack(track, localStreamRef.current);
         });
+      } else if (spectateRef.current) {
+        // Espectador: no manda media, solo lo recibe. Sin transceptores
+        // `recvonly` la oferta no tendría secciones de media y el anfitrión no
+        // tendría por dónde enviar su vídeo.
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+        pc.addTransceiver('video', { direction: 'recvonly' });
       }
 
       return pc;
@@ -234,7 +246,7 @@ export function VoiceRoomProvider({ children }) {
   );
 
   const join = useCallback(
-    async ({ slug, name, mesh = false } = {}) => {
+    async ({ slug, name, mesh = false, spectate = false } = {}) => {
       if (!slug) return;
       if (!connectedRef.current) {
         setError('Sin conexión: espera un momento y vuelve a intentarlo');
@@ -247,28 +259,40 @@ export function VoiceRoomProvider({ children }) {
       unlockAudio();
 
       try {
-        if (!navigator.mediaDevices?.getUserMedia) {
+        if (!navigator.mediaDevices?.getUserMedia && !spectate) {
           throw new Error('Tu navegador no permite el directo');
         }
-        // El directo lleva cámara y voz. Si la cámara falla (permiso denegado
-        // solo para ella, o no hay ninguna), se entra igual como oyente con
-        // micrófono en vez de dejar al usuario fuera: es más útil estar en la
-        // sala hablando que no estar.
-        try {
-          localStreamRef.current = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          });
-        } catch (videoErr) {
-          localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // El espectador no enciende cámara ni micrófono: entra a ver y comentar.
+        // Pedir permisos para algo que no va a usar es un paso de más (y en el
+        // móvil, un diálogo del sistema que asusta).
+        if (spectate) {
+          spectateRef.current = true;
+          setSpectate(true);
           camOffRef.current = true;
           setCamOff(true);
-          setError('Sin cámara: entras solo con voz');
-          // El aviso se borra solo; no debe quedar tapando el directo.
-          setTimeout(() => setError(''), 4000);
+        } else {
+          spectateRef.current = false;
+          setSpectate(false);
+          // El directo lleva cámara y voz. Si la cámara falla (permiso denegado
+          // solo para ella, o no hay ninguna), se entra igual como oyente con
+          // micrófono en vez de dejar al usuario fuera: es más útil estar en la
+          // sala hablando que no estar.
+          try {
+            localStreamRef.current = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+            });
+          } catch (videoErr) {
+            localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+            camOffRef.current = true;
+            setCamOff(true);
+            setError('Sin cámara: entras solo con voz');
+            // El aviso se borra solo; no debe quedar tapando el directo.
+            setTimeout(() => setError(''), 4000);
+          }
         }
         roomRef.current = { slug, name };
-        emit('voice:join', { slug, mesh });
+        emit('voice:join', { slug, mesh, spectate });
       } catch (err) {
         setError(err?.message || mediaErrorMessage(err));
         cleanup();
@@ -472,6 +496,7 @@ export function VoiceRoomProvider({ children }) {
       guestLimit,
       muted,
       camOff,
+      spectate,
       connecting,
       error,
       streamTick,
@@ -494,6 +519,7 @@ export function VoiceRoomProvider({ children }) {
       guestLimit,
       muted,
       camOff,
+      spectate,
       connecting,
       error,
       streamTick,

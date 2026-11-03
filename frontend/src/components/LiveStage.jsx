@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useVoiceRoom } from '../contexts/VoiceRoomContext';
 import { useAuth } from '../contexts/AuthContext';
 import { orderParticipants, guestColumns } from '../lib/liveGrid';
+import LiveChat from './LiveChat';
+import LiveGifts from './LiveGifts';
 
 // Ventana de una persona en el directo. Es un `<video>` que engancha su stream
 // cuando existe; si la cámara está apagada (o todavía no llegó), se pinta el
@@ -62,20 +64,33 @@ export default function LiveStage() {
     toggleMute,
     toggleCamera,
     toggleStage,
+    spectate,
     remoteStreamsRef,
     remoteVideoStreamsRef,
     localStreamRef,
   } = useVoiceRoom();
   const { user } = useAuth();
 
+  // Panel de comentarios abierto por defecto (es lo que se espera de un directo)
+  // y regalos a un toque desde el botón 🎁.
+  const [chatOpen, setChatOpen] = useState(true);
+  const [giftsOpen, setGiftsOpen] = useState(false);
+  // El último regalo recibido, para la animación breve encima del vídeo.
+  const [flash, setFlash] = useState(null);
+
+  // La ventana propia solo se pinta si publicamos algo. Un espectador no tiene
+  // ventana: solo ve a los demás y comenta.
+  const selfParticipates = !spectate;
+
   // El anfitrión primero, los invitados después. `streamTick` entra en las
   // dependencias para que la rejilla se vuelva a calcular cuando llega un vídeo
   // nuevo (los streams viven en refs y no disparan render por sí solos).
   const { host, guests } = useMemo(() => {
     const me = { id: String(user?.id), username: user?.username, muted, cameraOff: camOff };
-    const all = [me, ...peers];
+    // Un espectador no ocupa ventana: solo ve a los que publican.
+    const all = selfParticipates ? [me, ...peers] : [...peers];
     return orderParticipants(all, hostId);
-  }, [peers, hostId, user, muted, camOff, streamTick]);
+  }, [peers, hostId, user, muted, camOff, streamTick, selfParticipates]);
 
   if (!room || !stageOpen) return null;
 
@@ -102,11 +117,23 @@ export default function LiveStage() {
         <div className="live-stage-title">
           <strong>{room.name}</strong>
           <small>
-            {guests.length} invitado{guests.length === 1 ? '' : 's'}
-            {Number.isFinite(guestLimit) && guestLimit > 0 ? ` de ${guestLimit}` : ''}
+            {spectate
+              ? 'Espectador · viendo y comentando'
+              : `${guests.length} invitado${guests.length === 1 ? '' : 's'}${
+                  Number.isFinite(guestLimit) && guestLimit > 0 ? ` de ${guestLimit}` : ''
+                }`}
             {mode && ` · ${mode === 'sfu' ? 'grupo' : 'directo'}`}
           </small>
         </div>
+        <button
+          type="button"
+          className={`live-stage-min ${chatOpen ? 'active' : ''}`}
+          onClick={() => setChatOpen((open) => !open)}
+          aria-pressed={chatOpen}
+          aria-label={chatOpen ? 'Ocultar comentarios' : 'Mostrar comentarios'}
+        >
+          💬
+        </button>
         <button
           type="button"
           className="live-stage-min"
@@ -117,62 +144,103 @@ export default function LiveStage() {
         </button>
       </header>
 
-      <div className="live-stage-body">
-        {/* Ventana del anfitrión: más grande, arriba. Si todavía no ha publicado
-            su cámara, se ve su avatar con el rótulo de anfitrión. */}
-        {host ? (
-          <LiveTile
-            peer={host}
-            stream={hostStream}
-            isHost
-            isSelf={hostIsSelf}
-            local={hostIsSelf}
-          />
-        ) : (
-          <div className="live-tile host empty">
-            <span className="live-tile-avatar">📡</span>
-            <span className="live-tile-name">Esperando al anfitrión…</span>
+      <div className="live-stage-view">
+        <div className="live-stage-body">
+          {/* Ventana del anfitrión: más grande, arriba. Si todavía no ha publicado
+              su cámara, se ve su avatar con el rótulo de anfitrión. */}
+          {host ? (
+            <LiveTile
+              peer={host}
+              stream={hostStream}
+              isHost
+              isSelf={hostIsSelf}
+              local={hostIsSelf}
+            />
+          ) : (
+            <div className="live-tile host empty">
+              <span className="live-tile-avatar">📡</span>
+              <span className="live-tile-name">Esperando al anfitrión…</span>
+            </div>
+          )}
+
+          {/* Rejilla de invitados. Las columnas se calculan con el número de
+              invitados para que cada ventana sea lo más grande posible. */}
+          {guests.length > 0 && (
+            <div className="live-grid" style={{ '--live-cols': columns }}>
+              {guests.map((p) => {
+                const isSelf = String(p.id) === selfId;
+                return (
+                  <LiveTile
+                    key={p.id}
+                    peer={p}
+                    stream={videoStreamFor(p.id)}
+                    isSelf={isSelf}
+                    local={isSelf}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Animación breve del último regalo, encima del vídeo. Se borra sola
+            para no tapar el directo (como en TikTok). */}
+        {flash && (
+          <div
+            className="live-gift-flash"
+            key={flash.at}
+            onAnimationEnd={() => setFlash(null)}
+          >
+            <span className="live-gift-flash-icon" aria-hidden="true">🎁</span>
+            <span>
+              <strong>@{flash.from}</strong> envió {flash.giftName}
+            </span>
           </div>
         )}
 
-        {/* Rejilla de invitados. Las columnas se calculan con el número de
-            invitados para que cada ventana sea lo más grande posible. */}
-        {guests.length > 0 && (
-          <div className="live-grid" style={{ '--live-cols': columns }}>
-            {guests.map((p) => {
-              const isSelf = String(p.id) === selfId;
-              return (
-                <LiveTile
-                  key={p.id}
-                  peer={p}
-                  stream={videoStreamFor(p.id)}
-                  isSelf={isSelf}
-                  local={isSelf}
-                />
-              );
-            })}
-          </div>
-        )}
+        {/* Comentarios del directo, encima del vídeo. Es el canal de la sala de
+            voz, así que el servidor ya comprobó al unirse quién puede escribir.
+            Con los regalos abiertos solo se oculta (no se desmonta): al
+            desmontarlo se saldría de la sala y el regalo que se acaba de enviar
+            se perdería antes de salir. */}
+        {chatOpen && <LiveChat room={room.room} onGift={setFlash} hidden={giftsOpen} />}
+
+        {/* Botones de regalo. El cobro va por el monedero y la animación por el
+            socket; el receptor es el anfitrión del directo. */}
+        {giftsOpen && <LiveGifts room={room.room} recipientId={hostId} />}
       </div>
 
       <footer className="live-stage-controls">
+        {!spectate && (
+          <>
+            <button
+              type="button"
+              className={`live-ctrl ${muted ? 'on' : ''}`}
+              onClick={toggleMute}
+              aria-pressed={muted}
+              aria-label={muted ? 'Activar micrófono' : 'Silenciar micrófono'}
+            >
+              {muted ? '🔇' : '🎤'}
+            </button>
+            <button
+              type="button"
+              className={`live-ctrl ${camOff ? 'on' : ''}`}
+              onClick={toggleCamera}
+              aria-pressed={camOff}
+              aria-label={camOff ? 'Encender cámara' : 'Apagar cámara'}
+            >
+              {camOff ? '📷' : '🎥'}
+            </button>
+          </>
+        )}
         <button
           type="button"
-          className={`live-ctrl ${muted ? 'on' : ''}`}
-          onClick={toggleMute}
-          aria-pressed={muted}
-          aria-label={muted ? 'Activar micrófono' : 'Silenciar micrófono'}
+          className={`live-ctrl ${giftsOpen ? 'on' : ''}`}
+          onClick={() => setGiftsOpen((open) => !open)}
+          aria-pressed={giftsOpen}
+          aria-label="Enviar un regalo"
         >
-          {muted ? '🔇' : '🎤'}
-        </button>
-        <button
-          type="button"
-          className={`live-ctrl ${camOff ? 'on' : ''}`}
-          onClick={toggleCamera}
-          aria-pressed={camOff}
-          aria-label={camOff ? 'Encender cámara' : 'Apagar cámara'}
-        >
-          {camOff ? '📷' : '🎥'}
+          🎁
         </button>
         <button type="button" className="live-ctrl end" onClick={leave} aria-label="Salir del directo">
           📵

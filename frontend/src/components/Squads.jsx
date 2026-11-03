@@ -188,15 +188,29 @@ export default function Squads() {
                 Salir del directo
               </button>
             ) : (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() =>
-                  joinVoice({ slug: active.squad.slug, name: active.squad.name })
-                }
-              >
-                🎥 Entrar al directo
-              </button>
+              <div className="voice-room-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() =>
+                    joinVoice({ slug: active.squad.slug, name: active.squad.name })
+                  }
+                >
+                  🎥 Entrar al directo
+                </button>
+                {/* Espectador: ver y comentar sin encender cámara ni micrófono.
+                    Es la forma de entrar de quien solo quiere mirar (y de quien
+                    no quiere dar permisos de cámara en el móvil). */}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    joinVoice({ slug: active.squad.slug, name: active.squad.name, spectate: true })
+                  }
+                >
+                  👀 Ver como espectador
+                </button>
+              </div>
             )}
           </div>
 

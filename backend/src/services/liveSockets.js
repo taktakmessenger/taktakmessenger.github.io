@@ -62,6 +62,19 @@ function voiceMembers(room) {
   return members ? [...members.values()] : [];
 }
 
+// ¿Puede este usuario entrar al chat en vivo de esta sala? Las salas atadas a un
+// TAK Creator heredan su visibilidad: una privada solo se abre a sus miembros.
+// El nombre de la sala es público (sale en la lista de creators), así que sin
+// esta comprobación cualquiera podría leer y escribir en el directo de otro.
+// Las salas sueltas (sin creator detrás) se dejan abiertas, como estaban antes
+// de que el directo tuviera comentarios.
+async function canAccessLiveRoom(userId, roomName) {
+  const squad = await Squad.findOne({ voiceRoom: roomName }).select('visibility members.user');
+  if (!squad) return true;
+  if (squad.visibility !== 'private') return true;
+  return Boolean(userId) && squad.isMember(userId);
+}
+
 // Saca al socket de su sala de voz, avisa a los que quedan y devuelve el nombre
 // de la sala si realmente estaba dentro. Se llama tanto al salir a propósito
 // como al desconectar, para que nadie quede como un participante fantasma.
@@ -355,9 +368,19 @@ function initLiveSockets(server) {
       });
     }
 
-    socket.on('live:join', ({ room } = {}) => {
+    socket.on('live:join', async ({ room } = {}) => {
       if (typeof room !== 'string' || !room.trim()) return;
       const safeRoom = room.trim().slice(0, 60);
+      let allowed = true;
+      try {
+        allowed = await canAccessLiveRoom(socket.data.user?.id, safeRoom);
+      } catch {
+        // Ante la duda, cerrado: mejor un aviso que dejar el directo abierto.
+        allowed = false;
+      }
+      if (!allowed) {
+        return socket.emit('live:error', { error: 'No tienes acceso a este directo' });
+      }
       socket.join(safeRoom);
       socket.emit('live:joined', { room: safeRoom, you: socket.data.user });
     });
@@ -371,6 +394,11 @@ function initLiveSockets(server) {
       // Posting requires an identity, otherwise the chat is trivially spamable.
       if (!user || typeof room !== 'string' || typeof text !== 'string') return;
 
+      // Solo se publica en una sala a la que el socket se unió de verdad (y
+      // `live:join` ya comprobó el acceso): con el nombre de la sala no basta.
+      const safeRoom = room.trim().slice(0, 60);
+      if (!socket.rooms.has(safeRoom)) return;
+
       const now = Date.now();
       if (now - lastMessageAt < MIN_MESSAGE_INTERVAL_MS) return;
 
@@ -378,7 +406,7 @@ function initLiveSockets(server) {
       if (!body) return;
 
       lastMessageAt = now;
-      io.to(room.trim().slice(0, 60)).emit('live:message', {
+      io.to(safeRoom).emit('live:message', {
         user: user.username,
         text: body,
         at: now,
@@ -390,7 +418,10 @@ function initLiveSockets(server) {
     socket.on('live:gift', ({ room, giftName, iconUrl } = {}) => {
       const user = socket.data.user;
       if (!user || typeof room !== 'string' || typeof giftName !== 'string') return;
-      io.to(room.trim().slice(0, 60)).emit('live:gift', {
+      // Igual que los comentarios: solo se anuncia un regalo en la sala propia.
+      const safeRoom = room.trim().slice(0, 60);
+      if (!socket.rooms.has(safeRoom)) return;
+      io.to(safeRoom).emit('live:gift', {
         from: user.username,
         giftName: giftName.slice(0, 40),
         iconUrl: typeof iconUrl === 'string' ? iconUrl.slice(0, 300) : null,
@@ -677,8 +708,11 @@ function initLiveSockets(server) {
     // Entrar. La membresía se comprueba contra la base de datos, igual que el
     // endpoint REST del feed: el socket no puede ser una puerta trasera a la
     // sala de un creator privado.
-    socket.on('voice:join', async ({ slug, mesh } = {}) => {
+    socket.on('voice:join', async ({ slug, mesh, spectate } = {}) => {
       if (!me || typeof slug !== 'string' || !slug.trim()) return;
+      // Espectador: entra a ver y comentar, sin publicar cámara ni micrófono. No
+      // ocupa plaza de la rejilla, así que no cuenta para el aforo de invitados.
+      const asSpectator = spectate === true;
       try {
         const squad = await Squad.findOne({ slug: slug.trim().toLowerCase() });
         if (!squad || !squad.voiceRoom) {
@@ -705,10 +739,10 @@ function initLiveSockets(server) {
         // Se cuenta por persona (no por pestaña) y sin contar al anfitrión, así
         // que el límite no cambia porque alguien abra dos pestañas. Se aplica en
         // cualquier modo: es un límite de producto (la rejilla no da para más),
-        // no de infraestructura.
-        if (!isHost && env.liveGuestLimit > 0) {
+        // no de infraestructura. Los espectadores no ocupan plaza: solo miran.
+        if (!isHost && !asSpectator && env.liveGuestLimit > 0) {
           const guests = voiceMembers(room).filter(
-            (p) => String(p.id) !== hostId
+            (p) => String(p.id) !== hostId && !p.spectate
           ).length;
           if (guests >= env.liveGuestLimit) {
             return socket.emit('voice:error', {
@@ -733,11 +767,16 @@ function initLiveSockets(server) {
 
         // Quienes ya estaban: se le entregan al que llega para que sea él quien
         // llame (oferta) a cada uno. Así hay un único sentido de negociación y
-        // no se cruzan dos ofertas simultáneas.
-        const existing = voiceMembers(room);
+        // no se cruzan dos ofertas simultáneas. Los espectadores no publican
+        // nada, así que no entran en la lista: llamarles no tendría respuesta.
+        const existing = voiceMembers(room).filter((p) => !p.spectate);
 
         if (!voiceRooms.has(room)) voiceRooms.set(room, new Map());
-        voiceRooms.get(room).set(String(me.id), { id: String(me.id), username: me.username });
+        voiceRooms.get(room).set(String(me.id), {
+          id: String(me.id),
+          username: me.username,
+          spectate: asSpectator,
+        });
 
         // SFU o malla. El modo es de la SALA: el primero que entra decide y los
         // demás se adaptan. Si cada uno eligiera por su cuenta, una sala mixta
@@ -784,11 +823,15 @@ function initLiveSockets(server) {
         });
 
         // A los que ya estaban se les avisa del nuevo; ellos no llaman, esperan
-        // la oferta del que entra (en malla) o su productor (en SFU).
-        socket.to(voiceRoom(room)).emit('voice:peer-joined', {
-          id: String(me.id),
-          username: me.username,
-        });
+        // la oferta del que entra (en malla) o su productor (en SFU). Un
+        // espectador no publica, así que no se anuncia: nadie debe llamarle ni
+        // reservarle una ventana en la rejilla.
+        if (!asSpectator) {
+          socket.to(voiceRoom(room)).emit('voice:peer-joined', {
+            id: String(me.id),
+            username: me.username,
+          });
+        }
       } catch {
         socket.emit('voice:error', { error: 'No se pudo entrar en la sala de voz' });
       }

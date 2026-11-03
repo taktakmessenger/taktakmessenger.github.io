@@ -2492,6 +2492,246 @@
   transform: scale(0.94);
 }
 
+/* ------------------------------------------------------------------
+   Comentarios y regalos del directo (encima del vídeo, estilo TikTok)
+   ------------------------------------------------------------------ */
+.live-stage-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.live-chat {
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+/* Oculta sin desmontar: el chat sigue suscrito a la sala mientras se eligen
+   regalos, para no perder el evento del regalo que se está enviando. */
+.live-chat-hidden {
+  display: none;
+}
+
+.live-chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 32vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  /* Los comentarios se leen sobre el vídeo: sin esto el texto se pierde en una
+     escena clara. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: auto;
+}
+
+.live-chat-list li {
+  align-self: flex-start;
+  max-width: 92%;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: #fff;
+  background: rgba(5, 3, 12, 0.55);
+  backdrop-filter: blur(4px);
+  word-break: break-word;
+}
+
+.live-chat-list li strong {
+  color: var(--accent);
+}
+
+.live-chat-system {
+  background: rgba(255, 92, 138, 0.28) !important;
+}
+
+.live-chat-error {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: #fff;
+  background: rgba(255, 45, 141, 0.75);
+  pointer-events: auto;
+}
+
+.live-chat-form {
+  display: flex;
+  gap: 0.4rem;
+  pointer-events: auto;
+}
+
+.live-chat-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(5, 3, 12, 0.72);
+  color: #fff;
+  font-size: 0.85rem;
+  backdrop-filter: blur(6px);
+}
+
+.live-chat-form input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.live-chat-send {
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  border: none;
+  font-weight: 700;
+  color: #0d0a1a;
+  background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+  cursor: pointer;
+}
+
+.live-chat-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Regalos: tira de botones sobre el vídeo, con el saldo a la vista. */
+.live-gifts {
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border-radius: 16px;
+  background: rgba(5, 3, 12, 0.82);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(8px);
+  z-index: 2;
+}
+
+.live-gifts-balance {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.live-gifts-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.live-gift-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 64px;
+  padding: 0.5rem 0.4rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.live-gift-btn strong {
+  font-size: 0.72rem;
+}
+
+.live-gift-btn small {
+  color: var(--muted);
+}
+
+.live-gift-btn.selected {
+  border-color: var(--accent);
+  background: rgba(0, 247, 212, 0.16);
+  box-shadow: 0 0 20px -8px var(--glow-cyan);
+}
+
+.live-gift-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.live-gifts-send {
+  width: 100%;
+}
+
+.live-gifts-notice {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+/* Animación breve del regalo recibido: entra, se ve y se va sola. */
+.live-gift-flash {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: #fff;
+  background: linear-gradient(120deg, rgba(255, 92, 138, 0.92), rgba(139, 92, 246, 0.92));
+  box-shadow: 0 0 30px -6px var(--glow-purple);
+  animation: live-gift-flash 2.6s ease-out forwards;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.live-gift-flash-icon {
+  font-size: 1.3rem;
+}
+
+@keyframes live-gift-flash {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -14px) scale(1);
+  }
+}
+
+/* Botón de comentarios activo en la cabecera del directo. */
+.live-stage-min.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.voice-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .live-stage,
   .live-badge-dot {
