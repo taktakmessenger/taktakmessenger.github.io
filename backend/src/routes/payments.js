@@ -7,6 +7,7 @@ const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('../services/paymentService');
 const paymentMethodService = require('../services/paymentMethodService');
+const manualPaymentService = require('../services/manualPaymentService');
 const stripeService = require('../services/stripeService');
 const paypalService = require('../services/paypalService');
 const { auth } = require('../middleware/auth');
@@ -52,6 +53,9 @@ router.get(
       // para tokenizar la tarjeta. Se sirve desde aquí para que la tienda no
       // dependa de una variable de compilación del frontend.
       publishableKey: stripeService.publishableKey(),
+      // Métodos de cobro manual (Zinli, pago móvil…). Van los datos de pago para
+      // que la tienda muestre a dónde enviar el dinero sin tenerlos hardcodeados.
+      manualMethods: manualPaymentService.listMethods(),
     });
   })
 );
@@ -225,6 +229,56 @@ router.get(
   '/packages',
   asyncHandler(async (_req, res) => {
     res.json({ packages: env.coinPackages, currency: 'USD' });
+  })
+);
+
+// --- Cobro manual (Zinli, pago móvil…) -------------------------------------
+//
+// El usuario paga por fuera de la app, envía la referencia y un administrador
+// aprueba. La orden no acredita nada por sí sola: el abono lo hace la revisión.
+
+const manualLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones' },
+});
+
+// Crea una orden pendiente. El paquete se manda por id: el precio y las monedas
+// los pone el servidor, así que una orden no puede pedir más monedas de las que
+// paga.
+router.post(
+  '/manual/orders',
+  auth,
+  manualLimiter,
+  [
+    body('packageId').isString().notEmpty().withMessage('Falta el paquete'),
+    body('method').isString().notEmpty().withMessage('Falta el método de pago'),
+    body('reference').isString().trim().isLength({ min: 1, max: 120 })
+      .withMessage('Falta el número de referencia'),
+    body('note').optional().isString().trim().isLength({ max: 500 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const order = await manualPaymentService.createOrder({
+      userId: req.user.userId,
+      packageId: req.body.packageId,
+      methodId: req.body.method,
+      reference: req.body.reference,
+      note: req.body.note,
+    });
+    res.status(201).json({ order });
+  })
+);
+
+// Órdenes del propio usuario, para que vea en qué va la suya.
+router.get(
+  '/manual/orders',
+  auth,
+  asyncHandler(async (req, res) => {
+    const orders = await manualPaymentService.listUserOrders({ userId: req.user.userId });
+    res.json({ orders });
   })
 );
 

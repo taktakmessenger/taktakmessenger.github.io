@@ -4,6 +4,33 @@ const env = require('./config/env');
 const { seedGifts } = require('./services/giftService');
 const { initLiveSockets } = require('./services/liveSockets');
 const sfu = require('./services/sfuService');
+const manualPaymentService = require('./services/manualPaymentService');
+
+/**
+ * Revisa los pagos manuales pendientes cada pocos minutos.
+ *
+ * Solo actúa si el operador encendió `MANUAL_AUTO_APPROVE` y hay un asistente
+ * configurado; si no, `autoApprovePending` no hace nada y el panel manual sigue
+ * siendo el único camino. Va dentro del proceso web y no como servicio aparte
+ * porque una revisión cada pocos minutos no justifica consumir horas de
+ * instancia en Render.
+ */
+function startManualReviewScheduler() {
+  const intervalMs = 3 * 60 * 1000;
+  const tick = () =>
+    manualPaymentService
+      .autoApprovePending({ limit: 20 })
+      .then(({ approved, skipped }) => {
+        if (approved > 0) {
+          console.log(`[ASISTENTE] ${approved} pagos aprobados automáticamente, ${skipped} en revisión`);
+        }
+      })
+      .catch((error) => console.warn(`[ASISTENTE] Revisión fallida: ${error.message}`));
+
+  const timer = setInterval(tick, intervalMs);
+  // No mantiene vivo el proceso por sí solo: el servidor HTTP ya lo hace.
+  timer.unref?.();
+}
 
 async function main() {
   const app = createApp();
@@ -35,6 +62,8 @@ async function main() {
       // gift sent by name would be rejected.
       const seeded = await seedGifts();
       if (seeded > 0) console.log(`🎁 Catálogo de regalos: ${seeded} nuevos`);
+
+      startManualReviewScheduler();
     })
     .catch((err) => console.error('[db] fallo al preparar la base de datos:', err.message));
 

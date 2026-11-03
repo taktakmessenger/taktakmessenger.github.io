@@ -172,6 +172,48 @@ function assertPackagesCoverPayout(packages) {
   return packages;
 }
 
+/**
+ * Métodos de cobro manual configurados.
+ *
+ * El operador declara, en `MANUAL_PAYMENT_METHODS`, dónde cobra y con qué
+ * etiqueta. Es JSON para poder añadir un método sin tocar código:
+ *
+ *   [{"id":"zinli","label":"Zinli","details":"Zinli: +58 412 000 0000 (a nombre de TAK TAK)"}]
+ *
+ * `id` es lo que se guarda en la orden; `label` es lo que ve el usuario; `details`
+ * son las instrucciones de pago que se le muestran. Sin lista, la tienda no
+ * ofrece cobro manual y la única vía son las pasarelas.
+ */
+function resolveManualPaymentMethods() {
+  if (!process.env.MANUAL_PAYMENT_METHODS) return [];
+
+  let parsed;
+  try {
+    parsed = JSON.parse(process.env.MANUAL_PAYMENT_METHODS);
+  } catch {
+    throw new Error('MANUAL_PAYMENT_METHODS must be valid JSON');
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('MANUAL_PAYMENT_METHODS must be an array');
+  }
+
+  const seen = new Set();
+  return parsed.map((method) => {
+    if (!method?.id || !method?.label) {
+      throw new Error('Cada método manual necesita un id y un label');
+    }
+    if (seen.has(method.id)) {
+      throw new Error(`Duplicate manual payment method id: ${method.id}`);
+    }
+    seen.add(method.id);
+    return {
+      id: String(method.id).slice(0, 40),
+      label: String(method.label).slice(0, 60),
+      details: method.details ? String(method.details).slice(0, 500) : '',
+    };
+  });
+}
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction,
@@ -276,6 +318,34 @@ const env = {
   paypalApiBase:
     process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com',
   paypalCurrency: (process.env.PAYPAL_CURRENCY || 'USD').toUpperCase(),
+
+  // Cobro manual. No depende de ninguna pasarela ni de webhooks: el usuario
+  // paga por fuera (Zinli, pago móvil, transferencia…) y un administrador
+  // aprueba la orden, que entonces acredita las monedas. Es la vía que funciona
+  // sin cuenta de empresa y sin mantener nada encendido.
+  //
+  // Va apagado por defecto: sin métodos configurados la tienda no ofrece nada
+  // manual, para no prometer un cobro que nadie va a revisar.
+  manualPaymentMethods: resolveManualPaymentMethods(),
+
+  // Asistente de revisión de pagos manuales.
+  //
+  // Lee cada orden pendiente y propone aprobar o rechazar con una razón, para
+  // que el administrador no tenga que abrir cada comprobante a mano. Sin clave
+  // queda apagado y el panel funciona igual, solo que sin la sugerencia.
+  //
+  // La API es compatible con OpenAI (sirve OpenAI, Groq, OpenRouter…): solo
+  // cambia `ASSISTANT_API_BASE` y `ASSISTANT_MODEL`.
+  assistantApiKey: process.env.ASSISTANT_API_KEY || null,
+  assistantApiBase: (process.env.ASSISTANT_API_BASE || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+  assistantModel: process.env.ASSISTANT_MODEL || 'gpt-4o-mini',
+  // Aprobación automática. Apagada por defecto y a propósito: aprobar es
+  // entregar monedas, y el criterio del asistente no es una prueba de pago.
+  // Encendida, solo aprueba sola si el asistente está muy seguro (umbral) y el
+  // importe no supera `manualAutoApproveMaxUsd`.
+  manualAutoApprove: process.env.MANUAL_AUTO_APPROVE === 'true',
+  manualAutoApproveMinConfidence: Number(process.env.MANUAL_AUTO_APPROVE_MIN_CONFIDENCE ?? 0.9),
+  manualAutoApproveMaxUsd: Number(process.env.MANUAL_AUTO_APPROVE_MAX_USD ?? 15),
 
   // CORS origin used for the Socket.IO handshake, which does not go through
   // the Express CORS middleware.

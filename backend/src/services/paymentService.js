@@ -15,10 +15,14 @@ const { HttpError } = require('../utils/http');
 // Qué pasarelas están disponibles. El cliente lo consulta para pintar solo los
 // botones que van a funcionar: ofrecer "Pagar con tarjeta" cuando no hay claves
 // es prometer un cobro que no existe.
+//
+// `manual` es el cobro por fuera de la app (Zinli, pago móvil…): está activo si
+// el operador declaró algún método en `MANUAL_PAYMENT_METHODS`.
 function availableProviders() {
   return {
     stripe: stripeService.isConfigured(),
     paypal: paypalService.isConfigured(),
+    manual: env.manualPaymentMethods.length > 0,
   };
 }
 

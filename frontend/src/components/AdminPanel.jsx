@@ -8,13 +8,16 @@ export default function AdminPanel() {
   const [claims, setClaims] = useState([]);
   const [sources, setSources] = useState([]);
   const [reports, setReports] = useState([]);
+  const [manualOrders, setManualOrders] = useState([]);
+  const [suggestions, setSuggestions] = useState({});
+  const [reviewing, setReviewing] = useState(false);
   const [reportFilter, setReportFilter] = useState('open');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes] =
+      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes] =
         await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/videos', { params: { status: 'pending' } }),
@@ -22,6 +25,7 @@ export default function AdminPanel() {
           api.get('/admin/news-claims'),
           api.get('/admin/news-sources'),
           api.get('/admin/reports', { params: { status: reportFilter } }),
+          api.get('/admin/manual-orders', { params: { status: 'pending' } }),
         ]);
       setStats(statsRes.data);
       setPending(videosRes.data.videos);
@@ -29,6 +33,7 @@ export default function AdminPanel() {
       setClaims(claimsRes.data.videos);
       setSources(sourcesRes.data.sources);
       setReports(reportsRes.data.reports);
+      setManualOrders(manualRes.data.orders);
     } catch (err) {
       setError(err.message);
     }
@@ -104,6 +109,48 @@ export default function AdminPanel() {
     }
   }
 
+  async function decideManual(id, approve) {
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await api.post(
+        `/admin/manual-orders/${id}/${approve ? 'approve' : 'reject'}`,
+        approve ? {} : { reason: 'Pago no encontrado' }
+      );
+      setNotice(
+        approve
+          ? `Orden aprobada: ${data.coins} monedas acreditadas`
+          : 'Orden rechazada'
+      );
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Pide al asistente que revise las pendientes. Solo trae sugerencias: no
+  // aprueba nada, eso lo decide el administrador con el botón de cada orden.
+  async function runAssistantReview() {
+    setError('');
+    setNotice('');
+    setReviewing(true);
+    try {
+      const { data } = await api.get('/admin/manual-orders/review');
+      const map = {};
+      for (const item of data.reviewed) map[item.orderId] = item;
+      setSuggestions(map);
+      if (!data.configured) {
+        setNotice('El asistente no está configurado (falta ASSISTANT_API_KEY).');
+      } else {
+        setNotice(`El asistente revisó ${data.reviewed.length} órdenes.`);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   return (
     <div className="admin">
       <h2>🛡️ Panel de administración</h2>
@@ -124,6 +171,70 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* Cobro manual: el administrador comprueba el ingreso por fuera y
+          aprueba. Aprobar acredita las monedas de verdad. */}
+      <div className="moderation">
+        <div className="admin-section-head">
+          <h3>Pagos manuales por revisar ({manualOrders.length})</h3>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={reviewing || manualOrders.length === 0}
+            onClick={runAssistantReview}
+          >
+            {reviewing ? 'Revisando…' : '🤖 Revisar con asistente'}
+          </button>
+        </div>
+        {manualOrders.length === 0 ? (
+          <p>No hay pagos pendientes de revisión.</p>
+        ) : (
+          <ul>
+            {manualOrders.map((o) => {
+              const review = suggestions[o._id];
+              const suggestion = review?.suggestion;
+              return (
+                <li key={o._id} className="moderation-item">
+                  <div>
+                    <strong>
+                      {o.coins.toLocaleString('es')} monedas · {o.priceUsd.toFixed(2)} USD · {o.method}
+                    </strong>
+                    <small>
+                      @{o.user?.username || 'desconocido'} · ref. {o.reference}
+                      {o.note ? ` · “${o.note}”` : ''}
+                    </small>
+                    {/* Sugerencia del asistente. Es una ayuda para decidir, no
+                        una decisión: el botón que acredita sigue siendo el de
+                        abajo, y solo lo pulsa una persona. */}
+                    {suggestion && (
+                      <small className={`assistant-hint ${suggestion.action}`}>
+                        🤖 {suggestion.action === 'approve' ? 'Sugiere aprobar' : suggestion.action === 'reject' ? 'Sugiere rechazar' : 'Duda'}
+                        {' '}({Math.round(suggestion.confidence * 100)}%): {suggestion.reason}
+                      </small>
+                    )}
+                  </div>
+                  <div className="moderation-buttons">
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => decideManual(o._id, true)}
+                    >
+                      Aprobar y acreditar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={() => decideManual(o._id, false)}
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
       {/* La cola de reportes va primero, después de las cifras: es lo que un
           moderador abre a mirar. Antes los reportes de los usuarios no llegaban

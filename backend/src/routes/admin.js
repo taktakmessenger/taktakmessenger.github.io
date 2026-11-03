@@ -9,6 +9,7 @@ const walletService = require('../services/walletService');
 const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
+const manualPaymentService = require('../services/manualPaymentService');
 const { auth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -323,6 +324,70 @@ router.patch(
     );
     if (!report) throw new HttpError(404, 'Reporte no encontrado');
     res.json({ report });
+  })
+);
+
+// --- Cobro manual: cola de revisión ---------------------------------------
+//
+// El administrador ve las órdenes pendientes, comprueba el ingreso por fuera y
+// aprueba. Aprobar acredita las monedas de verdad (vía `creditPurchase`), así
+// que es la única acción con consecuencia económica.
+
+router.get(
+  '/manual-orders',
+  [query('status').optional().isIn(['pending', 'approved', 'rejected'])],
+  validate,
+  asyncHandler(async (req, res) => {
+    const orders = await manualPaymentService.listOrders({ status: req.query.status });
+    res.json({ orders });
+  })
+);
+
+// Sugerencias del asistente para las órdenes pendientes. Solo lee y propone:
+// ninguna orden se mueve por llamar aquí. Si el asistente no está configurado,
+// `configured: false` y la lista vacía.
+router.get(
+  '/manual-orders/review',
+  asyncHandler(async (_req, res) => {
+    const result = await manualPaymentService.reviewPending({ limit: 20 });
+    res.json(result);
+  })
+);
+
+// Aplica la aprobación automática del asistente. Va detrás de
+// MANUAL_AUTO_APPROVE; apagada, no aprueba nada aunque se llame.
+router.post(
+  '/manual-orders/auto-approve',
+  asyncHandler(async (_req, res) => {
+    const result = await manualPaymentService.autoApprovePending({ limit: 20 });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/manual-orders/:id/approve',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await manualPaymentService.approveOrder({
+      orderId: req.params.id,
+      adminId: req.user.userId,
+    });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/manual-orders/:id/reject',
+  [param('id').isMongoId(), body('reason').optional().isString().trim().isLength({ max: 300 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const order = await manualPaymentService.rejectOrder({
+      orderId: req.params.id,
+      adminId: req.user.userId,
+      reason: req.body.reason,
+    });
+    res.json({ order });
   })
 );
 
