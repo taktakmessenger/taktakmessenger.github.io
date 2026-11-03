@@ -63,7 +63,8 @@ services:
           name: taktak
           type: web
           envVarKey: RENDER_EXTERNAL_URL
-      # La imagen no incluye ffmpeg, así que la transcodificación queda apagada.
+      # ffmpeg sí está en la imagen; se apaga la transcodificación para no pagar
+      # su coste en runtime en el plan gratuito.
       - key: TRANSCODE_ENABLED
         value: false
       # Render no ofrece puertos UDP: el SFU de mediasoup no puede funcionar y
