@@ -90,6 +90,13 @@ services:
       # URL pública del bucket (https://pub-xxxx.r2.dev), sin barra final.
       - key: R2_PUBLIC_BASE_URL
         sync: false
+      # Región del proveedor. `auto` para Cloudflare R2; para Backblaze B2 hay
+      # que copiarla del endpoint del panel (p. ej. us-west-004).
+      - key: R2_REGION
+        value: auto
+      # B2 sirve los objetos en /bucket/clave y lo necesita activado.
+      - key: R2_FORCE_PATH_STYLE
+        value: "false"
       # Render no ofrece puertos UDP: el SFU de mediasoup no puede funcionar y
       # el modo malla es el único disponible.
       - key: SFU_ENABLED

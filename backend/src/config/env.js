@@ -301,6 +301,13 @@ const env = {
     // Base pública del bucket (https://pub-xxxx.r2.dev o el dominio propio). Sin
     // barra final. Es lo que se antepone a la clave para formar la URL servible.
     publicBaseUrl: (process.env.R2_PUBLIC_BASE_URL || '').replace(/\/+$/, '') || null,
+    // Región del proveedor S3. Cloudflare R2 no usa regiones reales y exige
+    // `auto`; Backblaze B2 sí (p. ej. `us-west-004`) y hay que copiarla del
+    // endpoint que da su panel.
+    region: process.env.R2_REGION || 'auto',
+    // Algunos proveedores (B2 entre ellos) necesitan que el bucket vaya en la
+    // ruta (`/bucket/clave`) y no en el subdominio.
+    forcePathStyle: process.env.R2_FORCE_PATH_STYLE === 'true',
   },
   // Built frontend to serve from the same process. Empty means "API only", so
   // the development setup and the test suite are unaffected.

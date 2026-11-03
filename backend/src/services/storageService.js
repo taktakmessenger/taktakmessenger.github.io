@@ -58,9 +58,13 @@ function getClient() {
   if (cachedClient) return cachedClient;
   const { S3Client } = require('@aws-sdk/client-s3');
   cachedClient = new S3Client({
-    // R2 no usa regiones reales; el SDK exige una y `auto` es la que documenta.
-    region: 'auto',
+    // R2 no usa regiones reales y documenta `auto`; B2 exige la suya. El valor
+    // sale de `R2_REGION`, con `auto` por defecto para no romper R2.
+    region: env.r2.region,
     endpoint: env.r2.endpoint,
+    // B2 sirve los objetos en `/bucket/clave`; sin esto, el SDK los pide en
+    // `bucket.endpoint` y el proveedor responde 404.
+    forcePathStyle: env.r2.forcePathStyle,
     credentials: {
       accessKeyId: env.r2.accessKeyId,
       secretAccessKey: env.r2.secretAccessKey,
