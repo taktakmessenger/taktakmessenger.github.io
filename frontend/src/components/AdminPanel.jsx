@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
+import { BackIcon } from './ChatIcons';
 
-export default function AdminPanel() {
+export default function AdminPanel({ onBack }) {
   const [stats, setStats] = useState(null);
   const [pending, setPending] = useState([]);
   const [ageQueue, setAgeQueue] = useState([]);
@@ -214,7 +215,14 @@ export default function AdminPanel() {
 
   return (
     <div className="admin">
-      <h2>🛡️ Panel de administración</h2>
+      <div className="screen-head">
+        {onBack && (
+          <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+            <BackIcon />
+          </button>
+        )}
+        <h2>🛡️ Panel de administración</h2>
+      </div>
 
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}

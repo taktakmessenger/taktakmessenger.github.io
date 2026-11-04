@@ -378,7 +378,7 @@ function Shell() {
         );
       case 'admin':
         return user?.role === 'admin' ? (
-          <AdminPanel />
+          <AdminPanel onBack={() => setView('settings')} />
         ) : (
           <div className="centered">No tienes acceso al panel de administración.</div>
         );
