@@ -36,6 +36,55 @@ const translateRoutes = require('./routes/translate');
 const pokerRoutes = require('./routes/poker');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
+// Orígenes externos que hay que permitir en la CSP: el host público del bucket
+// de medios (R2). Se aísla en una función pura para poder probarla sin
+// reconstruir la app entera.
+function storageOriginList(publicBaseUrl) {
+  if (!publicBaseUrl) return [];
+  try {
+    return [new URL(publicBaseUrl).origin];
+  } catch {
+    // Una base pública mal formada no debe tumbar el arranque: se ignora.
+    return [];
+  }
+}
+
+function cspDirectives(storageOrigins = []) {
+  return {
+    defaultSrc: ["'self'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'self'"],
+    objectSrc: ["'none'"],
+    // hls.js adjunta los segmentos por Blob, y las previews de subida son
+    // object URLs del propio archivo elegido.
+    mediaSrc: ["'self'", 'blob:', 'data:', ...storageOrigins],
+    imgSrc: ["'self'", 'data:', 'blob:', ...storageOrigins],
+    fontSrc: ["'self'", 'https:', 'data:'],
+    styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+    scriptSrc: ["'self'", 'https://js.stripe.com', 'https://accounts.google.com', 'https://connect.facebook.net'],
+    scriptSrcAttr: ["'none'"],
+    // Stripe monta sus campos en un iframe propio.
+    frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
+    connectSrc: [
+      "'self'",
+      'https://api.stripe.com',
+      'https://accounts.google.com',
+      // El SDK de Facebook valida la sesión y abre el diálogo de autorización
+      // contra estos dos hosts; sin ellos el botón falla en el navegador aunque
+      // el backend esté bien.
+      'https://graph.facebook.com',
+      'https://www.facebook.com',
+      // Los segmentos HLS y las descargas del bucket se piden por XHR/fetch,
+      // así que el host externo también va aquí.
+      ...storageOrigins,
+      'wss:',
+    ],
+    workerSrc: ["'self'", 'blob:'],
+    upgradeInsecureRequests: [],
+  };
+}
+
 // Built as a factory so tests can mount the app without starting a listener.
 function createApp() {
   const app = express();
@@ -52,43 +101,21 @@ function createApp() {
   //  - `script-src`: Stripe y el botón de Google cargan sus scripts desde sus
   //    dominios; sin ellos no hay compra de monedas ni alta con Google.
   //
+  // Con el almacenamiento externo activo (R2) los vídeos y las imágenes viven
+  // en otro host: `'self'` no basta y el navegador los rechaza con "Media load
+  // rejected by URL safety check". Se añade el origen público del bucket a
+  // `media-src`, `img-src` y `connect-src` (hls.js pide los segmentos por
+  // XHR/fetch desde ahí).
+  //
   // El resto se queda tan cerrado como lo deja helmet: nada de `unsafe-eval`,
   // `object-src 'none'` y `frame-ancestors 'self'`. Los datos (`data:`) solo se
   // permiten para imágenes y fuentes, no para scripts.
+  const storageOrigins = storageOriginList(env.r2.publicBaseUrl);
   app.use(
     helmet({
       contentSecurityPolicy: {
         useDefaults: false,
-        directives: {
-          defaultSrc: ["'self'"],
-          baseUri: ["'self'"],
-          formAction: ["'self'"],
-          frameAncestors: ["'self'"],
-          objectSrc: ["'none'"],
-          // hls.js adjunta los segmentos por Blob, y las previews de subida son
-          // object URLs del propio archivo elegido.
-          mediaSrc: ["'self'", 'blob:', 'data:'],
-          imgSrc: ["'self'", 'data:', 'blob:'],
-          fontSrc: ["'self'", 'https:', 'data:'],
-          styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
-          scriptSrc: ["'self'", 'https://js.stripe.com', 'https://accounts.google.com', 'https://connect.facebook.net'],
-          scriptSrcAttr: ["'none'"],
-          // Stripe monta sus campos en un iframe propio.
-          frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
-          connectSrc: [
-            "'self'",
-            'https://api.stripe.com',
-            'https://accounts.google.com',
-            // El SDK de Facebook valida la sesión y abre el diálogo de
-            // autorización contra estos dos hosts; sin ellos el botón falla en
-            // el navegador aunque el backend esté bien.
-            'https://graph.facebook.com',
-            'https://www.facebook.com',
-            'wss:',
-          ],
-          workerSrc: ["'self'", 'blob:'],
-          upgradeInsecureRequests: [],
-        },
+        directives: cspDirectives(storageOrigins),
       },
     })
   );
@@ -204,3 +231,6 @@ function createApp() {
 }
 
 module.exports = createApp;
+// Expuestos para los tests de la CSP sin tener que reconstruir la app.
+module.exports.cspDirectives = cspDirectives;
+module.exports.storageOriginList = storageOriginList;
