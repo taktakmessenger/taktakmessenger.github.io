@@ -2,8 +2,6 @@ const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
-const User = require('../models/User');
-const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('../services/paymentService');
 const paymentMethodService = require('../services/paymentMethodService');
@@ -179,47 +177,23 @@ router.post(
       throw new HttpError(400, 'Falta el identificador del evento');
     }
 
-    // Idempotency: a duplicate event id means the provider retried a delivery
-    // we already processed.
-    const existing = await Transaction.findOne({ externalId });
-    if (existing) {
-      return res.json({ received: true, duplicate: true });
-    }
+    // Un solo camino para acreditar: el mismo que usan Stripe y PayPal. Antes
+    // esta ruta duplicaba el abono y se dejaba fuera el premio de referidos, con
+    // lo que una compra confirmada por aquí pagaba monedas pero no el premio.
+    const amountPaidMinor = Number.isFinite(Number(amountPaid))
+      ? Math.round(Number(amountPaid) * 100)
+      : undefined;
 
-    const pkg = env.coinPackages.find((p) => p.id === packageId);
-    if (!pkg) throw new HttpError(400, 'Paquete de monedas desconocido');
-
-    const user = await User.findByIdAndUpdate(
+    const result = await paymentService.creditPurchase({
+      externalId,
       userId,
-      { $inc: { 'wallet.ttcC': pkg.coins } },
-      { new: true }
-    );
-    if (!user) throw new HttpError(404, 'Usuario no encontrado');
+      packageId,
+      amountPaidMinor,
+      currency,
+      provider: 'webhook',
+    });
 
-    try {
-      await Transaction.create({
-        from: user._id,
-        amount: pkg.coins,
-        type: 'purchase',
-        ttcType: 'ttcC',
-        packageId: pkg.id,
-        externalId,
-        amountPaid: amountPaid ?? pkg.priceUsd,
-        currency: currency || 'USD',
-        status: 'completed',
-        details: `Compra de ${pkg.coins} TTC-C (paquete ${pkg.id})`,
-      });
-    } catch (err) {
-      // A concurrent delivery of the same event lost the unique-index race.
-      // Undo this credit so the buyer is not paid twice.
-      if (err.code === 11000) {
-        await User.updateOne({ _id: user._id }, { $inc: { 'wallet.ttcC': -pkg.coins } });
-        return res.json({ received: true, duplicate: true });
-      }
-      throw err;
-    }
-
-    res.json({ received: true, coins: pkg.coins, balance: user.wallet.ttcC });
+    res.json({ received: true, ...result });
   })
 );
 

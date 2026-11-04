@@ -115,8 +115,15 @@ export function AuthProvider({ children }) {
     persist(data);
   }
 
-  async function register(username, email, password) {
-    const { data } = await api.post('/auth/register', { username, email, password });
+  async function register(username, email, password, ref) {
+    // El código de invitación es opcional: viaja con el alta para que el servidor
+    // apunte quién invitó. El servidor lo ignora si es inválido.
+    const { data } = await api.post('/auth/register', {
+      username,
+      email,
+      password,
+      ...(ref ? { ref } : {}),
+    });
     persist(data);
     // Returned so the form can show the code when the mail could not be sent
     // (development), instead of a "check your inbox" screen for nothing.

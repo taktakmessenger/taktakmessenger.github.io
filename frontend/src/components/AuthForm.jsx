@@ -275,7 +275,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
   //     | 'verify-email' | 'terms' | 'privacy'
   const [view, setView] = useState(initialView);
 
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '', ref: '' });
   const [identifier, setIdentifier] = useState('');
   const [providers, setProviders] = useState({
     google: false,
@@ -316,6 +316,14 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Si se llega con un enlace de invitación (`/?ref=CODIGO`), el código se
+  // rellena solo en el alta. Así el invitado no tiene que copiarlo a mano: toca
+  // el enlace, se registra, y quien le invitó cobra cuando compre.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('ref');
+    if (code) setForm((prev) => ({ ...prev, ref: code.toUpperCase() }));
   }, []);
 
   // Cuenta atrás del reenvío. Un temporizador que se limpia al desmontar, no un
@@ -386,7 +394,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     }
 
     run(async () => {
-      const data = await register(form.username, form.email, form.password);
+      const data = await register(form.username, form.email, form.password, form.ref);
 
       setPendingEmail(form.email);
       setCooldown(RESEND_SECONDS);
@@ -688,6 +696,14 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
             autoComplete="new-password"
             disabled={busy}
             name="confirm-password"
+          />
+          <input
+            type="text"
+            placeholder="Código de invitación (opcional)"
+            value={form.ref}
+            onChange={update('ref')}
+            maxLength={16}
+            autoCapitalize="characters"
           />
 
           <TermsCheck accepted={accepted} onChange={setAccepted} onOpen={setView} />

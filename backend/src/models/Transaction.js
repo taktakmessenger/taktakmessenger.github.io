@@ -30,6 +30,10 @@ const transactionSchema = new mongoose.Schema(
         'poker_event_refund',
         'poker_event_rake',
         'poker_event_rake_bonus',
+        // Premio del programa de referidos: un porcentaje de lo que compró el
+        // invitado, abonado a quien lo trajo. Siempre en monedas de regalo, así
+        // que no es ingreso canjeable y se apunta aparte de `bonus`.
+        'referral_bonus',
       ],
       required: true,
     },

@@ -48,6 +48,8 @@ async function notify({
   video = null,
   comment = null,
   post = null,
+  event = null,
+  title = null,
   amount = null,
   giftName = null,
   text = null,
@@ -66,6 +68,8 @@ async function notify({
       video,
       comment,
       post,
+      event,
+      title,
       amount,
       giftName,
       preview: text ? preview(text) : null,
@@ -120,18 +124,31 @@ function activityPayload(notification) {
     post_comment: notification.preview
       ? `Comentó tu publicación: ${notification.preview}`
       : 'Comentó tu publicación',
+    // Anuncio de la casa: el actor es el propio administrador, así que el
+    // título del aviso tiene que ser el del torneo, no su @usuario.
+    tournament: notification.title
+      ? `Nuevo torneo: ${notification.title}`
+      : 'Hay un torneo nuevo de POKERTAK',
+    referral: notification.amount
+      ? `Ganaste ${notification.amount} monedas por invitar`
+      : 'Ganaste monedas por invitar',
   }[notification.type] || 'Tienes actividad nueva';
 
   return {
     type: 'activity',
-    title: actor,
+    title: notification.type === 'tournament' ? 'POKERTAK' : actor,
     body,
     // Etiqueta por tipo y actor: dos regalos seguidos del mismo fan se agrupan
     // en una sola notificación en vez de apilarse.
     tag: `activity-${notification.type}-${notification.actor?._id || notification.actor}`,
     data: {
-      url: notification.type.startsWith('post_') ? '/?view=wall' : '/?view=activity',
+      url: notification.type === 'tournament'
+        ? '/?view=squads'
+        : notification.type.startsWith('post_')
+          ? '/?view=wall'
+          : '/?view=activity',
       type: notification.type,
+      eventId: notification.event ? String(notification.event._id || notification.event) : null,
     },
   };
 }
@@ -147,6 +164,10 @@ function toPublic(notification) {
     amount: doc.amount,
     giftName: doc.giftName,
     preview: doc.preview,
+    // Anuncio de torneo: el evento al que apunta y su título, para que la lista
+    // de actividad pueda abrirlo sin una consulta extra.
+    event: doc.event || null,
+    title: doc.title || null,
     createdAt: doc.createdAt,
     actor: doc.actor && typeof doc.actor === 'object'
       ? {
@@ -218,8 +239,67 @@ async function markRead({ userId, id }) {
   return { unread: await unreadCount(userId) };
 }
 
+/**
+ * Anuncia un torneo de POKERTAK a todas las cuentas.
+ *
+ * Es un aviso de la casa, no de un usuario: el actor es el administrador que
+ * organiza el torneo, y quien recibe es todo el mundo. Se inserta en bloque
+ * (`insertMany`) en vez de llamar a `notify` una vez por cuenta: con miles de
+ * cuentas, un bucle haría miles de viajes a la base y el admin esperaría por
+ * cada uno. Después se emite un solo evento de socket por cuenta conectada, y el
+ * push queda para quien no tenga la app abierta.
+ *
+ * Nunca lanza: el torneo ya está creado y cobrado cuando se llega aquí. Un fallo
+ * al avisar no puede deshacerlo.
+ *
+ * Devuelve cuántas cuentas recibieron el aviso.
+ */
+async function announceTournament({ event, actorId, exclude = [] }) {
+  try {
+    if (!event?._id || !actorId) return 0;
+    const User = require('../models/User');
+    const excluded = new Set([String(actorId), ...exclude.map(String)]);
+    const recipients = await User.find({ _id: { $nin: [...excluded] } }).select('_id').lean();
+    if (recipients.length === 0) return 0;
+
+    const docs = recipients.map((u) => ({
+      recipient: u._id,
+      actor: actorId,
+      type: 'tournament',
+      event: event._id,
+      title: event.title,
+    }));
+
+    const created = await Notification.insertMany(docs, { ordered: false });
+
+    const io = liveSockets().getIo();
+    for (const notification of created) {
+      const recipientId = String(notification.recipient);
+      if (io && liveSockets().isOnline(recipientId)) {
+        io.to(`user:${recipientId}`).emit('notification:new', toPublic(notification));
+      } else {
+        pushService
+          .sendToUser(recipientId, {
+            type: 'activity',
+            title: 'POKERTAK',
+            body: `Nuevo torneo: ${event.title}`,
+            tag: `activity-tournament-${event._id}`,
+            data: { url: '/?view=squads', type: 'tournament', eventId: String(event._id) },
+          })
+          .catch(() => {});
+      }
+    }
+    void payload;
+    return created.length;
+  } catch (err) {
+    console.error('[NOTIF] No se pudo anunciar el torneo:', err.message);
+    return 0;
+  }
+}
+
 module.exports = {
   notify,
+  announceTournament,
   listForUser,
   unreadCount,
   markAllRead,

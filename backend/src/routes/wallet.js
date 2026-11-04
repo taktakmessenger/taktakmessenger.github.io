@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const { body, query } = require('express-validator');
 const walletService = require('../services/walletService');
 const notificationService = require('../services/notificationService');
+const referralService = require('../services/referralService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler } = require('../utils/http');
@@ -124,6 +125,17 @@ router.get(
       message:
         'Monetización abierta: puedes recibir regalos y acumular Diamantes desde tu primer video.',
     });
+  })
+);
+
+router.get(
+  '/referral',
+  auth,
+  asyncHandler(async (req, res) => {
+    // El código se crea aquí, en la primera visita a la pantalla: así solo se
+    // gasta un código en las cuentas que de verdad invitan a alguien.
+    await referralService.ensureCode(req.user.userId);
+    res.json(await referralService.stats(req.user.userId));
   })
 );
 

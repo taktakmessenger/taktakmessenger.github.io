@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { connectTestDb, resetDb, disconnectTestDb, app, registerUser, setWallet } = require('./helpers');
 const User = require('../src/models/User');
 const Squad = require('../src/models/Squad');
+const Notification = require('../src/models/Notification');
 const { signToken } = require('../src/utils/tokens');
 
 // Rutas HTTP de los torneos: la validación y el control de acceso de verdad, no
@@ -131,4 +132,43 @@ test('listar los torneos de la sala filtra por slug', async () => {
   assert.equal(res.status, 200, JSON.stringify(res.body));
   assert.equal(res.body.events.length, 1);
   assert.equal(res.body.events[0].title, 'Torneo mesa-dos');
+});
+
+// Al crear un torneo, todas las cuentas deben enterarse: es el requisito de
+// "que Asistak cree los torneos y salgan en notificaciones de todas las cuentas".
+test('crear un torneo deja un aviso a todas las cuentas', async () => {
+  const admin = await makeAdmin();
+  await makeSquad(admin, 'mesa-aviso');
+  const ana = await registerUser(app(), { username: 'ana_aviso' });
+  const luis = await registerUser(app(), { username: 'luis_aviso' });
+
+  const created = await app()
+    .post('/api/admin/poker-events')
+    .set(auth(signToken(admin)))
+    .send({
+      title: 'Torneo anunciado',
+      squadSlug: 'mesa-aviso',
+      scheduledAt: when(),
+      entryCost: 100,
+      maxPlayers: 9,
+    });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+
+  const announcements = await Notification.find({ type: 'tournament' });
+  // Ana y Luis, no el administrador: uno no se anuncia a sí mismo.
+  assert.equal(announcements.length, 2);
+  assert.ok(announcements.every((n) => n.title === 'Torneo anunciado'));
+
+  const res = await app()
+    .get('/api/notifications')
+    .set(auth(ana.token));
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const aviso = res.body.notifications.find((n) => n.type === 'tournament');
+  assert.ok(aviso, 'el torneo debe aparecer en la actividad');
+  assert.equal(aviso.title, 'Torneo anunciado');
+  assert.equal(String(aviso.event), String(created.body.event.id));
+
+  // Y también lo ve el otro usuario.
+  const luisRes = await app().get('/api/notifications').set(auth(luis.token));
+  assert.ok(luisRes.body.notifications.some((n) => n.type === 'tournament'));
 });

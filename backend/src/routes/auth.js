@@ -21,6 +21,7 @@ const voiceService = require('../services/voiceService');
 const mailService = require('../services/mailService');
 const googleService = require('../services/googleService');
 const facebookService = require('../services/facebookService');
+const referralService = require('../services/referralService');
 
 const router = express.Router();
 
@@ -142,6 +143,10 @@ router.post(
       // A small starter balance lets a new account try gifts immediately.
       wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
     });
+
+    // Quién lo invitó, si el alta trae un código. Es best-effort y va después de
+    // crear la cuenta: un código inválido no puede tumbar el registro.
+    await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
 
     // Verification mail is best-effort: a mail outage must not fail the
     // registration, or the user is left with an account they cannot use and no
@@ -466,6 +471,10 @@ router.post(
           throw err;
         }
       }
+
+      // Quién lo invitó, si el alta trae código. Best-effort: no puede tumbar la
+      // creación de la cuenta.
+      if (user) await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
     } else if (!user.phoneVerified) {
       user.phoneVerified = true;
       await user.save();
@@ -626,6 +635,9 @@ router.post(
         profile: { displayName: claims.name || username, avatar: claims.picture || undefined },
         wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
       });
+      // Cuenta recién creada: es el único momento en que vale apuntar al
+      // invitador. Enlazar una cuenta que ya existía no es un alta y no cuenta.
+      await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
     }
 
     res.json(session(user));
@@ -671,6 +683,7 @@ router.post(
         profile: { displayName: claims.name || username, avatar: claims.picture || undefined },
         wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
       });
+      await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
     }
 
     res.json(session(user));

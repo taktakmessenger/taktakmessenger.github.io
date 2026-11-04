@@ -164,6 +164,29 @@ const userSchema = new mongoose.Schema(
       warnings: { type: Number, default: 0 },
       lastWarningAt: { type: Date, default: null },
     },
+
+    // Programa de referidos. `code` es el enlace que comparte esta cuenta; quien
+    // se registra con él queda apuntado en su `referredBy`. Cuando el invitado
+    // compra monedas, el que invitó cobra un porcentaje (ver
+    // `services/referralService`) en monedas de regalo: se pueden gastar en la
+    // app, pero no retirar, para que invitar no abra una vía de sacar dinero.
+    //
+    // `referredBy` se fija una sola vez, al crear la cuenta, y no cambia nunca:
+    // un usuario no puede "reapuntarse" a otro invitador para repartir el premio
+    // entre varios. `code` es único y disperso (`sparse`) porque las cuentas
+    // anteriores al programa no lo tienen.
+    referral: {
+      code: { type: String, unique: true, sparse: true, trim: true, uppercase: true },
+      referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      referredAt: { type: Date, default: null },
+      // Cuánto ha generado esta cuenta a quien la invitó. Se guarda para poder
+      // enseñarlo y para auditar el programa sin agregar el libro entero.
+      earnedByReferrer: { type: Number, default: 0, min: 0 },
+      // Lo que esta cuenta, como invitada, ha hecho ganar a su invitador. Es el
+      // otro lado del mismo premio: sirve para detectar cuentas que compran
+      // mucho y para cuadrar el total pagado por el programa.
+      earnedForReferrer: { type: Number, default: 0, min: 0 },
+    },
   },
   { timestamps: true }
 );

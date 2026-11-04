@@ -228,6 +228,20 @@ function resolvePaymentLink(link) {
   return value.slice(0, 300);
 }
 
+// Porcentaje del programa de referidos. Fuera de [0,1) es un error de
+// configuración, no una decisión: un 1 o más pagaría al invitador tanto o más de
+// lo que el invitado compró, y el programa perdería dinero en cada venta.
+function resolveReferralPercent() {
+  const raw = process.env.REFERRAL_PERCENT ?? 0.1;
+  const percent = Number(raw);
+  if (!Number.isFinite(percent) || percent < 0 || percent >= 1) {
+    throw new Error('REFERRAL_PERCENT must be a fraction between 0 and 1');
+  }
+  return percent;
+}
+
+const referralPercent = resolveReferralPercent();
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction,
@@ -282,6 +296,29 @@ const env = {
   // dinero: por muchas cuentas que se creen, el regalo solo recircula monedas de
   // regalo.
   welcomeBonusCoins: Number(process.env.WELCOME_BONUS_COINS ?? 100),
+
+  // Programa de referidos: quien invita cobra un porcentaje de lo que su
+  // invitado compre, en monedas de regalo.
+  //
+  // El 10% del importe comprado es el porcentaje pedido. Se paga sobre lo que el
+  // invitado pagó, no sobre las monedas que recibió: un 10% de lo comprado es
+  // dinero que la plataforma ya ingresó, así que es un descuento sobre margen y
+  // no una promesa pagada con dinero que no existe.
+  //
+  // Se abona SIEMPRE en monedas de regalo (`bonusC`): se gastan en la app
+  // (regalos, torneos) pero nunca se convierten en Diamantes retirables. Así el
+  // programa crece por dentro sin abrir una vía de extracción: si se pagara en
+  // monedas pagadas, invitar a cuentas que compren sería una forma de fabricar
+  // dinero canjeable.
+  referral: {
+    // 0 lo desactiva por completo (no se paga ningún premio).
+    percent: referralPercent,
+    // Longitud del código de invitación. 8 caracteres del alfabeto sin letras
+    // ambiguas bastan de sobra: el código no es un secreto (se comparte), solo
+    // tiene que ser único y fácil de leer por teléfono.
+    codeLength: Number(process.env.REFERRAL_CODE_LENGTH ?? 8),
+  },
+
   maxVideoBytes: Number(process.env.MAX_VIDEO_BYTES ?? 50 * 1024 * 1024),
 
   // POKERTAK: sala privada de póker de cada usuario, dentro del directo.

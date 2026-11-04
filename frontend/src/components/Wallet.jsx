@@ -11,6 +11,8 @@ export default function Wallet({ onBack, onNavigate }) {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [gift, setGift] = useState({ recipient: '', amount: '', giftName: '' });
   const [withdraw, setWithdraw] = useState({ amount: '', method: 'paypal', details: '' });
+  const [referral, setReferral] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const loadWallet = useCallback(async () => {
     try {
@@ -30,6 +32,43 @@ export default function Wallet({ onBack, onNavigate }) {
   useEffect(() => {
     loadWallet();
   }, [loadWallet]);
+
+  // El código de invitación se pide aparte del monedero: es un dato del programa
+  // de referidos y no del saldo. Si falla, la pantalla sigue enseñando el saldo.
+  useEffect(() => {
+    api
+      .get('/wallet/referral')
+      .then(({ data }) => setReferral(data))
+      .catch(() => {});
+  }, []);
+
+  async function copyReferral() {
+    if (!referral?.link) return;
+    try {
+      await navigator.clipboard.writeText(referral.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Sin permiso de portapapeles (o sin https): se enseña el enlace para
+      // copiarlo a mano en vez de fallar en silencio.
+      setNotice(`Tu enlace de invitación: ${referral.link}`);
+    }
+  }
+
+  async function shareReferral() {
+    if (!referral?.link) return;
+    const text = `Únete a TAK TAK con mi enlace: ${referral.link}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'TAK TAK', text, url: referral.link });
+        return;
+      }
+    } catch {
+      // El usuario canceló el diálogo de compartir: no es un error.
+      return;
+    }
+    copyReferral();
+  }
 
   async function handleGift(e) {
     e.preventDefault();
@@ -117,6 +156,39 @@ export default function Wallet({ onBack, onNavigate }) {
           <small>
             Ganas el {Math.round(monetization.creatorShare * 100)}% de cada regalo.
             La plataforma retiene el {Math.round(monetization.platformShare * 100)}%.
+          </small>
+        </div>
+      )}
+
+      {referral && (
+        <div className="referral-card">
+          <h3>🤝 Invita y gana</h3>
+          <p className="muted">
+            Comparte tu enlace. Cuando alguien se registre con él y compre monedas, ganas el{' '}
+            <strong>{Math.round((referral.percent || 0) * 100)}%</strong> de lo que compre.
+          </p>
+          <p className="referral-link">
+            <code>{referral.link}</code>
+          </p>
+          <div className="referral-stats">
+            <span>
+              <strong>{referral.invited}</strong> invitados
+            </span>
+            <span>
+              <strong>{Number(referral.earned || 0).toFixed(2)}</strong> monedas ganadas
+            </span>
+          </div>
+          <div className="wallet-actions">
+            <button type="button" className="btn-primary" onClick={shareReferral}>
+              📤 Compartir enlace
+            </button>
+            <button type="button" className="btn-secondary" onClick={copyReferral}>
+              {copied ? '✅ Copiado' : '📋 Copiar'}
+            </button>
+          </div>
+          <small className="muted">
+            Las monedas del premio son de regalo: se gastan en TAK TAK (regalos, torneos), pero no
+            se pueden retirar.
           </small>
         </div>
       )}

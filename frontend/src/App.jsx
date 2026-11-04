@@ -161,7 +161,6 @@ function Shell() {
 
   // Anything other than the feed needs a session.
   const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'pago-exito'].includes(view);
-
   // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
   // hasta que el flujo termina. Sin levantarlo aquí, el alta que acaba de crear
   // la sesión cerraría el formulario en el acto y se perdería la pantalla de
@@ -179,6 +178,7 @@ function Shell() {
     const target = params.get('view');
     if (target === 'activity') setView('activity');
     if (target === 'wall') setView('wall');
+    if (target === 'squads') setView('squads');
     if (target === 'pago-exito') {
       setPaymentProvider(params.get('provider') || 'stripe');
       setView('pago-exito');
@@ -374,6 +374,7 @@ function Shell() {
             onOpenVideo={() => setView('feed')}
             onOpenProfile={() => setView('profile')}
             onOpenWall={() => setView('wall')}
+            onOpenPoker={() => setView('squads')}
           />
         );
       case 'admin':

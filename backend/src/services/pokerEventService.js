@@ -15,6 +15,7 @@ const Squad = require('../models/Squad');
 const Transaction = require('../models/Transaction');
 const PokerEvent = require('../models/PokerEvent');
 const wallet = require('./walletService');
+const notificationService = require('./notificationService');
 const env = require('../config/env');
 const { prizePayout, DEFAULT_SPLIT, DEFAULT_RAKE } = require('../games/poker/prize');
 
@@ -60,7 +61,7 @@ async function createEvent({
     ? Math.min(Math.max(Number(rakeRate), 0), 1)
     : DEFAULT_RAKE_RATE;
 
-  return PokerEvent.create({
+  const event = await PokerEvent.create({
     title: cleanTitle,
     createdBy: adminId,
     squad: squad._id,
@@ -72,6 +73,16 @@ async function createEvent({
     status: 'scheduled',
     players: [],
   });
+
+  // Se avisa a todas las cuentas de que hay torneo. Es lo que pidió la idea: el
+  // torneo no se queda solo en el cartel de la sala, sino que sale en la campana
+  // de todo el mundo. Va después de crear el evento y no puede tumbar la
+  // creación: si el aviso falla, el torneo ya existe.
+  await notificationService
+    .announceTournament({ event, actorId: adminId })
+    .catch(() => 0);
+
+  return event;
 }
 
 /**
