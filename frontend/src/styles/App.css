@@ -7503,7 +7503,10 @@
      se sale de ella. Con el ancho máximo y el alto acotado, en el móvil queda a
      la vista entera, con los controles debajo siempre alcanzables. */
   width: min(100%, 620px);
-  max-height: 64vh;
+  /* Alargada hacia arriba: con nueve asientos el óvalo necesita más alto para
+     que las caras de arriba y de abajo no se junten en el centro. */
+  min-height: 58vh;
+  max-height: 72vh;
   margin: 8px auto;
   border-radius: 46% / 34%;
   background:
@@ -7577,9 +7580,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 54px;
-  border-radius: 6px;
+  width: 42px;
+  height: 60px;
+  border-radius: 7px;
   background: #fff;
   color: #14202b;
   font-weight: 800;
@@ -7592,11 +7595,11 @@
 }
 
 .ptak-card-rank {
-  font-size: 17px;
+  font-size: 19px;
 }
 
 .ptak-card-suit {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .ptak-card.back {
@@ -7615,8 +7618,8 @@
    que quepa la cara y no se deforme; el borde dorado marca la mesa de póker. */
 .ptak-face {
   position: relative;
-  width: 58px;
-  height: 70px;
+  width: 66px;
+  height: 80px;
   border-radius: 50% / 50%;
   overflow: hidden;
   background: linear-gradient(160deg, #1d5c46, #0c3628);
@@ -7671,13 +7674,18 @@
 /* Asientos */
 .ptak-seat {
   position: absolute;
-  transform: translate(-50%, -50%);
+  /* El escalado va aquí y no en las medidas sueltas: así la cara, las cartas y
+     los datos encogen juntos cuando se sientan muchos, sin descuadrar nada. */
+  transform: translate(-50%, -50%) scale(var(--seat-scale, 1));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  width: 100px;
-  padding: 5px;
+  /* Ajustado al contenido: la cara manda el ancho, no una caja fija. Con nueve
+     jugadores esto es lo que evita que los recuadros se pisen entre ellos. */
+  width: max-content;
+  max-width: 108px;
+  padding: 6px;
   border-radius: 12px;
   background: rgba(4, 20, 15, 0.72);
   border: 2px solid rgba(255, 255, 255, 0.12);
@@ -7721,21 +7729,21 @@
 .ptak-seat-cards {
   display: flex;
   gap: 3px;
-  min-height: 38px;
+  min-height: 45px;
   align-items: center;
 }
 
 .ptak-seat-cards .ptak-card {
-  width: 24px;
-  height: 34px;
+  width: 29px;
+  height: 41px;
 }
 
 .ptak-seat-cards .ptak-card-rank {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .ptak-seat-cards .ptak-card-suit {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .ptak-seat-info {
@@ -7748,7 +7756,7 @@
 
 .ptak-seat-info strong {
   font-size: 11px;
-  max-width: 92px;
+  max-width: 66px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7774,7 +7782,7 @@
 /* Botón del repartidor: marca a quién le toca repartir, como la ficha "D". */
 .ptak-seat-dealer {
   position: absolute;
-  bottom: -10px;
+  top: -10px;
   right: -8px;
   width: 22px;
   height: 22px;
@@ -7789,36 +7797,40 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
-/* Asistak, el repartidor, al pie del tapete. */
+/* Asistak, el repartidor, en la esquina superior izquierda del tapete: abajo
+   chocaba con el asiento propio y los controles, y arriba en el centro chocaba
+   con el asiento de arriba cuando hay pocos jugadores (con dos, el asiento de
+   arriba cae justo en el medio). La esquina está libre con cualquier número de
+   jugadores. Va estrecho para no comerse el tapete. */
 .ptak-dealer {
   position: absolute;
-  left: 50%;
-  bottom: 6px;
-  transform: translateX(-50%);
+  left: 6px;
+  top: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 5px 10px;
-  border-radius: 12px;
+  gap: 0;
+  padding: 2px 4px;
+  border-radius: 9px;
   background: rgba(4, 20, 15, 0.72);
   border: 1px solid rgba(255, 217, 74, 0.35);
   pointer-events: none;
-  z-index: 4;
+  z-index: 6;
+  max-width: 40px;
 }
 
 .ptak-dealer-name {
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 700;
   color: #ffd94a;
-  letter-spacing: 1px;
+  letter-spacing: 0.3px;
 }
 
 .ptak-dealer-role {
-  font-size: 9px;
+  font-size: 6px;
   color: rgba(255, 255, 255, 0.7);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 .ptak-empty {
@@ -7962,20 +7974,29 @@
 }
 
 @media (max-width: 480px) {
+  /* En el móvil el recuadro va algo más grande que antes: el asiento ocupado se
+     agranda por encima de esto (escala) y el libre se queda en este tamaño, así
+     las nueve plazas caben y las caras de los que juegan se ven mejor. */
   .ptak-seat {
-    width: 86px;
-    padding: 4px;
+    width: max-content;
+    max-width: 92px;
+    padding: 5px;
   }
-  /* El óvalo se encoge con el asiento para que seis caras quepan en un móvil. */
+  .ptak-seat-info strong {
+    max-width: 54px;
+  }
   .ptak-face {
-    width: 48px;
-    height: 58px;
+    width: 54px;
+    height: 66px;
   }
   .ptak-face-initial {
-    font-size: 22px;
+    font-size: 24px;
   }
   .ptak-felt {
-    max-height: 60vh;
+    /* Alargada: con nueve asientos el óvalo necesita más alto para que las caras
+       de arriba y de abajo no se junten. */
+    min-height: 54vh;
+    max-height: 70vh;
     margin: 6px auto;
     border-width: 6px;
   }
@@ -7994,22 +8015,22 @@
     font-size: 10px;
   }
   .ptak-board {
-    min-height: 44px;
+    min-height: 50px;
     margin-top: 6px;
   }
   .ptak-card {
-    width: 30px;
-    height: 44px;
+    width: 34px;
+    height: 49px;
   }
   .ptak-card-rank {
-    font-size: 14px;
+    font-size: 16px;
   }
   .ptak-card-suit {
-    font-size: 13px;
+    font-size: 14px;
   }
   .ptak-seat-cards .ptak-card {
-    width: 22px;
-    height: 32px;
+    width: 26px;
+    height: 37px;
   }
   .ptak-dealer {
     padding: 3px 8px;

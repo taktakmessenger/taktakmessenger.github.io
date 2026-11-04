@@ -294,9 +294,9 @@ const env = {
     // Comisión de la casa: 1% de cada bote, igual en todas las manos, hasta que
     // se cierre el directo o la sala de juegos.
     rake: Number(process.env.POKER_RAKE ?? 0.01),
-    // Asientos de la mesa. Con seis cabe la mesa ovalada y sigue siendo legible
-    // en un móvil; es el tamaño de la mesa de POKERTAK.
-    maxSeats: Number(process.env.POKER_MAX_SEATS ?? 6),
+    // Asientos de la mesa. Nueve, como la mesa en vivo: caben todos los que
+    // suelen entrar a un directo y la mesa sigue leyéndose en un móvil.
+    maxSeats: Number(process.env.POKER_MAX_SEATS ?? 9),
     smallBlind: Number(process.env.POKER_SMALL_BLIND ?? 5),
     bigBlind: Number(process.env.POKER_BIG_BLIND ?? 10),
     // Entrada mínima y máxima, en monedas de la app. La mínima (10) es accesible

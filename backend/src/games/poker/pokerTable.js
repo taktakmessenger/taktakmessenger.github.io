@@ -113,10 +113,25 @@ class PokerTable {
     const player = this.seats[seat];
     // Si se levanta a mitad de mano, se retira primero para no dejar la mano
     // colgada esperando su turno.
-    if (this.inHand(player) && !player.folded) this.foldSeat(seat);
+    const wasInHand = this.inHand(player) && !player.folded;
+    if (wasInHand) this.foldSeat(seat);
     const stack = player.stack;
     this.seats[seat] = null;
-    if (this.seatedCount() < 2) this.resetHand();
+    if (this.seatedCount() < 2) {
+      this.resetHand();
+      return stack;
+    }
+    // Con la mano en juego, el asiento que se acaba de vaciar no puede quedarse
+    // como el que tiene que hablar: la mesa se quedaría "esperando turno" para
+    // siempre. Se cierra la mano (gana el último que sigue) o se pasa el turno
+    // al siguiente que pueda actuar.
+    if (wasInHand && this.phase !== 'showdown' && this.phase !== 'waiting') {
+      if (this.livePlayers().length <= 1) {
+        this.finishWithoutShowdown();
+      } else if (this.turnSeat === seat || this.turnSeat === null || !this.seats[this.turnSeat]) {
+        this.advance();
+      }
+    }
     return stack;
   }
 

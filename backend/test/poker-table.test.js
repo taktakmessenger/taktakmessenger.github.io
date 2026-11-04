@@ -210,6 +210,33 @@ test('el bote se reparte a medias cuando dos manos empatan', () => {
   assert.equal(table.seats[1].stack, 1000);
 });
 
+test('si el que tiene el turno se levanta, la mano no se queda colgada', () => {
+  const table = tableWith([
+    { id: 'a', name: 'Ana', stack: 1000 },
+    { id: 'b', name: 'Luis', stack: 1000 },
+    { id: 'c', name: 'Eva', stack: 1000 },
+  ]);
+  table.startHand();
+  const leaver = table.seats[table.turnSeat];
+  table.standUp(leaver.userId);
+  // El turno no puede apuntar a un asiento vacío ni quedar sin nadie: sería la
+  // mesa "esperando turno" para siempre, que es justo lo que pasaba.
+  assert.equal(table.phase, 'preflop');
+  assert.ok(table.seats[table.turnSeat], 'el turno apunta a un asiento vacío');
+  assert.ok(table.actors().length >= 1, 'no queda nadie que pueda actuar');
+});
+
+test('si se levantan todos menos uno, la mano se cierra sin showdown', () => {
+  const table = tableWith([
+    { id: 'a', name: 'Ana', stack: 1000 },
+    { id: 'b', name: 'Luis', stack: 1000 },
+  ]);
+  table.startHand();
+  table.standUp('a');
+  assert.equal(table.phase, 'waiting');
+  assert.equal(table.seatedCount(), 1);
+});
+
 test('subir obliga a los demás a volver a hablar', () => {
   const table = tableWith(
     [{ id: 'a', name: 'Ana', stack: 1000 }, { id: 'b', name: 'Luis', stack: 1000 }, { id: 'c', name: 'Eva', stack: 1000 }],

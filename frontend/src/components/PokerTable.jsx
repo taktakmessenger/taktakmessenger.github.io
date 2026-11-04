@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useVoiceRoom } from '../contexts/VoiceRoomContext';
 import {
+  fitSeats,
   seatLayout,
   formatCoins,
   legalActions,
@@ -40,11 +41,23 @@ function PlayingCard({ label, hidden }) {
 // cámara está apagada o el vídeo aún no llegó, el óvalo enseña el avatar para
 // que el asiento nunca quede en negro.
 //
+// Escala de los asientos libres: fija y pequeña, para que las nueve plazas
+// quepan siempre aunque haya pocos jugadores (los ocupados se ven más grandes).
+const EMPTY_SEAT_SCALE = 0.62;
+
+// Un hueco está ocupado si trae jugador. El servidor manda los libres como
+// `{ empty: true }`, así que no basta con que el hueco exista.
+function occupiedSeat(slot) {
+  return Boolean(slot && !slot.empty);
+}
+
 // Los asientos vacíos no se esconden: se pintan con el mismo óvalo (en hueco)
-// para que la mesa enseñe siempre las seis plazas, como una mesa de póker real.
-function Seat({ player, position, isTurn, isSelf, isWinner, face, isButton, seatNumber }) {
+// para que la mesa enseñe siempre las nueve plazas, como una mesa de póker real.
+function Seat({ player, position, isTurn, isSelf, isWinner, face, isButton, seatNumber, scale = 1 }) {
   const empty = !player || player.empty;
-  const style = { left: `${position.x}%`, top: `${position.y}%` };
+  // `--seat-scale` agranda o encoge el recuadro entero (cara, cartas y datos)
+  // según cuántos se sientan en la mesa.
+  const style = { left: `${position.x}%`, top: `${position.y}%`, '--seat-scale': scale };
 
   if (empty) {
     return (
@@ -210,10 +223,55 @@ export default function PokerTable({ slug, onClose }) {
     if (actions.yourTurn) setRaiseTo(actions.minRaiseTo);
   }, [actions.yourTurn, actions.minRaiseTo]);
 
-  const positions = useMemo(
-    () => seatLayout(state?.maxSeats || 6),
+  // Los asientos libres también llegan como objeto (`{ empty: true }`), así que
+  // hay que mirar la marca, no solo que el hueco exista.
+  const occupiedSeats = useMemo(
+    () => (state?.seats || [])
+      .map((slot, seat) => (occupiedSeat(slot) ? seat : -1))
+      .filter((seat) => seat >= 0),
+    [state?.seats],
+  );
+  // Sillas: el anillo del aforo completo. Los huecos libres se pintan aquí, en
+  // pequeño, para que la mesa enseñe siempre todas sus plazas.
+  const slots = useMemo(
+    () => seatLayout(state?.maxSeats || 9),
     [state?.maxSeats],
   );
+  // Jugadores: se reparten por todo el óvalo según cuántos son de verdad. Así con
+  // pocos sentados cada uno tiene su sitio y la cara y las cartas se ven grandes.
+  const ring = useMemo(
+    () => seatLayout(occupiedSeats.length || 1),
+    [occupiedSeats.length],
+  );
+  // Tamaño de los asientos y huecos que se enseñan: se mide la mesa y el recuadro
+  // de verdad y se calcula el mayor tamaño que cabe sin pisarse. Se rehace al
+  // cambiar de tamaño la pantalla y al entrar o salir jugadores.
+  const feltRef = useRef(null);
+  const [layoutFit, setLayoutFit] = useState({ scale: 1, emptySeats: [] });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const felt = feltRef.current;
+      // Un asiento ocupado manda el ancho base (el libre es más estrecho, solo
+      // lleva el "+"), así que se mide el primero que tenga jugador.
+      const seat = felt?.querySelector('.ptak-seat:not(.empty)') || felt?.querySelector('.ptak-seat');
+      if (!felt || !seat) return;
+      // `offsetWidth` no lleva la escala aplicada: es justo la medida base.
+      const rect = felt.getBoundingClientRect();
+      // 8 px de más por lado: el recuadro real lleva sombra y borde, que no
+      // entran en `offsetWidth`, y sin ese margen los vecinos se rozaban.
+      setLayoutFit(fitSeats(
+        occupiedSeats,
+        { w: seat.offsetWidth + 8, h: seat.offsetHeight + 8 },
+        { w: rect.width, h: rect.height },
+        EMPTY_SEAT_SCALE,
+      ));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [occupiedSeats, slots]);
+  const seatSize = layoutFit.scale;
+  const visibleEmpties = useMemo(() => new Set(layoutFit.emptySeats), [layoutFit.emptySeats]);
   const winnerIds = new Set((state?.winners || []).map((w) => String(w.userId)));
 
   const selfId = String(user?.id ?? user?._id ?? '');
@@ -317,7 +375,7 @@ export default function PokerTable({ slug, onClose }) {
 
       {error && <p className="ptak-error" role="alert">{error}</p>}
 
-      <div className="ptak-felt">
+      <div className="ptak-felt" ref={feltRef}>
         {/* Centro de la mesa: el logo, el nombre, el eslogan, el repartidor y las
             cartas comunitarias. El repartidor es Asistak: cuida la mesa y lleva
             las cartas, como se pidió. */}
@@ -337,26 +395,34 @@ export default function PokerTable({ slug, onClose }) {
         {/* Asistak, el repartidor: ficha fija al pie del tapete, con su cara y su
             pajarita. Reparte y vigila el juego. */}
         <div className="ptak-dealer" aria-label="Asistak, el repartidor de la mesa">
-          <AsistakLogo size={40} className="ptak-dealer-face" />
+          <AsistakLogo size={22} className="ptak-dealer-face" />
           <span className="ptak-dealer-name">Asistak</span>
           <span className="ptak-dealer-role">Repartidor</span>
         </div>
 
-        {/* Asientos alrededor. Se pintan siempre las seis plazas: las libres en
+        {/* Asientos alrededor. Se pintan siempre las nueve plazas: las libres en
             hueco, para que la mesa muestre su forma de óvalo completa. */}
-        {positions.map((pos, seat) => (
+        {slots.map((slotPos, seat) => {
+          const inRing = occupiedSeats.indexOf(seat);
+          const taken = inRing >= 0;
+          // Los huecos libres solo se pintan si no caen encima de un jugador.
+          if (!taken && !visibleEmpties.has(seat)) return null;
+          const position = taken ? ring[inRing] : slotPos;
+          return (
           <Seat
             key={seat}
             seatNumber={seat}
             player={state?.seats?.[seat]}
-            position={pos}
+            position={position}
             isTurn={state?.turnSeat === seat}
             isSelf={seat === mySeat}
             isButton={state?.buttonSeat === seat}
+            scale={taken ? seatSize : EMPTY_SEAT_SCALE}
             isWinner={state?.seats?.[seat] && winnerIds.has(String(state.seats[seat].userId))}
             face={faceFor.get(String(state?.seats?.[seat]?.userId))}
           />
-        ))}
+          );
+        })}
 
         {/* Comentarios de la mesa, sobre el tapete. Es el mismo hilo del directo,
             así que Asistak vigila lo que se dice jugando y deja aquí su aviso. */}
