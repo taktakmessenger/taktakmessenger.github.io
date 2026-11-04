@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 import { BackIcon } from './ChatIcons';
+import glenisIa from '../assets/glenis-ia.jpg';
 
 export default function AdminPanel({ onBack }) {
   const [stats, setStats] = useState(null);
@@ -245,7 +246,15 @@ export default function AdminPanel({ onBack }) {
           admin: no hay forma de llegar a él con una cuenta normal. */}
       <div className="moderation admin-assistant">
         <div className="admin-section-head">
-          <h3>🤖 Asistente del administrador</h3>
+          <div className="glenis-head">
+            <span className="glenis-avatar">
+              <img src={glenisIa} alt="GLENIS IA" />
+            </span>
+            <div className="glenis-id">
+              <h3>GLENIS IA</h3>
+              <span className="glenis-role">Asistente del administrador</span>
+            </div>
+          </div>
           {chatMessages.length > 0 && (
             <button
               type="button"
@@ -268,7 +277,7 @@ export default function AdminPanel({ onBack }) {
           <div className="admin-chat-log">
             {chatMessages.map((m, i) => (
               <div key={i} className={`admin-chat-msg ${m.role}`}>
-                <strong>{m.role === 'user' ? 'Tú' : 'Asistente'}</strong>
+                <strong>{m.role === 'user' ? 'Tú' : 'GLENIS IA'}</strong>
                 <p>{m.content}</p>
               </div>
             ))}

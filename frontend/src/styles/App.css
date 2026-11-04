@@ -7018,6 +7018,53 @@
   margin: 0;
 }
 
+/* Identidad de GLENIS IA, la asistente del administrador: su retrato real en un
+   marco circular con el aro dorado de la marca, junto a su nombre. */
+.glenis-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.glenis-avatar {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, #e1c889, #d2a12d 45%, #8a6d15);
+  box-shadow: 0 6px 18px -8px rgba(210, 161, 45, 0.6);
+  display: block;
+}
+
+.glenis-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  border: 2px solid var(--bg, #07070d);
+}
+
+.glenis-id {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.glenis-id h3 {
+  margin: 0;
+}
+
+.glenis-role {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #a99cc9);
+}
+
 /* Asistente del administrador: chat sencillo, con el historial arriba y la caja
    de texto abajo. Solo se muestra dentro del panel de admin. */
 .admin-chat-log {
