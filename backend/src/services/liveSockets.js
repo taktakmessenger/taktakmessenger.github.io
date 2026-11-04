@@ -1174,9 +1174,14 @@ function initLiveSockets(server) {
     });
 
     // Empezar una mano nueva. La comisión es la misma en todas las manos: la fija
-    // el servicio al arrancar (`env.poker.rake`, 1%).
+    // el servicio al arrancar (`env.poker.rake`, 1%). Solo el anfitrión reparte:
+    // si lo pudiera hacer cualquier jugador, cualquiera reiniciaría la mano a
+    // mitad para esquivar una apuesta perdida.
     socket.on('poker:start', async () => {
       if (!me || !socket.data.pokerHost) return;
+      if (String(socket.data.pokerHost) !== String(me.id)) {
+        return socket.emit('poker:error', { error: 'Solo el anfitrión puede repartir' });
+      }
       try {
         const table = poker.getTable(socket.data.pokerHost);
         if (!table) return socket.emit('poker:error', { error: 'No hay mesa abierta' });

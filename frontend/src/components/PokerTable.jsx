@@ -11,6 +11,7 @@ import {
   actionLabel,
 } from '../lib/pokerUi';
 import PokerTakLogo from './PokerTakLogo';
+import AsistakLogo from './AsistakLogo';
 import LiveChat from './LiveChat';
 
 // Carta de la baraja: "As" -> A♠. Se pintan rojas las de corazones y diamantes.
@@ -37,8 +38,31 @@ function PlayingCard({ label, hidden }) {
 // jugadores se ven y se hablan mientras juegan, sin abrir otra conexión. Si la
 // cámara está apagada o el vídeo aún no llegó, el óvalo enseña el avatar para
 // que el asiento nunca quede en negro.
-function Seat({ player, position, isTurn, isSelf, isWinner, layout, face }) {
-  if (!player || player.empty) return null;
+//
+// Los asientos vacíos no se esconden: se pintan con el mismo óvalo (en hueco)
+// para que la mesa enseñe siempre las seis plazas, como una mesa de póker real.
+function Seat({ player, position, isTurn, isSelf, isWinner, face, isButton, seatNumber }) {
+  const empty = !player || player.empty;
+  const style = { left: `${position.x}%`, top: `${position.y}%` };
+
+  if (empty) {
+    return (
+      <div
+        className="ptak-seat empty"
+        style={style}
+        data-seat={seatNumber}
+        aria-label={`Asiento ${seatNumber + 1} libre`}
+      >
+        <div className="ptak-face empty" aria-hidden="true">
+          <span className="ptak-face-plus">+</span>
+        </div>
+        <div className="ptak-seat-info">
+          <span className="ptak-seat-free">Libre</span>
+        </div>
+      </div>
+    );
+  }
+
   const hole = player.holeCards || [];
   const initial = (player.username?.[0] || '?').toUpperCase();
   const showVideo = face?.stream && !face?.cameraOff;
@@ -52,7 +76,7 @@ function Seat({ player, position, isTurn, isSelf, isWinner, layout, face }) {
         player.allIn ? 'allin' : '',
         isWinner ? 'winner' : '',
       ].filter(Boolean).join(' ')}
-      style={{ left: `${position.x}%`, top: `${position.y}%` }}
+      style={style}
       data-seat={player.seat}
     >
       {/* Póker face: la cara del jugador en un círculo ovalado. */}
@@ -85,7 +109,7 @@ function Seat({ player, position, isTurn, isSelf, isWinner, layout, face }) {
         {player.handLabel && <span className="ptak-seat-hand">{player.handLabel}</span>}
       </div>
       {isWinner && <span className="ptak-seat-crown" aria-label="Ganador">👑</span>}
-      {layout != null && <span className="ptak-seat-index">{layout}</span>}
+      {isButton && <span className="ptak-seat-dealer" aria-label="Botón del repartidor">D</span>}
     </div>
   );
 }
@@ -119,6 +143,9 @@ export default function PokerTable({ slug, onClose }) {
   // Comentarios de la mesa: el mismo hilo del directo, así Asistak vigila
   // también lo que se dice jugando y el aviso sale en la parte de comentarios.
   const [chatOpen, setChatOpen] = useState(false);
+  // Menú de tres puntos de la cabecera: en un móvil no caben los botones
+  // sueltos, así que el chat y el cerrar viven aquí dentro.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Al abrir la mesa se pide el estado. Al cerrar, se avisa al servidor para que
   // devuelva las fichas al monedero.
@@ -143,6 +170,14 @@ export default function PokerTable({ slug, onClose }) {
 
   const mySeat = ownSeat(state, user?.id);
   const actions = useMemo(() => legalActions(state, mySeat), [state, mySeat]);
+  // Solo el anfitrión (el dueño del directo) reparte, y solo entre manos: cuando
+  // la mesa está esperando o se acaba de resolver la anterior. Así el botón de
+  // Asistak no aparece a mitad de una mano ni a los invitados.
+  const canDeal =
+    mySeat !== -1 &&
+    String(state?.hostId) === String(user?.id) &&
+    (state?.phase === 'waiting' || state?.phase === 'showdown') &&
+    (state?.seats || []).filter((s) => s && !s.empty && s.stack > 0).length >= 2;
 
   // El importe de subida arranca en el mínimo legal y se recoloca cuando cambia
   // el turno, para no dejar un valor de la mano anterior.
@@ -155,7 +190,6 @@ export default function PokerTable({ slug, onClose }) {
     [state?.maxSeats],
   );
   const winnerIds = new Set((state?.winners || []).map((w) => String(w.userId)));
-  const seated = (state?.seats || []).filter((s) => s && !s.empty);
 
   const selfId = String(user?.id ?? user?._id ?? '');
 
@@ -204,40 +238,60 @@ export default function PokerTable({ slug, onClose }) {
     <div className="ptak-overlay" role="dialog" aria-modal="true" aria-label="Mesa de POKERTAK">
       <header className="ptak-head">
         <div className="ptak-head-title">
-          <PokerTakLogo size={40} />
-          <div>
-            <strong className="ptak-name">POKERTAK</strong>
-            <small className="ptak-tagline">Somos la PEPA DEL QUIERO</small>
-          </div>
+          <PokerTakLogo size={34} />
+          <strong className="ptak-name">POKERTAK</strong>
         </div>
+        {/* Estado en una fila que no desborda: fase, bote y un menú. En pantalla
+            de móvil el nombre del eslogan y los botones sueltos no caben, así que
+            el chat y el cerrar viven dentro del menú de tres puntos. */}
         <div className="ptak-head-status">
           <span className="ptak-phase">{phaseLabel(state?.phase)}</span>
-          {state && (
-            <span className="ptak-pot">Bote 🪙 {formatCoins(state.pot)}</span>
-          )}
-          {voiceRoomInfo && (
+          {state && <span className="ptak-pot">🪙 {formatCoins(state.pot)}</span>}
+          <div className="ptak-menu-wrap">
             <button
               type="button"
-              className={`ptak-btn ghost ${chatOpen ? 'on' : ''}`}
-              onClick={() => setChatOpen((open) => !open)}
-              aria-pressed={chatOpen}
-              aria-label={chatOpen ? 'Ocultar comentarios' : 'Mostrar comentarios'}
+              className="ptak-btn ghost ptak-menu-btn"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label="Más opciones de la mesa"
             >
-              💬
+              ⋯
             </button>
-          )}
-          <button type="button" className="ptak-btn ghost" onClick={onClose} aria-label="Cerrar la mesa">
-            ✕
-          </button>
+            {menuOpen && (
+              <div className="ptak-menu" role="menu">
+                {voiceRoomInfo && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`ptak-menu-item${chatOpen ? ' on' : ''}`}
+                    onClick={() => { setChatOpen((open) => !open); setMenuOpen(false); }}
+                  >
+                    💬 {chatOpen ? 'Ocultar comentarios' : 'Ver comentarios'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ptak-menu-item"
+                  onClick={() => { setMenuOpen(false); onClose(); }}
+                >
+                  ✕ Cerrar la mesa
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
       {error && <p className="ptak-error" role="alert">{error}</p>}
 
       <div className="ptak-felt">
-        {/* Centro de la mesa: el nombre, el eslogan y el logo, sobre el tapete. */}
+        {/* Centro de la mesa: el logo, el nombre, el eslogan, el repartidor y las
+            cartas comunitarias. El repartidor es Asistak: cuida la mesa y lleva
+            las cartas, como se pidió. */}
         <div className="ptak-center">
-          <PokerTakLogo size={92} className="ptak-center-logo" />
+          <PokerTakLogo size={64} className="ptak-center-logo" />
           <h2 className="ptak-center-name">POKERTAK</h2>
           <p className="ptak-center-tagline">Somos la PEPA DEL QUIERO</p>
           <div className="ptak-board">
@@ -249,24 +303,29 @@ export default function PokerTable({ slug, onClose }) {
           {state?.lastAction && <p className="ptak-last">{state.lastAction}</p>}
         </div>
 
-        {/* Asientos alrededor. */}
+        {/* Asistak, el repartidor: ficha fija al pie del tapete, con su cara y su
+            pajarita. Reparte y vigila el juego. */}
+        <div className="ptak-dealer" aria-label="Asistak, el repartidor de la mesa">
+          <AsistakLogo size={40} className="ptak-dealer-face" />
+          <span className="ptak-dealer-name">Asistak</span>
+          <span className="ptak-dealer-role">Repartidor</span>
+        </div>
+
+        {/* Asientos alrededor. Se pintan siempre las seis plazas: las libres en
+            hueco, para que la mesa muestre su forma de óvalo completa. */}
         {positions.map((pos, seat) => (
           <Seat
             key={seat}
+            seatNumber={seat}
             player={state?.seats?.[seat]}
             position={pos}
             isTurn={state?.turnSeat === seat}
             isSelf={seat === mySeat}
+            isButton={state?.buttonSeat === seat}
             isWinner={state?.seats?.[seat] && winnerIds.has(String(state.seats[seat].userId))}
             face={faceFor.get(String(state?.seats?.[seat]?.userId))}
           />
         ))}
-
-        {seated.length === 0 && (
-          <div className="ptak-empty">
-            <p>La mesa está vacía. Siéntate para empezar a jugar.</p>
-          </div>
-        )}
 
         {/* Comentarios de la mesa, sobre el tapete. Es el mismo hilo del directo,
             así que Asistak vigila lo que se dice jugando y deja aquí su aviso. */}
@@ -284,6 +343,27 @@ export default function PokerTable({ slug, onClose }) {
           </div>
         ) : (
           <>
+            {/* Asistak reparte: entre manos, el anfitrión pide la siguiente y la
+                mesa vuelve a jugar. Va con la cara del repartidor para que quede
+                claro quién da las cartas. */}
+            {canDeal && (
+              <div className="ptak-deal">
+                <AsistakLogo size={26} />
+                <button
+                  type="button"
+                  className="ptak-btn primary"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    setError('');
+                    emit('poker:start', {});
+                    setTimeout(() => setBusy(false), 500);
+                  }}
+                >
+                  {state?.handNumber ? 'Repartir otra mano' : 'Repartir las cartas'}
+                </button>
+              </div>
+            )}
             <div className="ptak-actions">
               <button type="button" className="ptak-btn" disabled={!actions.canFold || busy} onClick={() => send('fold')}>
                 Retirarse
@@ -325,7 +405,7 @@ export default function PokerTable({ slug, onClose }) {
                 </button>
               </div>
             )}
-            {!actions.yourTurn && mySeat !== -1 && (
+            {!actions.yourTurn && !canDeal && (
               <p className="ptak-wait">Esperando tu turno…</p>
             )}
           </>
@@ -338,7 +418,7 @@ export default function PokerTable({ slug, onClose }) {
 // Botones de entrada, con los importes de la mesa. La entrada se cobra en el
 // servidor; aquí solo se elige el importe.
 function SitButtons({ emit, slug, state, busy, setBusy, setError }) {
-  const min = state?.minBuyIn ?? 200;
+  const min = state?.minBuyIn ?? 50;
   const max = state?.maxBuyIn ?? 20000;
   const options = [min, Math.min(min * 5, max), max].filter((v, i, a) => a.indexOf(v) === i);
   return (

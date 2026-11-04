@@ -6,6 +6,9 @@
 // en porcentaje del contenedor, con el asiento 0 abajo (el más cercano a quien
 // mira), y reparte el resto en el sentido del reloj. La elipse es más ancha que
 // alta para que la mesa parezca una mesa de póker y no un círculo.
+//
+// Los radios (38% / 30%) van por dentro del borde del tapete: si se usara el
+// borde entero (46% / 34%), el asiento de abajo quedaría medio fuera de la mesa.
 export function seatLayout(count) {
   const seats = Math.max(1, Math.min(6, Number(count) || 1));
   const positions = [];
@@ -13,8 +16,8 @@ export function seatLayout(count) {
     // Se empieza abajo (90°) y se avanza en el sentido del reloj.
     const angle = (90 + (360 / seats) * i) * (Math.PI / 180);
     positions.push({
-      x: 50 + 40 * Math.cos(angle),
-      y: 50 + 34 * Math.sin(angle),
+      x: 50 + 38 * Math.cos(angle),
+      y: 50 + 30 * Math.sin(angle),
     });
   }
   return positions;

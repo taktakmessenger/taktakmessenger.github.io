@@ -7326,24 +7326,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 10px;
   background: rgba(0, 0, 0, 0.28);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Sin salto de línea: si algo no cabe, se encoge o se recorta, pero nunca se
+     apila un botón encima de otro ni se sale de la pantalla. */
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .ptak-head-title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .ptak-name {
   display: block;
-  font-size: 20px;
-  letter-spacing: 3px;
+  font-size: 18px;
+  letter-spacing: 2px;
   color: #ffd94a;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
 }
 
 .ptak-tagline {
@@ -7356,21 +7363,70 @@
 .ptak-head-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .ptak-phase,
 .ptak-pot {
-  padding: 4px 10px;
+  padding: 4px 9px;
   border-radius: 999px;
   font-size: 12px;
   background: rgba(255, 255, 255, 0.1);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 42vw;
 }
 
 .ptak-pot {
   background: rgba(255, 217, 74, 0.16);
   color: #ffe98a;
+}
+
+/* Menú de tres puntos: el chat y el cerrar caben aquí sin apilarse. */
+.ptak-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ptak-menu-btn {
+  min-width: 40px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.ptak-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 12px;
+  background: #0d3b2e;
+  border: 1px solid rgba(255, 217, 74, 0.4);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.ptak-menu-item {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #f4f7f5;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ptak-menu-item:hover,
+.ptak-menu-item.on {
+  background: rgba(255, 217, 74, 0.16);
 }
 
 .ptak-btn {
@@ -7422,12 +7478,17 @@
 
 .ptak-felt {
   position: relative;
-  flex: 1;
-  margin: 12px;
+  flex: 1 1 auto;
+  /* La mesa es un óvalo contenido: no se estira hasta llenar toda la pantalla ni
+     se sale de ella. Con el ancho máximo y el alto acotado, en el móvil queda a
+     la vista entera, con los controles debajo siempre alcanzables. */
+  width: min(100%, 620px);
+  max-height: 64vh;
+  margin: 8px auto;
   border-radius: 46% / 34%;
   background:
     radial-gradient(ellipse at center, #1a6b52 0%, #12503d 55%, #0c3628 100%);
-  border: 10px solid #5a3a1c;
+  border: 8px solid #5a3a1c;
   box-shadow:
     inset 0 0 60px rgba(0, 0, 0, 0.5),
     0 12px 30px rgba(0, 0, 0, 0.45);
@@ -7534,8 +7595,8 @@
    que quepa la cara y no se deforme; el borde dorado marca la mesa de póker. */
 .ptak-face {
   position: relative;
-  width: 66px;
-  height: 80px;
+  width: 58px;
+  height: 70px;
   border-radius: 50% / 50%;
   overflow: hidden;
   background: linear-gradient(160deg, #1d5c46, #0c3628);
@@ -7550,6 +7611,19 @@
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+/* Óvalo de un asiento libre: hueco, con un "+", para que la mesa enseñe las
+   plazas que quedan sin parecer rota. */
+.ptak-face.empty {
+  border-style: dashed;
+  border-color: rgba(255, 217, 74, 0.28);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.ptak-face-plus {
+  font-size: 24px;
+  color: rgba(255, 217, 74, 0.5);
+}
+
 .ptak-face-video {
   width: 100%;
   height: 100%;
@@ -7558,7 +7632,7 @@
 }
 
 .ptak-face-initial {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
 }
@@ -7581,13 +7655,25 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  width: 116px;
-  padding: 6px;
+  gap: 3px;
+  width: 100px;
+  padding: 5px;
   border-radius: 12px;
   background: rgba(4, 20, 15, 0.72);
   border: 2px solid rgba(255, 255, 255, 0.12);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Asiento libre: se ve, pero sin robar protagonismo a los jugadores. */
+.ptak-seat.empty {
+  background: rgba(4, 20, 15, 0.32);
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ptak-seat-free {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .ptak-seat.turn {
@@ -7615,13 +7701,13 @@
 .ptak-seat-cards {
   display: flex;
   gap: 3px;
-  min-height: 54px;
+  min-height: 38px;
   align-items: center;
 }
 
 .ptak-seat-cards .ptak-card {
-  width: 26px;
-  height: 38px;
+  width: 24px;
+  height: 34px;
 }
 
 .ptak-seat-cards .ptak-card-rank {
@@ -7636,13 +7722,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  line-height: 1.25;
+  line-height: 1.2;
   text-align: center;
 }
 
 .ptak-seat-info strong {
-  font-size: 12px;
-  max-width: 104px;
+  font-size: 11px;
+  max-width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7665,11 +7751,54 @@
   font-size: 20px;
 }
 
-.ptak-seat-index {
+/* Botón del repartidor: marca a quién le toca repartir, como la ficha "D". */
+.ptak-seat-dealer {
   position: absolute;
-  bottom: -8px;
-  right: -6px;
-  font-size: 10px;
+  bottom: -10px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: #0c3628;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Asistak, el repartidor, al pie del tapete. */
+.ptak-dealer {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  background: rgba(4, 20, 15, 0.72);
+  border: 1px solid rgba(255, 217, 74, 0.35);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.ptak-dealer-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd94a;
+  letter-spacing: 1px;
+}
+
+.ptak-dealer-role {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .ptak-empty {
@@ -7728,6 +7857,14 @@
   gap: 10px;
 }
 
+/* Fila de reparto de Asistak: su cara y el botón de dar las cartas. */
+.ptak-deal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 .ptak-raise input[type='range'] {
   flex: 1;
   accent-color: #ffd94a;
@@ -7752,26 +7889,56 @@
 
 @media (max-width: 480px) {
   .ptak-seat {
-    width: 92px;
+    width: 86px;
     padding: 4px;
   }
   /* El óvalo se encoge con el asiento para que seis caras quepan en un móvil. */
   .ptak-face {
-    width: 52px;
-    height: 64px;
+    width: 48px;
+    height: 58px;
   }
   .ptak-face-initial {
-    font-size: 24px;
+    font-size: 22px;
+  }
+  .ptak-felt {
+    max-height: 60vh;
+    margin: 6px auto;
+    border-width: 6px;
   }
   .ptak-center {
-    width: 66%;
+    width: 62%;
+  }
+  .ptak-center-logo {
+    width: 44px;
+    height: 44px;
   }
   .ptak-center-name {
-    font-size: 18px;
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+  .ptak-center-tagline {
+    font-size: 10px;
+  }
+  .ptak-board {
+    min-height: 44px;
+    margin-top: 6px;
+  }
+  .ptak-card {
+    width: 30px;
+    height: 44px;
+  }
+  .ptak-card-rank {
+    font-size: 14px;
+  }
+  .ptak-card-suit {
+    font-size: 13px;
   }
   .ptak-seat-cards .ptak-card {
     width: 22px;
     height: 32px;
+  }
+  .ptak-dealer {
+    padding: 3px 8px;
   }
 }
 

@@ -299,8 +299,11 @@ const env = {
     maxSeats: Number(process.env.POKER_MAX_SEATS ?? 6),
     smallBlind: Number(process.env.POKER_SMALL_BLIND ?? 5),
     bigBlind: Number(process.env.POKER_BIG_BLIND ?? 10),
-    // Entrada mínima y máxima, en monedas de la app.
-    minBuyIn: Number(process.env.POKER_MIN_BUYIN ?? 200),
+    // Entrada mínima y máxima, en monedas de la app. La mínima (50) cabe en el
+    // bono de bienvenida (100), así que un recién llegado puede sentarse sin
+    // comprar monedas: con la anterior (200) la mesa era inalcanzable para todo
+    // el que no hubiera pagado antes.
+    minBuyIn: Number(process.env.POKER_MIN_BUYIN ?? 50),
     maxBuyIn: Number(process.env.POKER_MAX_BUYIN ?? 20000),
   },
 

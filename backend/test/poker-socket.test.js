@@ -123,18 +123,25 @@ test('una mano completa por socket termina en showdown y enseña las cartas', as
   await setWallet(b.user.id, { ttcC: 5000, bonusC: 0 });
 
   await withServer(async (url) => {
+    const sh = await connect(url, host.token);
     const sa = await connect(url, a.token);
     const sb = await connect(url, b.token);
 
-    await openTable(sa, slug);
+    await openTable(sh, slug);
     sa.emit('poker:sit', { slug, buyIn: 1000 });
     await nextEvent(sa, 'poker:state');
     await openTable(sb, slug);
     sb.emit('poker:sit', { slug, buyIn: 1000 });
     await nextEvent(sb, 'poker:state');
 
+    // Un invitado no puede repartir: solo el anfitrión reparte.
     sa.emit('poker:start', {});
-    let state = await nextEvent(sa, 'poker:state');
+    const denied = await nextEvent(sa, 'poker:error');
+    assert.match(denied.error, /anfitrión/i);
+
+    // El anfitrión reparte y la mano arranca.
+    sh.emit('poker:start', {});
+    let state = await nextEvent(sh, 'poker:state');
     assert.equal(state.phase, 'preflop');
 
     // Se juega con "call"/"check" hasta el final. El estado llega a los dos.
@@ -144,7 +151,7 @@ test('una mano completa por socket termina en showdown y enseña las cartas', as
       const actor = String(player.userId) === String(a.user.id) ? sa : sb;
       const toCall = state.currentBet - player.bet;
       actor.emit('poker:act', { action: toCall > 0 ? 'call' : 'check' });
-      state = await nextEvent(sa, 'poker:state');
+      state = await nextEvent(sh, 'poker:state');
     }
 
     assert.equal(state.phase, 'showdown');
@@ -154,7 +161,7 @@ test('una mano completa por socket termina en showdown y enseña las cartas', as
     const shown = state.seats.filter((s) => !s.empty && s.holeCards.some(Boolean));
     assert.equal(shown.length, 2);
 
-    sa.close(); sb.close();
+    sh.close(); sa.close(); sb.close();
   });
 });
 
