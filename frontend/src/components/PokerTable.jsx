@@ -208,14 +208,17 @@ export default function PokerTable({ slug, onClose }) {
 
   const mySeat = ownSeat(state, user?.id);
   const actions = useMemo(() => legalActions(state, mySeat), [state, mySeat]);
-  // Solo el anfitrión (el dueño del directo) reparte, y solo entre manos: cuando
-  // la mesa está esperando o se acaba de resolver la anterior. Así el botón de
-  // Asistak no aparece a mitad de una mano ni a los invitados.
+  const seatedWithChips = (state?.seats || [])
+    .filter((s) => s && !s.empty && s.stack > 0).length;
+  // Solo el anfitrión (el dueño del directo) puede pedir el reparto a mano, y
+  // solo entre manos: cuando la mesa está esperando o se acaba de resolver la
+  // anterior. La mesa se reparte sola pasado un momento, así que este botón es
+  // el atajo para barajar ya, no un requisito para jugar.
   const canDeal =
     mySeat !== -1 &&
     String(state?.hostId) === String(user?.id) &&
     (state?.phase === 'waiting' || state?.phase === 'showdown') &&
-    (state?.seats || []).filter((s) => s && !s.empty && s.stack > 0).length >= 2;
+    seatedWithChips >= 2;
 
   // El importe de subida arranca en el mínimo legal y se recoloca cuando cambia
   // el turno, para no dejar un valor de la mano anterior.
@@ -436,6 +439,7 @@ export default function PokerTable({ slug, onClose }) {
       <footer className="ptak-controls">
         {mySeat === -1 ? (
           <div className="ptak-buyin">
+            <TournamentPanel slug={slug} />
             <SitButtons emit={emit} slug={slug} state={state} busy={busy} setBusy={setBusy} setError={setError} />
           </div>
         ) : (
@@ -518,8 +522,17 @@ export default function PokerTable({ slug, onClose }) {
                 />
               </div>
             )}
+            {/* Entre manos el texto explica qué pasa de verdad: si la mesa va a
+                repartir sola, cuándo; si falta gente, que hace falta otro jugador.
+                "Esperando tu turno" solo se enseña con la mano ya en juego. */}
             {!actions.yourTurn && !canDeal && (
-              <p className="ptak-wait">Esperando tu turno…</p>
+              state?.phase === 'waiting' && seatedWithChips < 2 ? (
+                <p className="ptak-wait">Hacen falta al menos dos jugadores para empezar…</p>
+              ) : state?.phase === 'waiting' || state?.phase === 'showdown' ? (
+                <p className="ptak-wait">Repartiendo la próxima mano…</p>
+              ) : (
+                <p className="ptak-wait">Esperando tu turno…</p>
+              )
             )}
           </>
         )}

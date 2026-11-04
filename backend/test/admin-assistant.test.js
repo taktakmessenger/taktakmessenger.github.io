@@ -396,3 +396,101 @@ test('el historial es de cada administrador, no compartido', async () => {
     .set('Authorization', `Bearer ${signToken(dos)}`);
   assert.equal(res.body.messages.length, 0);
 });
+
+/* ------------------------------------------------------------------ */
+/* Torneos de POKERTAK                                                 */
+/* ------------------------------------------------------------------ */
+
+test('el asistente puede organizar un torneo de POKERTAK', async () => {
+  const admin = await makeAdmin();
+  const Squad = require('../src/models/Squad');
+  await Squad.create({
+    name: 'Mesa del jefe',
+    slug: 'mesa-jefe',
+    owner: admin._id,
+    visibility: 'public',
+    voiceRoom: 'voice-jefe',
+  });
+
+  const when = new Date(Date.now() + 86400_000).toISOString();
+  await withModel(
+    [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_t1',
+            type: 'function',
+            function: {
+              name: 'organizar_torneo_poker',
+              arguments: JSON.stringify({
+                titulo: 'Torneo del viernes',
+                sala: 'mesa-jefe',
+                fecha: when,
+                entrada: 100,
+                jugadores: 9,
+              }),
+            },
+          },
+        ],
+      },
+      { role: 'assistant', content: 'Torneo creado.' },
+    ],
+    async (fake) => {
+      const res = await app()
+        .post('/api/admin/assistant')
+        .set('Authorization', `Bearer ${signToken(admin)}`)
+        .send({ message: 'organiza un torneo el viernes' });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      assert.equal(res.body.executed[0].tool, 'organizar_torneo_poker');
+      assert.equal(res.body.executed[0].result.ok, true);
+      // El reparto por defecto queda congelado en el torneo.
+      assert.deepEqual(res.body.executed[0].result.torneo.split, [0.4, 0.3, 0.2]);
+      assert.equal(res.body.executed[0].result.torneo.rakeRate, 0.1);
+      // Con el aforo lleno: 900 de bruto, 810 de bote y 40/30/20.
+      assert.deepEqual(
+        res.body.executed[0].result.torneo.projectedPlaces.map((p) => p.amount),
+        [360, 270, 180]
+      );
+      assert.ok(fake.calls.length >= 2);
+    }
+  );
+});
+
+test('el asistente informa del error si la sala del torneo no existe', async () => {
+  const admin = await makeAdmin();
+  await withModel(
+    [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_t2',
+            type: 'function',
+            function: {
+              name: 'organizar_torneo_poker',
+              arguments: JSON.stringify({
+                titulo: 'Torneo fantasma',
+                sala: 'no-existe',
+                fecha: new Date(Date.now() + 86400_000).toISOString(),
+                entrada: 100,
+                jugadores: 9,
+              }),
+            },
+          },
+        ],
+      },
+      { role: 'assistant', content: 'Esa sala no existe.' },
+    ],
+    async () => {
+      const res = await app()
+        .post('/api/admin/assistant')
+        .set('Authorization', `Bearer ${signToken(admin)}`)
+        .send({ message: 'organiza un torneo' });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      assert.match(res.body.executed[0].result.error, /No existe esa sala/);
+    }
+  );
+});

@@ -8037,3 +8037,56 @@
   }
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Torneos de POKERTAK                                                 */
+/* ------------------------------------------------------------------ */
+/* El cartel de torneos vive encima de los botones de entrada, solo para quien
+   aún no tiene asiento. Enseña hora, entrada, inscritos y lo que se llevaría
+   cada puesto, para que se sepa qué se paga antes de inscribirse. */
+.ptak-tourneys {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.ptak-tourney {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ptak-tourney-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ptak-tourney-when {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  text-transform: capitalize;
+}
+
+.ptak-tourney-meta,
+.ptak-tourney-prizes {
+  margin: 0;
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+
+.ptak-tourney .ptak-btn {
+  margin-top: 4px;
+}
+
+.ptak-tourneys-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #ffb4b4;
+}

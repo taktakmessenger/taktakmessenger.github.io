@@ -23,6 +23,17 @@ const tables = new Map();
 // liquida al cerrar la sala.
 const rakeAccrual = new Map(); // tableId -> { paid, bonus, hands }
 
+// Reparto automático de manos. Entre manos, si hay dos o más jugadores con
+// fichas, la mesa reparte sola: nadie se queda mirando "esperando tu turno"
+// porque el anfitrión no pulse el botón, y quien se sienta a mitad de una mano
+// entra en la siguiente sin que nadie haga nada.
+//
+// Tras un showdown se espera un poco más, para que dé tiempo a ver quién ganó y
+// con qué mano antes de barajar de nuevo.
+const AUTO_DEAL_WAIT_MS = 2000;
+const AUTO_DEAL_AFTER_SHOWDOWN_MS = 5000;
+const autoDealTimers = new Map(); // tableId -> timeout
+
 function tableIdFor(hostId) {
   return `poker:${hostId}`;
 }
@@ -65,6 +76,56 @@ function startHand(hostId) {
   const table = getOrCreateTable(hostId);
   table.rakeRate = rakeRateFor();
   return table.startHand();
+}
+
+/**
+ * ¿Toca repartir solo? Solo entre manos (esperando o tras el showdown) y con al
+ * menos dos jugadores con fichas: si no, la mesa se quedaría dando cartas a uno
+ * solo o pisando una mano en curso.
+ */
+function canAutoDeal(hostId) {
+  const table = getTable(hostId);
+  if (!table) return false;
+  if (table.phase !== 'waiting' && table.phase !== 'showdown') return false;
+  return table.players().filter((p) => p.stack > 0).length >= 2;
+}
+
+/**
+ * Programa el reparto automático de la siguiente mano. `onDeal` se llama cuando
+ * la mano ya ha arrancado, para que la capa de sockets vuelva a emitir el estado.
+ *
+ * Si ya hay un reparto programado no se duplica: da igual cuántos jugadores se
+ * sienten seguidos, la mesa baraja una sola vez.
+ */
+function scheduleAutoDeal(hostId, onDeal) {
+  if (!canAutoDeal(hostId)) return false;
+  const id = tableIdFor(hostId);
+  if (autoDealTimers.has(id)) return true;
+  const table = getTable(hostId);
+  const delay = table.phase === 'showdown' ? AUTO_DEAL_AFTER_SHOWDOWN_MS : AUTO_DEAL_WAIT_MS;
+  const timer = setTimeout(() => {
+    autoDealTimers.delete(id);
+    if (!canAutoDeal(hostId)) return;
+    try {
+      startHand(hostId);
+    } catch {
+      return;
+    }
+    if (typeof onDeal === 'function') onDeal();
+  }, delay);
+  // No mantiene vivo el proceso por sí solo: el servidor HTTP ya lo hace.
+  timer.unref?.();
+  autoDealTimers.set(id, timer);
+  return true;
+}
+
+function cancelAutoDeal(hostId) {
+  const id = tableIdFor(hostId);
+  const timer = autoDealTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    autoDealTimers.delete(id);
+  }
 }
 
 /**
@@ -202,6 +263,7 @@ async function closeTable(hostId) {
       // Si uno falla no se bloquea a los demás; se sigue devolviendo el resto.
     }
   }
+  cancelAutoDeal(hostId);
   tables.delete(tableIdFor(hostId));
   rakeAccrual.delete(tableIdFor(hostId));
   return { settled, refunded };
@@ -214,6 +276,8 @@ function stats(hostId) {
 
 // Solo para las pruebas: deja el estado limpio entre casos.
 function _reset() {
+  for (const timer of autoDealTimers.values()) clearTimeout(timer);
+  autoDealTimers.clear();
   tables.clear();
   rakeAccrual.clear();
 }
@@ -222,6 +286,11 @@ module.exports = {
   getOrCreateTable,
   getTable,
   startHand,
+  canAutoDeal,
+  scheduleAutoDeal,
+  cancelAutoDeal,
+  AUTO_DEAL_WAIT_MS,
+  AUTO_DEAL_AFTER_SHOWDOWN_MS,
   rakeRateFor,
   sitDown,
   standUp,

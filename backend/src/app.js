@@ -33,6 +33,7 @@ const listingRoutes = require('./routes/listings');
 const searchRoutes = require('./routes/search');
 const safetyRoutes = require('./routes/safety');
 const translateRoutes = require('./routes/translate');
+const pokerRoutes = require('./routes/poker');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Built as a factory so tests can mount the app without starting a listener.
@@ -159,6 +160,7 @@ function createApp() {
   app.use('/api/search', searchRoutes);
   app.use('/api/safety', safetyRoutes);
   app.use('/api/translate', translateRoutes);
+  app.use('/api/poker', pokerRoutes);
 
   // Uploaded originals and their HLS renditions. Read-only.
   //

@@ -305,6 +305,10 @@ const env = {
     // elige cuánto pone.
     minBuyIn: Number(process.env.POKER_MIN_BUYIN ?? 10),
     maxBuyIn: Number(process.env.POKER_MAX_BUYIN ?? 20000),
+    // Tarifa de la casa en un torneo: se cobra una vez sobre todo lo recaudado,
+    // no por mano. El reparto por defecto (40/30/20) y esta tarifa (10%) suman
+    // el 100%: lo que no va a un puesto es lo que se queda la casa.
+    eventRake: Number(process.env.POKER_EVENT_RAKE ?? 0.1),
   },
 
   // Where uploaded originals and their HLS renditions are written. Served

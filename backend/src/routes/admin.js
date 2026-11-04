@@ -11,6 +11,7 @@ const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
 const manualPaymentService = require('../services/manualPaymentService');
 const asistakService = require('../services/asistakService');
+const pokerEventService = require('../services/pokerEventService');
 const adminAssistant = require('../services/adminAssistant');
 const assistantThreadService = require('../services/assistantThreadService');
 const { auth, requireAdmin } = require('../middleware/auth');
@@ -472,6 +473,83 @@ router.post(
       reason: req.body.reason,
     });
     res.json({ order });
+  })
+);
+
+// Torneos de POKERTAK. El administrador los organiza desde aquí (o pidiéndoselo
+// a Asistak, que usa estas mismas funciones); el jugador se inscribe desde el
+// móvil. Listar y ver van dentro de `requireAdmin` como el resto del router.
+router.get(
+  '/poker-events',
+  [query('status').optional().isIn(['scheduled', 'running', 'finished', 'cancelled'])],
+  validate,
+  asyncHandler(async (req, res) => {
+    const events = await pokerEventService.listEvents({ status: req.query.status, limit: 50 });
+    res.json({ events });
+  })
+);
+
+router.post(
+  '/poker-events',
+  [
+    body('title').isString().trim().isLength({ min: 3, max: 80 }),
+    body('squadSlug').isString().trim().isLength({ min: 1, max: 60 }),
+    body('scheduledAt').isISO8601(),
+    body('entryCost').isFloat({ gt: 0 }),
+    body('maxPlayers').isInt({ min: 2, max: 9 }),
+    body('rakeRate').optional().isFloat({ min: 0, max: 1 }),
+    body('split').optional().isArray({ min: 1, max: 6 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const event = await pokerEventService.createEvent({
+      title: req.body.title,
+      adminId: req.user.userId,
+      squadSlug: req.body.squadSlug,
+      scheduledAt: req.body.scheduledAt,
+      entryCost: req.body.entryCost,
+      maxPlayers: req.body.maxPlayers,
+      rakeRate: req.body.rakeRate,
+      split: req.body.split,
+    });
+    res.status(201).json({ event: pokerEventService.publicEvent(event) });
+  })
+);
+
+router.get(
+  '/poker-events/:id',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const event = await pokerEventService.getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Evento no encontrado');
+    res.json({ event });
+  })
+);
+
+router.post(
+  '/poker-events/:id/finish',
+  [param('id').isMongoId(), body('ranking').optional().isArray({ max: 9 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await pokerEventService.finishEvent({
+      eventId: req.params.id,
+      ranking: req.body.ranking,
+    });
+    res.json({ event: pokerEventService.publicEvent(result.event), payout: result.payout });
+  })
+);
+
+router.post(
+  '/poker-events/:id/cancel',
+  [param('id').isMongoId(), body('reason').optional().isString().trim().isLength({ max: 300 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await pokerEventService.cancelEvent({
+      eventId: req.params.id,
+      reason: req.body.reason,
+    });
+    res.json({ event: pokerEventService.publicEvent(result.event), refunded: result.refunded });
   })
 );
 

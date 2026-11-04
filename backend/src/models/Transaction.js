@@ -23,6 +23,13 @@ const transactionSchema = new mongoose.Schema(
         // de regalo se queda en el circuito de monedas promocionales.
         'poker_rake',
         'poker_rake_bonus',
+        // Torneos: entrada cobrada, premio pagado, devolución al cancelar y la
+        // tarifa que se queda la casa del bote entero.
+        'poker_event_entry',
+        'poker_event_prize',
+        'poker_event_refund',
+        'poker_event_rake',
+        'poker_event_rake_bonus',
       ],
       required: true,
     },

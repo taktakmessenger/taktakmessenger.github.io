@@ -165,6 +165,93 @@ test('una mano completa por socket termina en showdown y enseña las cartas', as
   });
 });
 
+test('con dos jugadores la mesa reparte sola y la mano arranca sin pulsar nada', async () => {
+  const agent = app();
+  const host = await registerUser(agent, { username: 'host' });
+  const slug = await makeCreator(host);
+  const a = await registerUser(agent, { username: 'ana' });
+  const b = await registerUser(agent, { username: 'luis' });
+  await setWallet(a.user.id, { ttcC: 5000, bonusC: 0 });
+  await setWallet(b.user.id, { ttcC: 5000, bonusC: 0 });
+
+  await withServer(async (url) => {
+    const sh = await connect(url, host.token);
+    const sa = await connect(url, a.token);
+    const sb = await connect(url, b.token);
+
+    await openTable(sh, slug);
+    sa.emit('poker:sit', { slug, buyIn: 1000 });
+    await nextEvent(sa, 'poker:state');
+    await openTable(sb, slug);
+    sb.emit('poker:sit', { slug, buyIn: 1000 });
+    await nextEvent(sb, 'poker:state');
+
+    // Nadie pulsa "repartir": la mesa lo hace sola pasados un par de segundos.
+    const state = await nextEvent(sa, 'poker:state', poker.AUTO_DEAL_WAIT_MS + 3000);
+    assert.equal(state.phase, 'preflop', 'la mano arranca sola con dos jugadores');
+    assert.equal(state.handNumber, 1);
+
+    sh.close(); sa.close(); sb.close();
+  });
+});
+
+test('un tercero que entra a mitad de mano juega la siguiente sin trabarse', async () => {
+  const agent = app();
+  const host = await registerUser(agent, { username: 'host' });
+  const slug = await makeCreator(host);
+  const a = await registerUser(agent, { username: 'ana' });
+  const b = await registerUser(agent, { username: 'luis' });
+  const c = await registerUser(agent, { username: 'eva' });
+  for (const u of [a, b, c]) await setWallet(u.user.id, { ttcC: 5000, bonusC: 0 });
+
+  await withServer(async (url) => {
+    const sh = await connect(url, host.token);
+    const sa = await connect(url, a.token);
+    const sb = await connect(url, b.token);
+    const sc = await connect(url, c.token);
+
+    await openTable(sh, slug);
+    sa.emit('poker:sit', { slug, buyIn: 1000 });
+    await nextEvent(sa, 'poker:state');
+    await openTable(sb, slug);
+    sb.emit('poker:sit', { slug, buyIn: 1000 });
+    await nextEvent(sb, 'poker:state');
+
+    // La mano arranca sola; Eva se sienta con la mano ya en juego.
+    let state = await nextEvent(sa, 'poker:state', poker.AUTO_DEAL_WAIT_MS + 3000);
+    assert.equal(state.phase, 'preflop');
+    await openTable(sc, slug);
+    sc.emit('poker:sit', { slug, buyIn: 1000 });
+    const seated = await nextEvent(sc, 'poker:state');
+    assert.equal(seated.seats.filter((s) => !s.empty).length, 3, 'Eva está sentada');
+
+    // Se termina la mano en curso y la siguiente incluye a los tres.
+    for (let i = 0; i < 30 && state.phase !== 'showdown'; i += 1) {
+      const seat = state.turnSeat;
+      if (seat == null) break;
+      const player = state.seats[seat];
+      const actor = [sa, sb, sc].find((s) => s.id && String(player.userId) === String(s.data?.user?.id))
+        || (String(player.userId) === String(a.user.id) ? sa
+          : String(player.userId) === String(b.user.id) ? sb : sc);
+      const toCall = state.currentBet - player.bet;
+      actor.emit('poker:act', { action: toCall > 0 ? 'call' : 'check' });
+      state = await nextEvent(sh, 'poker:state');
+    }
+    assert.equal(state.phase, 'showdown', 'la mano en curso termina');
+
+    // Entre manos, la mesa baraja sola otra vez y ahora juegan los tres.
+    const next = await nextEvent(sh, 'poker:state', poker.AUTO_DEAL_AFTER_SHOWDOWN_MS + 3000);
+    assert.equal(next.phase, 'preflop', 'arranca la siguiente mano sin que nadie pulse nada');
+    assert.equal(next.handNumber, 2);
+    assert.ok(
+      next.seats.filter((s) => !s.empty && s.holeCount === 2).length >= 2,
+      'los sentados reciben cartas'
+    );
+
+    sh.close(); sa.close(); sb.close(); sc.close();
+  });
+});
+
 test('cerrar la mesa devuelve las fichas y liquida la comisión al administrador', async () => {
   const agent = app();
   const admin = await registerUser(agent, { username: 'jefe' });

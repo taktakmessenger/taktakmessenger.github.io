@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const walletService = require('../services/walletService');
 const manualPaymentService = require('../services/manualPaymentService');
 const asistak = require('../services/asistakService');
+const pokerEventService = require('../services/pokerEventService');
 const assistantClient = require('./assistantClient');
 const assistantThreadService = require('./assistantThreadService');
 
@@ -179,6 +180,91 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'organizar_torneo_poker',
+      description:
+        'Organiza un torneo de POKERTAK: un evento con día, hora, aforo (2 a 9 jugadores), coste de entrada y reparto de premios. No cobra nada al crearlo: el jugador paga la entrada al inscribirse. Por defecto reparte 40% al 1º, 30% al 2º y 20% al 3º, y la casa se queda el 10% de lo recaudado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          titulo: { type: 'string', description: 'Nombre del torneo' },
+          sala: { type: 'string', description: 'slug de la sala (squad) donde se juega' },
+          fecha: {
+            type: 'string',
+            description: 'Fecha y hora de comienzo en formato ISO 8601, p. ej. 2026-11-10T21:00:00Z',
+          },
+          entrada: { type: 'number', description: 'Coste de la entrada en monedas, por jugador' },
+          jugadores: { type: 'number', description: 'Aforo del torneo (2 a 9)' },
+          reparto: {
+            type: 'array',
+            items: { type: 'number' },
+            description:
+              'Parte de lo recaudado para cada puesto, de primero a último (p. ej. [0.4, 0.3, 0.2]). Opcional: por defecto 40/30/20.',
+          },
+          tarifa: {
+            type: 'number',
+            description: 'Parte que se queda la casa, 0 a 1. Opcional: por defecto 0.1 (10%).',
+          },
+        },
+        required: ['titulo', 'sala', 'fecha', 'entrada', 'jugadores'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_torneos_poker',
+      description: 'Lista los torneos de POKERTAK con su estado, inscritos y lo que se repartiría.',
+      parameters: {
+        type: 'object',
+        properties: {
+          estado: {
+            type: 'string',
+            enum: ['scheduled', 'running', 'finished', 'cancelled'],
+            description: 'Filtra por estado. Opcional.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'cerrar_torneo_poker',
+      description:
+        'Termina un torneo en juego y paga los premios. Pasa el ranking por orden de puesto (primero el ganador); si no lo pasas, se usa el orden de inscripción.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id del torneo' },
+          ranking: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'ids de usuario en orden de puesto, del primero al último. Opcional.',
+          },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'cancelar_torneo_poker',
+      description:
+        'Cancela un torneo y devuelve la entrada a todos los inscritos, cada uno en el mismo tipo de moneda con que pagó.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id del torneo' },
+          motivo: { type: 'string', description: 'Motivo de la cancelación' },
+        },
+        required: ['id'],
+      },
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `Eres el asistente interno de TAK TAK, una app de vídeos con monedas TTC.
@@ -190,7 +276,13 @@ Cómo trabajar:
 - Si la petición es ambigua o falta un dato (por ejemplo el id), pregunta en vez de adivinar.
 - Responde en español, breve y claro, en texto normal (no JSON).
 
-Los ids son cadenas largas de MongoDB. Cuando el administrador se refiera a "ese usuario" o "ese vídeo", busca primero para obtener el id correcto.`;
+Los ids son cadenas largas de MongoDB. Cuando el administrador se refiera a "ese usuario" o "ese vídeo", busca primero para obtener el id correcto.
+
+Torneos de POKERTAK:
+- Para organizar uno usa "organizar_torneo_poker". Necesitas título, sala, fecha y hora (ISO 8601), entrada en monedas y aforo (2 a 9). Si el administrador no dice el reparto, se usa 40% al 1º, 30% al 2º y 20% al 3º, y la casa se queda el 10% de lo recaudado; eso es lo mismo que hace PokerStars en sus mesas de 9 jugadores (50/30/20 cuando solo paga el bote entero, 40/30/20 aquí porque el 10% es la tarifa).
+- Antes de crearlo, confirma en tu respuesta el día, la hora, la entrada, el aforo y el reparto, y di cuánto se llevaría cada puesto con el aforo completo.
+- Para terminar uno usa "cerrar_torneo_poker"; si el administrador no da el ranking, se usa el orden de inscripción.
+- Para suspenderlo usa "cancelar_torneo_poker", que devuelve las entradas a todos.`;
 
 /* ------------------------------------------------------------------ */
 /* Ejecución de herramientas                                           */
@@ -365,6 +457,77 @@ async function runTool(name, args) {
     case 'levantar_suspension': {
       await asistak.liftSuspension(args.id);
       return { ok: true };
+    }
+
+    case 'organizar_torneo_poker': {
+      try {
+        const event = await pokerEventService.createEvent({
+          title: args.titulo,
+          adminId: args.adminId,
+          squadSlug: args.sala,
+          scheduledAt: args.fecha,
+          entryCost: args.entrada,
+          maxPlayers: args.jugadores,
+          rakeRate: args.tarifa,
+          split: args.reparto,
+        });
+        return { ok: true, torneo: pokerEventService.publicEvent(event) };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'listar_torneos_poker': {
+      const events = await pokerEventService.listEvents({ status: args.estado, limit: 20 });
+      return {
+        torneos: events.map((e) => ({
+          id: e.id,
+          titulo: e.title,
+          fecha: e.scheduledAt,
+          estado: e.status,
+          entrada: e.entryCost,
+          inscritos: e.seatsTaken,
+          aforo: e.maxPlayers,
+          reparto: e.split,
+          tarifa: e.rakeRate,
+          botePrevisto: e.projectedPrizePool,
+          premiosPrevistos: e.projectedPlaces,
+        })),
+      };
+    }
+
+    case 'cerrar_torneo_poker': {
+      try {
+        const result = await pokerEventService.finishEvent({
+          eventId: args.id,
+          ranking: args.ranking,
+        });
+        return {
+          ok: true,
+          yaCerrado: result.already,
+          ganadores: result.event.results.map((r) => ({
+            puesto: r.place,
+            usuario: r.username,
+            premio: r.amount,
+          })),
+          bote: result.event.prizePool,
+          casa: result.event.houseCut,
+        };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'cancelar_torneo_poker': {
+      try {
+        const result = await pokerEventService.cancelEvent({
+          eventId: args.id,
+          reason: args.motivo,
+        });
+        return { ok: true, yaCancelado: result.already, devueltos: result.refunded?.length || 0 };
+      } catch (err) {
+        return { error: err.message };
+      }
     }
 
     default:

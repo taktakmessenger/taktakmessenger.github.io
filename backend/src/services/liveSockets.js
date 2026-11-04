@@ -1116,6 +1116,13 @@ function initLiveSockets(server) {
       for (const s of sockets) {
         s.emit('poker:state', table.publicState(s.data.user?.id || null));
       }
+      // La mesa se reparte sola entre manos: si ya hay dos jugadores con fichas y
+      // no hay mano en curso, se baraja en un par de segundos. Así nadie se queda
+      // en "esperando tu turno" porque el anfitrión no pulse el botón, y quien se
+      // sienta a mitad de una mano entra en la siguiente sin esperar a nadie.
+      poker.scheduleAutoDeal(hostId, () => {
+        broadcastTable(room, hostId).catch(() => {});
+      });
     }
 
     // Abrir la mesa (o entrar en la ya abierta) y recibir el estado actual.
