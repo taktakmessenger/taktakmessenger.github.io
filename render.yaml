@@ -113,9 +113,10 @@ services:
         sync: false
       # Cobro manual (PayPal, Zinli…). Va con valor y no como secreto porque
       # son los datos de pago que se le muestran al usuario, no credenciales.
-      # `link` es la página de pago a la que el usuario va directo.
+      # `link` es la página de pago a la que el usuario va directo y `payTo` el
+      # dato de pago directo (el correo de Zinli) que se muestra junto al enlace.
       - key: MANUAL_PAYMENT_METHODS
-        value: '[{"id":"paypal","label":"PayPal","link":"https://paypal.me/eliecerdepablos","details":"Paga el importe exacto en PayPal y pega aquí el número de operación."},{"id":"zinli","label":"Zinli","link":"https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt","details":"Recarga con Zinli usando el enlace y pega aquí el número de referencia."}]'
+        value: '[{"id":"paypal","label":"PayPal","link":"https://paypal.me/eliecerdepablos","details":"Paga el importe exacto en PayPal y pega aquí el número de operación."},{"id":"zinli","label":"Zinli","link":"https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt","payTo":"eliecerdepablos@gmail.com","details":"Recarga con Zinli usando el enlace o el pago directo, y pega aquí el número de referencia."}]'
       # Asistente de revisión (opcional). Sin clave queda apagado y el panel
       # manual funciona igual. La base y el modelo deben ir juntos: el modelo es
       # el que entiende esa base (gpt-oss-120b es de Groq, gpt-4o-mini de OpenAI).

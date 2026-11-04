@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const pokerEventService = require('../services/pokerEventService');
+const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -46,10 +47,14 @@ router.post(
   [param('id').isMongoId()],
   validate,
   asyncHandler(async (req, res) => {
+    // El nombre para la inscripción se lee de la base: el token puede ser viejo
+    // y llevar el usuario anterior si el jugador se cambió el nombre. Así la
+    // inscripción queda con el nombre que de verdad tiene hoy.
+    const me = await User.findById(req.user.userId).select('username');
     const event = await pokerEventService.joinEvent({
       eventId: req.params.id,
       userId: req.user.userId,
-      username: req.user.username,
+      username: me?.username || req.user.username,
     });
     res.status(201).json({ event: pokerEventService.publicEvent(event) });
   })

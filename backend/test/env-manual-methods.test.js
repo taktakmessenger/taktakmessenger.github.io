@@ -41,6 +41,20 @@ test('sin enlace queda vacío', () => {
   assert.equal(env.manualPaymentMethods[0].link, '');
 });
 
+test('payTo se conserva y se recorta', () => {
+  const env = loadEnv(JSON.stringify([
+    { id: 'zinli', label: 'Zinli', link: 'https://recargas.zinli.com/x', payTo: '  eliecerdepablos@gmail.com  ' },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].payTo, 'eliecerdepablos@gmail.com');
+});
+
+test('sin payTo queda vacío', () => {
+  const env = loadEnv(JSON.stringify([{ id: 'zinli', label: 'Zinli' }]));
+
+  assert.equal(env.manualPaymentMethods[0].payTo, '');
+});
+
 test('sin métodos configurados la lista queda vacía', () => {
   const env = loadEnv(undefined);
 

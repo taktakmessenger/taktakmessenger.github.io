@@ -184,8 +184,9 @@ function assertPackagesCoverPayout(packages) {
  * `id` es lo que se guarda en la orden; `label` es lo que ve el usuario; `details`
  * son las instrucciones de pago que se le muestran y `link` es un enlace directo
  * a la página de pago (opcional) para que el usuario no tenga que buscar a quién
- * pagar. Sin lista, la tienda no ofrece cobro manual y la única vía son las
- * pasarelas.
+ * pagar. `payTo` es un dato de pago directo (correo, cuenta) que se muestra
+ * además del enlace. Sin lista, la tienda no ofrece cobro manual y la única vía
+ * son las pasarelas.
  */
 function resolveManualPaymentMethods() {
   if (!process.env.MANUAL_PAYMENT_METHODS) return [];
@@ -214,6 +215,9 @@ function resolveManualPaymentMethods() {
       label: String(method.label).slice(0, 60),
       details: method.details ? String(method.details).slice(0, 500) : '',
       link: resolvePaymentLink(method.link),
+      // Dato de pago directo (un correo de Zinli, una cuenta…). Se muestra
+      // junto al enlace para quien prefiere pagar sin abrir otra página.
+      payTo: method.payTo ? String(method.payTo).trim().slice(0, 120) : '',
     };
   });
 }

@@ -385,7 +385,7 @@ function initLiveSockets(server) {
 
   // The handshake is the only place a socket proves who it is. An anonymous
   // socket is allowed to watch but not to post.
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {
       socket.data.user = null;
@@ -393,7 +393,15 @@ function initLiveSockets(server) {
     }
     try {
       const payload = jwt.verify(token, env.jwtSecret);
-      socket.data.user = { id: payload.userId, username: payload.username };
+      // El nombre se lee de la base, no del token: el token es viejo y arrastra
+      // el usuario que había al iniciar sesión. Tras un cambio de nombre, el
+      // chat del directo mostraba el antiguo mientras el perfil ya mostraba el
+      // nuevo. El id del token manda; el nombre se refresca aquí.
+      const user = await User.findById(payload.userId).select('username');
+      socket.data.user = {
+        id: payload.userId,
+        username: user?.username || payload.username,
+      };
       return next();
     } catch {
       return next(new Error('Token inválido'));

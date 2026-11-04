@@ -296,6 +296,24 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       </div>
                     </>
                   )}
+                  {/* Pago directo: el correo o la cuenta a la que enviar el
+                      dinero sin salir de la app. Se ofrece junto al enlace
+                      porque muchos usuarios pagan desde otra app y solo
+                      necesitan el dato para pegarlo. */}
+                  {selectedManual?.payTo && (
+                    <div className="manual-pay-copy">
+                      <code className="manual-pay-value">{selectedManual.payTo}</code>
+                      <button
+                        type="button"
+                        className="btn-ghost manual-pay-copy-btn"
+                        onClick={() =>
+                          copyValue(`payTo:${selectedManual.id}`, selectedManual.payTo)
+                        }
+                      >
+                        {copied === `payTo:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
+                      </button>
+                    </div>
+                  )}
                   <input
                     type="text"
                     placeholder="Número de referencia"

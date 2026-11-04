@@ -69,6 +69,38 @@ test('a viewer receives a message another viewer posted', async () => {
   });
 });
 
+// El token es viejo: lleva el nombre que el usuario tenía al iniciar sesión. Si
+// después se cambia el nombre, el chat del directo debe mostrar el nuevo (el de
+// la base de datos), no el que quedó dentro del token.
+test('el chat del directo muestra el nombre actual, no el del token', async () => {
+  const agent = app();
+  const sender = await registerUser(agent);
+  const listener = await registerUser(agent);
+
+  const User = require('../src/models/User');
+  await User.updateOne({ username: sender.username }, { $set: { username: 'nombre_nuevo' } });
+
+  await withServer(async (url) => {
+    const a = await connect(url, sender.token);
+    const b = await connect(url, listener.token);
+    try {
+      a.emit('live:join', { room: 'sala-rename' });
+      b.emit('live:join', { room: 'sala-rename' });
+      await nextEvent(a, 'live:joined');
+      await nextEvent(b, 'live:joined');
+
+      const received = nextEvent(b, 'live:message');
+      a.emit('live:message', { room: 'sala-rename', text: 'hola' });
+
+      const msg = await received;
+      assert.equal(msg.user, 'nombre_nuevo', 'debe usar el nombre de la base, no el del token');
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
+});
+
 test('an anonymous socket cannot post messages', async () => {
   const agent = app();
   await registerUser(agent);
