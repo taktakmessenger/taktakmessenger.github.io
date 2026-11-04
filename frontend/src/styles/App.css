@@ -1985,18 +1985,47 @@
 
 .call-actions {
   display: flex;
-  gap: 0.7rem;
-  padding-top: 1rem;
+  /* En un móvil la fila tiene que caber sin cortarse. `wrap` es la red de
+     seguridad: si aun con botones compactos no entran (pantallas de 320 px),
+     bajan a una segunda fila en vez de salirse por los lados. */
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 100%;
+  padding-top: 0.8rem;
 }
 
 .call-btn {
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  padding: 0.7rem 1.3rem;
+  /* Cuadrado de 44 px: el mínimo táctil recomendado en móvil. Como casi todos
+     son iconos, el ancho queda fijo y la fila no se desborda. */
+  min-width: 2.75rem;
+  height: 2.75rem;
+  padding: 0 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  line-height: 1;
   color: var(--text);
   background: var(--surface-2);
   backdrop-filter: blur(8px);
+}
+
+/* En un móvil la pantalla de llamada no debe llevar márgenes anchos: cada
+   píxel de ancho es un botón que cabe en la fila de abajo sin partirse. */
+@media (max-width: 640px) {
+  .call-overlay {
+    padding: 1rem 0.7rem;
+  }
+
+  .call-actions {
+    gap: 0.35rem;
+  }
 }
 
 .call-btn.accept {
