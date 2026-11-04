@@ -59,35 +59,32 @@ export default function Splash({ fading = false }) {
           {/* Corte por el que asoma la semilla. */}
           <path d="M40 52 Q52 40 66 34 L70 44 Q56 50 48 60 Z" fill="#8a5a06" opacity="0.35" />
 
-          {/* Semilla de mango dorada saliendo del queso. Forma de mango: punta
-              arriba (donde iría el tallo), cuerpo redondeado y asimétrico, más
-              lleno por el lado derecho. Antes era una elipse y parecía un huevo. */}
-          <g transform="rotate(-22 58 34)">
+          {/* Semilla de mango dorada saliendo del queso. Forma de mango:
+              alargada y curvada, con la punta abajo a la izquierda, como el
+              emoji 🥭. Antes era una elipse y parecía un huevo. */}
+          <g transform="rotate(-22 58 34) translate(58 34) scale(0.66) translate(-58 -34)">
             <path
-              d="M57 11 C 66 12 73 19 75 30 C 76 40 72 50 63 55 C 54 58 46 52 44 41 C 42 31 46 18 57 11 Z"
+              d="M66 8 C 80 14 87 31 81 48 C 75 65 57 75 39 71 C 31 69 28 61 33 52 C 40 40 52 34 57 22 C 60 15 62 11 66 8 Z"
               fill="url(#splash-seed)"
               stroke="#a86e08"
               strokeWidth="2.5"
               strokeLinejoin="round"
             />
             {/* Brillo del lomo izquierdo. */}
-            <path
-              d="M50 21 C 55 17 62 19 65 26 C 59 21 53 21 50 24 Z"
-              fill="#fffbe0"
-              opacity="0.75"
-            />
-            {/* Sombra del cachete derecho, para dar volumen de mango. */}
-            <path
-              d="M69 33 C 72 42 68 51 61 54 C 68 48 70 40 69 33 Z"
-              fill="#a86e08"
-              opacity="0.22"
+            <ellipse
+              cx="52"
+              cy="27"
+              rx="5"
+              ry="9"
+              transform="rotate(-28 52 27)"
+              fill="url(#splash-seed-shine)"
             />
             {/* Rabito del mango. */}
             <path
-              d="M56 11 C 56 8 57 6 59 5"
+              d="M66 9 C 67 5 70 3 73 2"
               fill="none"
               stroke="#8a5a06"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
             />
           </g>
