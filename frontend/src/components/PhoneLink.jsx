@@ -219,6 +219,11 @@ export default function PhoneLink({ onDone, onSkip, skipLabel = 'Ahora no', auto
           >
             Usar otro número
           </button>
+          {onSkip && (
+            <button type="button" className="btn-link" onClick={onSkip}>
+              {skipLabel}
+            </button>
+          )}
         </form>
       )}
     </div>

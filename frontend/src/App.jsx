@@ -18,7 +18,6 @@ import AuthForm from './components/AuthForm';
 import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
 import Settings from './components/Settings';
-import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
 import ConnectionBanner from './components/ConnectionBanner';
 import VoiceRoomBar from './components/VoiceRoomBar';
@@ -149,11 +148,6 @@ function Shell() {
   // Mensajes para que abra el hilo directamente en vez de dejar al usuario
   // buscándolo a mano en la bandeja.
   const [chatTarget, setChatTarget] = useState(null);
-  // Invitación a vincular el teléfono, una sola vez por cuenta. Muchas cuentas
-  // se crean por correo y quedan sin número: sin teléfono no se las puede llamar
-  // desde el marcador. Se muestra una vez y se recuerda el descarte para no
-  // insistir en cada inicio de sesión.
-  const [phonePrompt, setPhonePrompt] = useState(false);
   // Vídeo que hay que abrir al arrancar, cuando se llega por un enlace
   // compartido (`/?video=<id>`). Se pasa al feed, que lo coloca el primero.
   const [focusVideoId, setFocusVideoId] = useState(null);
@@ -167,12 +161,6 @@ function Shell() {
 
   // Anything other than the feed needs a session.
   const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'pago-exito'].includes(view);
-
-  useEffect(() => {
-    if (!user || user.phoneVerified) return;
-    const seen = localStorage.getItem(`taktak_phone_prompt_${user.id}`);
-    if (!seen) setPhonePrompt(true);
-  }, [user]);
 
   // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
   // hasta que el flujo termina. Sin levantarlo aquí, el alta que acaba de crear
@@ -212,11 +200,6 @@ function Shell() {
       setView('feed');
     }
   }, []);
-
-  function dismissPhonePrompt() {
-    if (user) localStorage.setItem(`taktak_phone_prompt_${user.id}`, '1');
-    setPhonePrompt(false);
-  }
 
   // Al haber sesión, se reenvía al servidor la suscripción push que este
   // navegador ya tuviera. El servidor guarda qué dispositivo pertenece a qué
@@ -455,27 +438,6 @@ function Shell() {
           de las vistas, para que la sala no se desmonte al navegar. Cuando se
           minimiza, la barra de arriba sigue mostrando el estado. */}
       {user && <LiveStage />}
-
-      {/* Se ofrece una sola vez tras entrar con correo o Google, porque esas
-          cuentas no tienen teléfono y sin él no se las puede llamar por número.
-          Es opcional y descartable: obligar a dar el teléfono para usar la app
-          espantaría a quien solo quiere ver vídeos.
-          En WhaTaka no se dibuja: es un modal que bloquea la pantalla entera, y
-          ahí vive el marcador, que es justo donde se llama a otra persona. Antes
-          tapaba el marcador y el selector de país, así que parecían muertos. Ya
-          se ofrece sobre el feed al entrar. */}
-      {phonePrompt && user && !user.phoneVerified && view !== 'messages' && (
-        <div className="modal" role="dialog" aria-modal="true">
-          <div className="modal-content">
-            <h3>¿Añades tu teléfono?</h3>
-            <PhoneLink
-              onDone={dismissPhonePrompt}
-              onSkip={dismissPhonePrompt}
-              skipLabel="Ahora no"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Aviso de conexión: si la señal en vivo se cae, se dice en pantalla en
           vez de dejar la app muda. El socket se recupera solo, así que el aviso
