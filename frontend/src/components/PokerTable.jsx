@@ -416,29 +416,61 @@ export default function PokerTable({ slug, onClose }) {
 }
 
 // Botones de entrada, con los importes de la mesa. La entrada se cobra en el
-// servidor; aquí solo se elige el importe.
+// servidor; aquí solo se elige el importe. El mínimo (10) es accesible para
+// cualquiera, incluso con el bono de bienvenida, y cada jugador puede subir el
+// importe a su gusto hasta el máximo de la mesa.
 function SitButtons({ emit, slug, state, busy, setBusy, setError }) {
-  const min = state?.minBuyIn ?? 50;
+  const min = state?.minBuyIn ?? 10;
   const max = state?.maxBuyIn ?? 20000;
-  const options = [min, Math.min(min * 5, max), max].filter((v, i, a) => a.indexOf(v) === i);
+  const [amount, setAmount] = useState(min);
+
+  // Si cambia el mínimo de la mesa (o llega el estado por primera vez), el
+  // importe se recoloca dentro de rango para no ofrecer un valor inválido.
+  useEffect(() => {
+    setAmount((current) => Math.min(Math.max(current, min), max));
+  }, [min, max]);
+
+  const quick = [min, Math.min(min * 10, max), Math.min(min * 50, max), max]
+    .filter((v, i, a) => a.indexOf(v) === i);
+
+  const sit = (value) => {
+    setBusy(true);
+    setError('');
+    emit('poker:sit', { slug, buyIn: value });
+    setTimeout(() => setBusy(false), 400);
+  };
+
   return (
     <>
-      {options.map((amount) => (
-        <button
-          key={amount}
-          type="button"
-          className="ptak-btn primary"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError('');
-            emit('poker:sit', { slug, buyIn: amount });
-            setTimeout(() => setBusy(false), 400);
-          }}
-        >
-          Sentarse con {formatCoins(amount)}
-        </button>
-      ))}
+      <div className="ptak-buyin-quick">
+        {quick.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className="ptak-btn"
+            disabled={busy}
+            onClick={() => setAmount(value)}
+          >
+            {formatCoins(value)}
+          </button>
+        ))}
+      </div>
+      <div className="ptak-buyin-custom">
+        <label htmlFor="ptak-buyin-range">Entrada: 🪙 {formatCoins(amount)}</label>
+        <input
+          id="ptak-buyin-range"
+          type="range"
+          min={min}
+          max={max}
+          step={min}
+          value={amount}
+          onChange={(e) => setAmount(Number(e.target.value))}
+          aria-label="Importe de la entrada"
+        />
+      </div>
+      <button type="button" className="ptak-btn primary" disabled={busy} onClick={() => sit(amount)}>
+        Sentarse con {formatCoins(amount)}
+      </button>
     </>
   );
 }

@@ -48,6 +48,24 @@ test('sin monedas suficientes no se sienta y no se cobra nada', async () => {
   assert.equal(poker.getTable('host-1').seatedCount(), 0, 'no queda asiento ocupado');
 });
 
+test('la entrada mínima son 10 monedas y el jugador puede subir el importe', async () => {
+  // Con el bono de bienvenida (100) cualquiera puede sentarse en el mínimo.
+  const low = await makeUser('pobre', 100);
+  const minPlayer = await poker.sitDown('host-min', low.id, 'pobre', 10);
+  assert.equal(minPlayer.stack, 10);
+
+  // Por debajo del mínimo se rechaza (en otra mesa, para no chocar con el asiento).
+  const cheap = await makeUser('tacano', 100);
+  await assert.rejects(() => poker.sitDown('host-cheap', cheap.id, 'tacano', 5), /entrada mínima es 10/i);
+
+  // Y dentro del rango, elige cuánto pone: 500, no el mínimo.
+  const rich = await makeUser('rico', 2000);
+  const bigPlayer = await poker.sitDown('host-min', rich.id, 'rico', 500);
+  assert.equal(bigPlayer.stack, 500, 'se sienta con el importe que elige');
+  const after = await User.findById(rich.id).select('wallet');
+  assert.equal(after.wallet.ttcC, 1500);
+});
+
 test('al levantarse vuelven las fichas al monedero', async () => {
   const user = await makeUser('eva', 1000);
   await poker.sitDown('host-1', user.id, 'eva', 500);

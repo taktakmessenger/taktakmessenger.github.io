@@ -7846,6 +7846,44 @@
   justify-content: center;
 }
 
+/* Entrada: atajos de importe, control para subirlo y botón de sentarse. */
+.ptak-buyin {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.ptak-buyin-quick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ptak-buyin-quick .ptak-btn {
+  flex: 1;
+  min-width: 64px;
+}
+
+.ptak-buyin-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ptak-buyin-custom label {
+  font-size: 13px;
+  color: #ffe98a;
+  text-align: center;
+}
+
+.ptak-buyin-custom input[type='range'] {
+  width: 100%;
+  accent-color: #ffd94a;
+}
+
 .ptak-actions .ptak-btn {
   flex: 1;
   min-width: 96px;

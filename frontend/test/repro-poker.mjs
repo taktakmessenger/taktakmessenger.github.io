@@ -91,8 +91,22 @@ try {
   console.log('caras host:', await host.page.locator('.ptak-face').count());
   console.log('botones head host:', await host.page.locator('.ptak-head-status .ptak-btn').count());
 
-  // Sentarse (botón de buy-in mínimo).
-  const sitBtn = host.page.locator('.ptak-buyin .ptak-btn').first();
+  // Entrada: mínimo, control de subida y atajos.
+  console.log('mínimo de entrada:', (await host.page.locator('.ptak-buyin-custom label').textContent().catch(() => '')).trim());
+  console.log('atajos de entrada:', await host.page.locator('.ptak-buyin-quick .ptak-btn').count());
+  const range = host.page.locator('.ptak-buyin-custom input[type=range]');
+  if (await range.count()) {
+    console.log('rango entrada:', await range.getAttribute('min'), '->', await range.getAttribute('max'));
+    await range.fill('500');
+    await host.page.waitForTimeout(300);
+    console.log('importe subido:', (await host.page.locator('.ptak-buyin-custom label').textContent()).trim());
+    await host.page.locator('.ptak-buyin-quick .ptak-btn').nth(1).click();
+    await host.page.waitForTimeout(200);
+    console.log('importe elegido (atajo):', (await host.page.locator('.ptak-buyin-custom label').textContent()).trim());
+  }
+
+  // Sentarse (botón de buy-in elegido).
+  const sitBtn = host.page.locator('.ptak-buyin > .ptak-btn.primary');
   if (await sitBtn.count()) { await sitBtn.click(); await host.page.waitForTimeout(1500); }
   console.log('tras sentarse, asientos:', await host.page.locator('.ptak-seat').count());
   console.log('asientos ocupados:', await host.page.locator('.ptak-seat:not(.empty)').count());
@@ -102,7 +116,9 @@ try {
   // El invitado también se sienta.
   await guest.page.getByRole('tab', { name: 'Sala de juegos' }).click();
   await guest.page.waitForTimeout(2000);
-  const gsit = guest.page.locator('.ptak-buyin .ptak-btn').first();
+  const grange = guest.page.locator('.ptak-buyin-custom input[type=range]');
+  if (await grange.count()) { await grange.fill('100'); await guest.page.waitForTimeout(200); }
+  const gsit = guest.page.locator('.ptak-buyin > .ptak-btn.primary');
   if (await gsit.count()) { await gsit.click(); await guest.page.waitForTimeout(1800); }
   console.log('ocupados tras guest:', await host.page.locator('.ptak-seat:not(.empty)').count());
 

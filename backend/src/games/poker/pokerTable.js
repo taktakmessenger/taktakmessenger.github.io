@@ -24,7 +24,7 @@ function round2(n) {
 }
 
 class PokerTable {
-  constructor({ id, maxSeats = 6, smallBlind = 5, bigBlind = 10, minBuyIn = 200, maxBuyIn = 20000, rakeRate = 0, deckFactory = null } = {}) {
+  constructor({ id, maxSeats = 6, smallBlind = 5, bigBlind = 10, minBuyIn = 10, maxBuyIn = 20000, rakeRate = 0, deckFactory = null } = {}) {
     this.id = id || `poker-${++tableSeq}`;
     this.maxSeats = maxSeats;
     this.smallBlind = smallBlind;
