@@ -82,8 +82,17 @@ try {
   await guest.page.waitForTimeout(3000);
   console.log('guest en directo:', await guest.page.locator('.live-stage').count());
 
+  // Barra inferior del directo: el botón de sala de juegos debe ir junto al micro.
+  const foot = await host.page.$$eval('.live-stage-controls .live-ctrl', (els) => els.map((e) => {
+    const r = e.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), label: e.getAttribute('aria-label') || e.textContent.trim() };
+  }));
+  console.log('barra inferior:', JSON.stringify(foot));
+  console.log('icono ases:', await host.page.locator('.live-ctrl-aces .ace-card').count());
+  await host.page.screenshot({ path: `${OUT}-barra.png` });
+
   // Abrir la sala de juegos.
-  await host.page.getByRole('tab', { name: 'Sala de juegos' }).click();
+  await host.page.getByRole('button', { name: 'Sala de juegos' }).click();
   await host.page.waitForTimeout(2500);
   await host.page.screenshot({ path: `${OUT}-host-abierta.png`, fullPage: false });
   console.log('mesa host:', await host.page.locator('.ptak-overlay').count());
@@ -114,7 +123,7 @@ try {
   console.log('repartidor:', await host.page.locator('.ptak-dealer').count());
 
   // El invitado también se sienta.
-  await guest.page.getByRole('tab', { name: 'Sala de juegos' }).click();
+  await guest.page.getByRole('button', { name: 'Sala de juegos' }).click();
   await guest.page.waitForTimeout(2000);
   const grange = guest.page.locator('.ptak-buyin-custom input[type=range]');
   if (await grange.count()) { await grange.fill('100'); await guest.page.waitForTimeout(200); }

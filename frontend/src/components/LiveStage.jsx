@@ -184,28 +184,6 @@ export default function LiveStage() {
         </div>
 
         <div className="live-stage-tools">
-          {/* Ventana activa: el directo o la mesa de POKERTAK. Son los dos
-              botones de arriba al centro, como se pidió. */}
-          <div className="live-view-switch" role="tablist" aria-label="Ventana del directo">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'live'}
-              className={`live-view-btn ${view === 'live' ? 'active' : ''}`}
-              onClick={() => setView('live')}
-            >
-              Live
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'games'}
-              className={`live-view-btn ${view === 'games' ? 'active' : ''}`}
-              onClick={() => setView('games')}
-            >
-              Sala de juegos
-            </button>
-          </div>
           {/* Diseños: Panel (anfitrión grande) y Rejilla (todos iguales), los dos
               de TikTok. El botón alterna y el icono enseña el actual. */}
           <button
@@ -315,26 +293,41 @@ export default function LiveStage() {
 
       <footer className="live-stage-controls">
         {!spectate && (
-          <>
-            <button
-              type="button"
-              className={`live-ctrl ${muted ? 'on' : ''}`}
-              onClick={toggleMute}
-              aria-pressed={muted}
-              aria-label={muted ? 'Activar micrófono' : 'Silenciar micrófono'}
-            >
-              {muted ? '🔇' : '🎤'}
-            </button>
-            <button
-              type="button"
-              className={`live-ctrl ${camOff ? 'on' : ''}`}
-              onClick={toggleCamera}
-              aria-pressed={camOff}
-              aria-label={camOff ? 'Encender cámara' : 'Apagar cámara'}
-            >
-              {camOff ? '📷' : '🎥'}
-            </button>
-          </>
+          <button
+            type="button"
+            className={`live-ctrl ${muted ? 'on' : ''}`}
+            onClick={toggleMute}
+            aria-pressed={muted}
+            aria-label={muted ? 'Activar micrófono' : 'Silenciar micrófono'}
+          >
+            {muted ? '🔇' : '🎤'}
+          </button>
+        )}
+        {/* La sala de juegos vive aquí, junto al micrófono. El icono son dos
+            ases cruzados en forma de V. */}
+        <button
+          type="button"
+          className={`live-ctrl games ${view === 'games' ? 'active' : ''}`}
+          onClick={() => setView((v) => (v === 'games' ? 'live' : 'games'))}
+          aria-pressed={view === 'games'}
+          aria-label="Sala de juegos"
+          title="Sala de juegos"
+        >
+          <svg className="live-ctrl-aces" viewBox="0 0 32 24" aria-hidden="true" focusable="false">
+            <text x="11" y="19" textAnchor="middle" className="ace-card" transform="rotate(-20 11 20)">A</text>
+            <text x="21" y="19" textAnchor="middle" className="ace-card" transform="rotate(20 21 20)">A</text>
+          </svg>
+        </button>
+        {!spectate && (
+          <button
+            type="button"
+            className={`live-ctrl ${camOff ? 'on' : ''}`}
+            onClick={toggleCamera}
+            aria-pressed={camOff}
+            aria-label={camOff ? 'Encender cámara' : 'Apagar cámara'}
+          >
+            {camOff ? '📷' : '🎥'}
+          </button>
         )}
         <button
           type="button"

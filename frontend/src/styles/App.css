@@ -2910,13 +2910,6 @@
   margin-left: auto;
 }
 
-/* Conmutador Live / Sala de juegos: al centro de la cabecera. */
-.live-stage-head .live-view-switch {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
 .live-stage-title strong {
   font-size: 0.98rem;
   white-space: nowrap;
@@ -3104,6 +3097,30 @@
 .live-ctrl.end {
   background: rgba(255, 45, 141, 0.2);
   border-color: var(--pink);
+}
+
+/* Sala de juegos: dos ases cruzados en V. El SVG se inclina un poco hacia
+   dentro para que las dos cartas se lean como una V. */
+.live-ctrl-aces {
+  width: 30px;
+  height: 24px;
+  display: block;
+}
+
+.live-ctrl-aces .ace-card {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 700;
+  fill: #fff;
+}
+
+.live-ctrl.games.active {
+  background: rgba(255, 217, 74, 0.22);
+  border-color: #ffd94a;
+}
+
+.live-ctrl.games.active .live-ctrl-aces .ace-card {
+  fill: #ffd94a;
 }
 
 .live-ctrl:active {
@@ -7980,38 +7997,3 @@
   }
 }
 
-/* Conmutador Live / Sala de juegos, arriba al centro del directo. */
-.live-view-switch {
-  display: inline-flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.live-view-btn {
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.8);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.live-view-btn.active {
-  background: linear-gradient(180deg, #ffd94a, #f0a91b);
-  color: #3a2600;
-}
-
-/* En móvil el conmutador se acorta para no pisar la ficha del anfitrión ni los
-   botones de la derecha. */
-@media (max-width: 600px) {
-  .live-view-btn {
-    padding: 5px 10px;
-    font-size: 12px;
-  }
-}
