@@ -15,6 +15,7 @@ import {
 import PokerTakLogo from './PokerTakLogo';
 import AsistakLogo from './AsistakLogo';
 import LiveChat from './LiveChat';
+import TournamentPanel from './TournamentPanel';
 
 // Carta de la baraja: "As" -> A♠. Se pintan rojas las de corazones y diamantes.
 const SUIT_ICON = { s: '♠', h: '♥', d: '♦', c: '♣' };
