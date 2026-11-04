@@ -284,6 +284,26 @@ const env = {
   welcomeBonusCoins: Number(process.env.WELCOME_BONUS_COINS ?? 100),
   maxVideoBytes: Number(process.env.MAX_VIDEO_BYTES ?? 50 * 1024 * 1024),
 
+  // POKERTAK: sala privada de póker de cada usuario, dentro del directo.
+  //
+  // Es un juego con monedas de la app, no dinero real. La casa (el
+  // administrador) se queda `pokerRake` de cada bote jugado, en el tipo de
+  // moneda con que se pagó: la parte de monedas pagadas es ingreso real y la de
+  // monedas de regalo vuelve al circuito de regalo, igual que en los regalos.
+  poker: {
+    // Comisión de la casa: 1% de cada bote, igual en todas las manos, hasta que
+    // se cierre el directo o la sala de juegos.
+    rake: Number(process.env.POKER_RAKE ?? 0.01),
+    // Asientos de la mesa. Con seis cabe la mesa ovalada y sigue siendo legible
+    // en un móvil; es el tamaño de la mesa de POKERTAK.
+    maxSeats: Number(process.env.POKER_MAX_SEATS ?? 6),
+    smallBlind: Number(process.env.POKER_SMALL_BLIND ?? 5),
+    bigBlind: Number(process.env.POKER_BIG_BLIND ?? 10),
+    // Entrada mínima y máxima, en monedas de la app.
+    minBuyIn: Number(process.env.POKER_MIN_BUYIN ?? 200),
+    maxBuyIn: Number(process.env.POKER_MAX_BUYIN ?? 20000),
+  },
+
   // Where uploaded originals and their HLS renditions are written. Served
   // read-only at /uploads.
   uploadsDir: process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads'),
@@ -389,6 +409,21 @@ const env = {
   manualAutoApprove: process.env.MANUAL_AUTO_APPROVE === 'true',
   manualAutoApproveMinConfidence: Number(process.env.MANUAL_AUTO_APPROVE_MIN_CONFIDENCE ?? 0.9),
   manualAutoApproveMaxUsd: Number(process.env.MANUAL_AUTO_APPROVE_MAX_USD ?? 15),
+
+  // Asistak: moderación de directos y de la sala de juegos.
+  //
+  // Vigila los comentarios del directo y de POKERTAK. Avisa en el propio hilo y,
+  // si el usuario reincide, le pone una suspensión temporal sin acceso a
+  // directos ni a la mesa. Va encendido por defecto porque es la defensa que se
+  // pidió; se puede apagar con ASISTAK_ENABLED=false.
+  asistak: {
+    enabled: process.env.ASISTAK_ENABLED !== 'false',
+    // Días que dura la suspensión.
+    suspensionDays: Number(process.env.ASISTAK_SUSPENSION_DAYS ?? 3),
+    // Avisos antes de suspender. Con 2, el primer comentario solo avisa y el
+    // segundo ya suspende: un desliz no expulsa, insistir sí.
+    warnBeforeSuspend: Number(process.env.ASISTAK_WARN_BEFORE_SUSPEND ?? 2),
+  },
 
   // CORS origin used for the Socket.IO handshake, which does not go through
   // the Express CORS middleware.

@@ -67,7 +67,16 @@ export default function LiveChat({ room, onGift, hidden = false }) {
     >
       <ul className="live-chat-list" ref={listRef}>
         {messages.map((msg, i) => (
-          <li key={`${msg.at}-${i}`} className={msg.system ? 'live-chat-system' : ''}>
+          <li
+            key={`${msg.at}-${i}`}
+            className={
+              msg.asistak
+                ? 'live-chat-system live-chat-asistak'
+                : msg.system
+                  ? 'live-chat-system'
+                  : ''
+            }
+          >
             {!msg.system && <strong>@{msg.user}</strong>} {msg.text}
           </li>
         ))}

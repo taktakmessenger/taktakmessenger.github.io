@@ -149,6 +149,21 @@ const userSchema = new mongoose.Schema(
     // de nada. Se puede apagar para quien trabaja en silencio y prefiere ver
     // solo la notificación.
     callRingtone: { type: Boolean, default: true },
+
+    // Moderación de Asistak, el asistente administrativo. Cuando el asistente
+    // detecta faltas de respeto en un directo o en la sala de juegos, puede
+    // dejar una suspensión temporal: mientras `until` esté en el futuro, el
+    // usuario no puede entrar a un directo ni sentarse en POKERTAK. Se guarda el
+    // motivo y quién la puso para poder auditarla (y levantarla a mano).
+    moderation: {
+      suspendedUntil: { type: Date, default: null },
+      suspensionReason: { type: String, default: null, maxlength: 300 },
+      suspendedBy: { type: String, enum: ['asistak', 'admin', null], default: null },
+      // Avisos que ha dado el asistente en los directos/salas. Solo se cuenta
+      // para que Asistak escale a suspensión si reincide, no se enseña en la UI.
+      warnings: { type: Number, default: 0 },
+      lastWarningAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
@@ -220,6 +235,13 @@ userSchema.statics.existsByUsername = function existsByUsername(username) {
 // unverifiable and would make the gate trivial to bypass.
 userSchema.methods.isAdult = function isAdult() {
   return this.ageVerification?.status === 'verified';
+};
+
+// ¿Está suspendido ahora mismo? La suspensión es temporal: una fecha pasada ya
+// no cuenta, así que el usuario vuelve solo sin que nadie tenga que levantarla.
+userSchema.methods.isSuspended = function isSuspended() {
+  const until = this.moderation?.suspendedUntil;
+  return Boolean(until && new Date(until).getTime() > Date.now());
 };
 
 userSchema.set('toJSON', {

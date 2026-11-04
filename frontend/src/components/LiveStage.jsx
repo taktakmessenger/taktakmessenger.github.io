@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { orderParticipants, guestColumns, stageColumns } from '../lib/liveGrid';
 import LiveChat from './LiveChat';
 import LiveGifts from './LiveGifts';
+import PokerTable from './PokerTable';
 
 // Ventana de una persona en el directo. Es un `<video>` que engancha su stream
 // cuando existe; si la cámara está apagada (o todavía no llegó), se pinta el
@@ -84,6 +85,9 @@ export default function LiveStage() {
   const [giftsOpen, setGiftsOpen] = useState(false);
   // El último regalo recibido, para la animación breve encima del vídeo.
   const [flash, setFlash] = useState(null);
+  // Ventana activa del directo: el propio directo ("live") o la mesa de póker
+  // ("games"). Los dos botones de arriba al centro conmutan entre ellas.
+  const [view, setView] = useState('live');
   // Diseño de la ventana, como en TikTok: "panel" deja al anfitrión grande
   // arriba; "rejilla" pone a todos en cuadrícula del mismo tamaño. Se recuerda
   // entre directos para no tener que elegirlo cada vez.
@@ -131,6 +135,12 @@ export default function LiveStage() {
   const hostIsSelf = host && String(host.id) === selfId;
   const hostStream = host ? videoStreamFor(host.id) : null;
 
+  // La sala de juegos es la mesa de POKERTAK. Se monta encima del directo; al
+  // cerrarla se vuelve a "Live".
+  if (view === 'games') {
+    return <PokerTable slug={room.slug} onClose={() => setView('live')} />;
+  }
+
   const guestTotal = guests.length;
   const layoutIsGrid = layout === 'grid';
   const columns = layoutIsGrid ? stageColumns((host ? 1 : 0) + guestTotal) : guestColumns(guestTotal);
@@ -174,6 +184,28 @@ export default function LiveStage() {
         </div>
 
         <div className="live-stage-tools">
+          {/* Ventana activa: el directo o la mesa de POKERTAK. Son los dos
+              botones de arriba al centro, como se pidió. */}
+          <div className="live-view-switch" role="tablist" aria-label="Ventana del directo">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'live'}
+              className={`live-view-btn ${view === 'live' ? 'active' : ''}`}
+              onClick={() => setView('live')}
+            >
+              Live
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'games'}
+              className={`live-view-btn ${view === 'games' ? 'active' : ''}`}
+              onClick={() => setView('games')}
+            >
+              Sala de juegos
+            </button>
+          </div>
           {/* Diseños: Panel (anfitrión grande) y Rejilla (todos iguales), los dos
               de TikTok. El botón alterna y el icono enseña el actual. */}
           <button

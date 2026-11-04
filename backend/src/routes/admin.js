@@ -10,6 +10,7 @@ const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
 const manualPaymentService = require('../services/manualPaymentService');
+const asistakService = require('../services/asistakService');
 const adminAssistant = require('../services/adminAssistant');
 const assistantThreadService = require('../services/assistantThreadService');
 const { auth, requireAdmin } = require('../middleware/auth');
@@ -101,6 +102,38 @@ router.delete(
   asyncHandler(async (req, res) => {
     await assistantThreadService.clear(req.user.userId);
     res.json({ cleared: true });
+  })
+);
+
+// Suspensiones de Asistak. El administrador puede suspender a mano a alguien
+// (por ejemplo, tras un reporte) y levantar la suspensión antes de que caduque.
+router.post(
+  '/users/:id/suspend',
+  [
+    param('id').isMongoId(),
+    body('days').optional().isInt({ min: 1, max: 365 }),
+    body('reason').optional().trim().isLength({ max: 300 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await asistakService.suspendUser({
+      userId: req.params.id,
+      days: req.body.days || 3,
+      reason: req.body.reason || '',
+      by: 'admin',
+    });
+    if (!result) throw new HttpError(404, 'Usuario no encontrado');
+    res.json(result);
+  })
+);
+
+router.delete(
+  '/users/:id/suspend',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    await asistakService.liftSuspension(req.params.id);
+    res.json({ lifted: true });
   })
 );
 

@@ -19,6 +19,10 @@ const transactionSchema = new mongoose.Schema(
         'platform',
         'platform_bonus',
         'bonus',
+        // Comisión de la casa en POKERTAK. La parte pagada es ingreso real; la
+        // de regalo se queda en el circuito de monedas promocionales.
+        'poker_rake',
+        'poker_rake_bonus',
       ],
       required: true,
     },

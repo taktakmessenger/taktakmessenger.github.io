@@ -3,6 +3,8 @@ const env = require('../config/env');
 const messages = require('./messageService');
 const pushService = require('./pushService');
 const sfu = require('./sfuService');
+const poker = require('./pokerService');
+const asistak = require('./asistakService');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Squad = require('../models/Squad');
@@ -34,6 +36,13 @@ function conversationRoom(conversationId) {
 // must not be forgeable.
 function voiceRoom(roomName) {
   return `voice:${roomName}`;
+}
+
+// Sala de sockets de una mesa de POKERTAK. Va aparte de la de voz para que el
+// estado de la mesa (que incluye las cartas de cada jugador) no llegue a los
+// espectadores del directo que no están jugando.
+function pokerRoom(roomName) {
+  return `poker:${roomName}`;
 }
 
 // Quién está conectado a cada sala de voz: `voiceRoom -> Map(userId -> user)`.
@@ -83,6 +92,54 @@ function guestCount(room, hostId) {
 // enseña TikTok junto al ojo).
 function broadcastViewers(io, room) {
   io.to(voiceRoom(room)).emit('voice:viewers', { count: spectatorCount(room) });
+}
+
+// Asistak vigila un comentario del directo. Si falta al respeto, deja su aviso
+// en el propio hilo (para que todo el mundo lo vea) y, si el usuario reincide,
+// lo suspende. La suspensión se anuncia también en la sala para que quede claro
+// por qué esa persona ya no está.
+//
+// Se lanza sin `await` desde el handler: el chat no puede esperar a la IA. Si el
+// usuario estaba en la sala de voz, se le saca al momento para que la suspensión
+// tenga efecto ya, no cuando cierre la app.
+function moderateLiveComment(io, room, user, text) {
+  if (!env.asistak.enabled) return;
+  asistak
+    .moderateComment({ userId: user.id, text })
+    .then((verdict) => {
+      if (!verdict || verdict.action === 'none') return;
+      io.to(room).emit('live:message', {
+        system: true,
+        asistak: true,
+        text: asistak.warningText(verdict.username, verdict.severity),
+        at: Date.now(),
+      });
+      if (verdict.action === 'suspend') {
+        io.to(room).emit('live:message', {
+          system: true,
+          asistak: true,
+          text: asistak.suspensionText(verdict.username, env.asistak.suspensionDays),
+          at: Date.now(),
+        });
+        // Sacar de la sala de voz a quien acaba de ser suspendido: si no, la
+        // suspensión solo se notaría al intentar volver a entrar.
+        evictSuspendedFromVoice(io, user.id);
+      }
+    })
+    .catch(() => {});
+}
+
+// Saca de su sala de voz a un usuario suspendido, en todos sus sockets.
+function evictSuspendedFromVoice(io, userId) {
+  const id = String(userId);
+  for (const socket of io.sockets.sockets.values()) {
+    if (String(socket.data?.user?.id) !== id) continue;
+    if (!socket.data?.voiceRoom) continue;
+    socket.emit('voice:error', {
+      error: 'Asistak te ha suspendido del directo por faltar al respeto.',
+    });
+    leaveVoiceRoom(io, socket);
+  }
 }
 
 // ¿Puede este usuario entrar al chat en vivo de esta sala? Las salas atadas a un
@@ -138,6 +195,11 @@ function leaveVoiceRoom(io, socket, notify = true) {
       // vuelve a decidir (y así una sala puede pasar de malla a SFU cuando el
       // SFU esté disponible).
       voiceRoomModes.delete(room);
+      // Cerrar el directo cierra también su mesa de POKERTAK: liquida la
+      // comisión y devuelve las fichas. Si no, la mesa quedaría abierta en
+      // memoria con las monedas de los jugadores dentro.
+      const hostId = voiceRoomHosts.get(room);
+      if (hostId) poker.closeTable(hostId).catch(() => {});
       voiceRoomHosts.delete(room);
     }
   }
@@ -438,6 +500,12 @@ function initLiveSockets(server) {
         text: body,
         at: now,
       });
+
+      // Asistak vigila el comentario. Va después de publicarlo para que el
+      // aviso aparezca como una línea más del hilo y el mensaje no se pierda
+      // mientras el modelo decide. No se espera aquí: el chat no debe frenarse
+      // por la moderación.
+      moderateLiveComment(io, safeRoom, user, body);
     });
 
     // Gift animation broadcast. The coin transfer itself goes through the HTTP
@@ -737,6 +805,13 @@ function initLiveSockets(server) {
     // sala de un creator privado.
     socket.on('voice:join', async ({ slug, mesh, spectate } = {}) => {
       if (!me || typeof slug !== 'string' || !slug.trim()) return;
+      // Asistak: una cuenta suspendida no entra a ningún directo, ni siquiera
+      // como espectador. Se comprueba en el servidor porque la UI se puede
+      // saltar.
+      const access = await asistak.checkAccess(me.id);
+      if (!access.allowed) {
+        return socket.emit('voice:error', { error: access.reason || 'No puedes entrar al directo' });
+      }
       // Espectador: entra a ver y comentar, sin publicar cámara ni micrófono. No
       // ocupa plaza de la rejilla, así que no cuenta para el aforo de invitados.
       const asSpectator = spectate === true;
@@ -1009,11 +1084,161 @@ function initLiveSockets(server) {
       });
     }
 
+    // ------------------------------------------------------------------
+    // POKERTAK: sala de póker privada del anfitrión del directo
+    // ------------------------------------------------------------------
+    //
+    // La mesa vive en el servidor (`pokerService`): las fichas se compran con
+    // monedas al sentarse y se devuelven al levantarse. El cliente nunca manda
+    // cartas ni apuestas «a pelo»: solo la acción y, cuando toca, el importe; el
+    // servidor decide si es legal. El estado que se emite a cada socket se
+    // construye por usuario (`publicState`), de modo que nadie ve las cartas de
+    // otro hasta el showdown.
+
+    // Resuelve la mesa del anfitrión a partir del slug del creator, con las
+    // mismas comprobaciones de acceso que la sala de voz: la mesa de póker no
+    // puede ser una puerta trasera a un creator privado.
+    async function pokerTableFor(slug) {
+      const squad = await Squad.findOne({ slug: String(slug).trim().toLowerCase() });
+      if (!squad || !squad.voiceRoom) return null;
+      if (squad.visibility === 'private' && !squad.isMember(me.id)) return null;
+      return { hostId: String(squad.owner), room: squad.voiceRoom };
+    }
+
+    // Emite a cada socket de la mesa su propia vista (cada uno ve sus cartas y
+    // no las de los demás). Los sockets de POKERTAK tienen su propia sala
+    // (`poker:room`), separada de la de voz: así los espectadores del directo no
+    // reciben estados de una mesa en la que no están.
+    async function broadcastTable(room, hostId) {
+      const table = poker.getTable(hostId);
+      if (!table) return;
+      const sockets = await io.in(pokerRoom(room)).fetchSockets();
+      for (const s of sockets) {
+        s.emit('poker:state', table.publicState(s.data.user?.id || null));
+      }
+    }
+
+    // Abrir la mesa (o entrar en la ya abierta) y recibir el estado actual.
+    socket.on('poker:open', async ({ slug } = {}) => {
+      if (!me || typeof slug !== 'string') return;
+      // Asistak: la suspensión también cierra la sala de juegos.
+      const access = await asistak.checkAccess(me.id);
+      if (!access.allowed) {
+        return socket.emit('poker:error', { error: access.reason || 'No puedes entrar a la mesa' });
+      }
+      try {
+        const info = await pokerTableFor(slug);
+        if (!info) return socket.emit('poker:error', { error: 'Mesa no encontrada' });
+        const table = poker.getOrCreateTable(info.hostId);
+        socket.data.pokerRoom = info.room;
+        socket.data.pokerHost = info.hostId;
+        socket.join(pokerRoom(info.room));
+        socket.emit('poker:state', table.publicState(me.id));
+      } catch {
+        socket.emit('poker:error', { error: 'No se pudo abrir la mesa' });
+      }
+    });
+
+    // Sentarse. La entrada se cobra del monedero aquí, en el servidor.
+    socket.on('poker:sit', async ({ slug, buyIn } = {}) => {
+      if (!me) return;
+      try {
+        // Asistak: la suspensión impide sentarse, aunque la mesa ya estuviera
+        // abierta de antes.
+        const access = await asistak.checkAccess(me.id);
+        if (!access.allowed) {
+          return socket.emit('poker:error', { error: access.reason || 'No puedes sentarte' });
+        }
+        const info = await pokerTableFor(slug);
+        if (!info) return socket.emit('poker:error', { error: 'Mesa no encontrada' });
+        await poker.sitDown(info.hostId, me.id, me.username, buyIn);
+        socket.data.pokerRoom = info.room;
+        socket.data.pokerHost = info.hostId;
+        socket.join(pokerRoom(info.room));
+        await broadcastTable(info.room, info.hostId);
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'No se pudo sentar' });
+      }
+    });
+
+    // Levantarse: devuelve las fichas al monedero.
+    socket.on('poker:leave', async () => {
+      if (!me || !socket.data.pokerHost) return;
+      try {
+        await poker.standUp(socket.data.pokerHost, me.id);
+        await broadcastTable(socket.data.pokerRoom, socket.data.pokerHost);
+        socket.leave(pokerRoom(socket.data.pokerRoom));
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'No se pudo salir' });
+      }
+    });
+
+    // Empezar una mano nueva. La comisión es la misma en todas las manos: la fija
+    // el servicio al arrancar (`env.poker.rake`, 1%).
+    socket.on('poker:start', async () => {
+      if (!me || !socket.data.pokerHost) return;
+      try {
+        const table = poker.getTable(socket.data.pokerHost);
+        if (!table) return socket.emit('poker:error', { error: 'No hay mesa abierta' });
+        poker.startHand(socket.data.pokerHost);
+        await broadcastTable(socket.data.pokerRoom, socket.data.pokerHost);
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'No se pudo empezar la mano' });
+      }
+    });
+
+    // Actuar: retirarse, pasar, igualar, subir o ir all-in.
+    socket.on('poker:act', async ({ action, amount } = {}) => {
+      if (!me || !socket.data.pokerHost) return;
+      try {
+        const table = poker.getTable(socket.data.pokerHost);
+        if (!table) return socket.emit('poker:error', { error: 'No hay mesa abierta' });
+        const before = table.phase;
+        table.act(me.id, action, amount);
+        // La comisión solo se cobra cuando la mano termina de verdad, no en cada
+        // acción: `showdown` la deja calculada en `table.rake`.
+        if (table.phase === 'showdown' && before !== 'showdown') {
+          poker.accrueRake(socket.data.pokerHost, table.rake);
+        }
+        await broadcastTable(socket.data.pokerRoom, socket.data.pokerHost);
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'Acción no válida' });
+      }
+    });
+
+    // Cerrar la sala: liquida la comisión al administrador y devuelve las fichas
+    // a todos. Es lo que pasa al cerrar el directo o la sala de juegos. Solo
+    // puede cerrarla el anfitrión: si lo pudiera hacer cualquier jugador sentado,
+    // cualquiera cortaría la partida (y dispararía la liquidación) a los demás.
+    socket.on('poker:close', async () => {
+      if (!me || !socket.data.pokerHost) return;
+      if (String(socket.data.pokerHost) !== String(me.id)) {
+        return socket.emit('poker:error', { error: 'Solo el anfitrión puede cerrar la mesa' });
+      }
+      try {
+        await poker.closeTable(socket.data.pokerHost);
+        io.to(pokerRoom(socket.data.pokerRoom)).emit('poker:closed', {});
+        socket.data.pokerRoom = null;
+        socket.data.pokerHost = null;
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'No se pudo cerrar la mesa' });
+      }
+    });
+
     // Al desconectar hay que sacarlo de la sala: si no, los demás seguirían
     // intentando hablar con un socket muerto y el usuario aparecería "dentro"
-    // para siempre.
+    // para siempre. En POKERTAK, además, se le devuelven las fichas: si no, sus
+    // monedas quedarían dentro de una mesa en memoria a la que ya no puede volver.
     socket.on('disconnect', () => {
       if (me && socket.data.voiceRoom) leaveVoiceRoom(io, socket);
+      if (me && socket.data.pokerHost) {
+        const hostId = socket.data.pokerHost;
+        const room = socket.data.pokerRoom;
+        poker
+          .standUp(hostId, me.id)
+          .then(() => broadcastTable(room, hostId))
+          .catch(() => {});
+      }
     });
 
   });

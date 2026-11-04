@@ -67,6 +67,19 @@ async function creditWithdrawable(userId, { ttcR = 0, bonusC = 0 } = {}, session
 }
 
 /**
+ * Devuelve monedas gastables a un usuario, cada tipo a su cubo. Se usa al salir
+ * de una mesa de POKERTAK: las fichas respaldadas por monedas pagadas vuelven
+ * como pagadas y las de regalo como regalo, para no convertir una en otra.
+ */
+async function creditSpendable(userId, { ttcC = 0, bonusC = 0 } = {}, session) {
+  const inc = {};
+  if (ttcC) inc['wallet.ttcC'] = ttcC;
+  if (bonusC) inc['wallet.bonusC'] = bonusC;
+  if (Object.keys(inc).length === 0) return User.findById(userId);
+  return User.findOneAndUpdate({ _id: userId }, { $inc: inc }, { new: true, session });
+}
+
+/**
  * Resolve a gift to the amount to charge.
  *
  * When `giftId` is supplied the price comes from the catalogue, never from the
@@ -306,6 +319,7 @@ module.exports = {
   getPlatformEarnings,
   listTransactions,
   debitSpendable,
+  creditSpendable,
   creditWithdrawable,
   round2,
 };

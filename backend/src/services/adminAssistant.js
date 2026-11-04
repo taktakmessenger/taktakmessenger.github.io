@@ -5,6 +5,7 @@ const Report = require('../models/Report');
 const Transaction = require('../models/Transaction');
 const walletService = require('../services/walletService');
 const manualPaymentService = require('../services/manualPaymentService');
+const asistak = require('../services/asistakService');
 const assistantClient = require('./assistantClient');
 const assistantThreadService = require('./assistantThreadService');
 
@@ -147,6 +148,35 @@ const TOOLS = [
       name: 'revisar_pagos',
       description: 'Pide al asistente de pagos una sugerencia para cada orden manual pendiente.',
       parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'suspender_usuario',
+      description:
+        'Suspende a un usuario unos días sin poder entrar a directos ni a la sala de juegos de POKERTAK. Requiere el id del usuario y un motivo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id del usuario' },
+          dias: { type: 'number', description: 'Días de suspensión (por defecto 3)' },
+          motivo: { type: 'string', description: 'Motivo de la suspensión' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'levantar_suspension',
+      description: 'Quita la suspensión de un usuario para que pueda volver a los directos y a POKERTAK.',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string', description: 'id del usuario' } },
+        required: ['id'],
+      },
     },
   },
 ];
@@ -318,6 +348,23 @@ async function runTool(name, args) {
     case 'revisar_pagos': {
       const result = await manualPaymentService.reviewPending({ limit: 20 });
       return { configurado: result.configured, revisadas: result.reviewed.length };
+    }
+
+    case 'suspender_usuario': {
+      const days = Number.isFinite(Number(args.dias)) && Number(args.dias) > 0 ? Number(args.dias) : 3;
+      const result = await asistak.suspendUser({
+        userId: args.id,
+        days,
+        reason: args.motivo,
+        by: 'admin',
+      });
+      if (!result) return { error: 'Usuario no encontrado' };
+      return { ok: true, usuario: result.username, dias: result.days, hasta: result.until };
+    }
+
+    case 'levantar_suspension': {
+      await asistak.liftSuspension(args.id);
+      return { ok: true };
     }
 
     default:
