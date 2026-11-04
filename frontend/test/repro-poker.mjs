@@ -156,6 +156,19 @@ try {
   console.log('cartas en asientos:', await host.page.locator('.ptak-seat-cards .ptak-card').count());
   console.log('botón repartir guest (debe ser 0):', await guest.page.locator('.ptak-deal .ptak-btn').count());
 
+  // Las tres acciones de siempre deben estar SIEMPRE en pantalla: retirarse,
+  // igualar/pasar y subir (o all-in). Cuando no toca, apagadas, no ausentes.
+  for (const [who, u] of [['host', host], ['guest', guest]]) {
+    const btns = await u.page.locator('.ptak-actions .ptak-btn').allInnerTexts();
+    console.log(`acciones ${who}:`, JSON.stringify(btns));
+    if (btns.length !== 3) throw new Error(`${who}: se esperaban 3 acciones y hay ${btns.length}`);
+  }
+  const turnHasRaise = await host.page.locator('.ptak-actions .ptak-btn.raise').count()
+    + await guest.page.locator('.ptak-actions .ptak-btn.raise').count();
+  console.log('quien tiene el turno puede subir (1 esperado):', turnHasRaise);
+  const waitingBtns = await guest.page.locator('.ptak-actions .ptak-btn').evaluateAll((els) => els.map((e) => e.disabled));
+  console.log('acciones del que espera (todas apagadas):', JSON.stringify(waitingBtns));
+
   await host.page.screenshot({ path: `${OUT}-host-sentado.png`, fullPage: false });
   await host.page.screenshot({ path: `${OUT}-host-jugando.png`, fullPage: false });
 

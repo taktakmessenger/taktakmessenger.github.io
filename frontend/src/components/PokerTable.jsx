@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useVoiceRoom } from '../contexts/VoiceRoomContext';
@@ -286,10 +287,11 @@ export default function PokerTable({ slug, onClose }) {
         </div>
       </header>
 
-      {/* El menú va aquí, fuera de la cabecera: como la cabecera recorta lo que
-          sobresale (`overflow: hidden`), dentro se quedaba por detrás de la mesa
-          y no se veía. Aquí flota por encima, anclado a la esquina derecha. */}
-      {menuOpen && (
+      {/* El menú se dibuja en un portal colgado de <body>, fuera de la mesa y de
+          la cabecera. Así ningún contenedor con `overflow: hidden` puede
+          recortarlo (era lo que lo dejaba por detrás del tapete) ni ninguna capa
+          con `transform` puede romper su `position: fixed`. */}
+      {menuOpen && createPortal(
         <div className="ptak-menu" role="menu" ref={menuPanelRef}>
           {voiceRoomInfo && (
             <button
@@ -309,7 +311,8 @@ export default function PokerTable({ slug, onClose }) {
           >
             ✕ Cerrar la mesa
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {error && <p className="ptak-error" role="alert">{error}</p>}
@@ -392,22 +395,46 @@ export default function PokerTable({ slug, onClose }) {
                 </button>
               </div>
             )}
+            {/* Las tres acciones de siempre, siempre en el mismo sitio: retirarse,
+                igualar/pasar y subir (o all-in). Cuando no es tu turno se ven
+                apagadas en vez de desaparecer, para que la mesa no cambie de
+                forma bajo el dedo. */}
             <div className="ptak-actions">
-              <button type="button" className="ptak-btn" disabled={!actions.canFold || busy} onClick={() => send('fold')}>
+              <button
+                type="button"
+                className="ptak-btn fold"
+                disabled={!actions.canFold || busy}
+                onClick={() => send('fold')}
+              >
                 Retirarse
               </button>
-              {actions.canCheck && (
-                <button type="button" className="ptak-btn" disabled={busy} onClick={() => send('check')}>
-                  Pasar
+              <button
+                type="button"
+                className="ptak-btn call"
+                disabled={!(actions.canCheck || actions.canCall) || busy}
+                onClick={() => send(actions.canCall ? 'call' : 'check')}
+              >
+                {actions.canCall ? `Igualar ${formatCoins(actions.toCall)}` : 'Pasar'}
+              </button>
+              {/* Subir y all-in comparten hueco: si hay sitio para una subida de
+                  verdad se enseña el control de importe; si no, el atajo de
+                  all-in. Así el botón de la derecha nunca falta. */}
+              {actions.canRaise ? (
+                <button
+                  type="button"
+                  className="ptak-btn primary raise"
+                  disabled={busy}
+                  onClick={() => send('raise', raiseTo)}
+                >
+                  Subir a {formatCoins(raiseTo)}
                 </button>
-              )}
-              {actions.canCall && (
-                <button type="button" className="ptak-btn" disabled={busy} onClick={() => send('call')}>
-                  Igualar {formatCoins(actions.toCall)}
-                </button>
-              )}
-              {actions.canAllIn && (
-                <button type="button" className="ptak-btn allin" disabled={busy} onClick={() => send('all-in')}>
+              ) : (
+                <button
+                  type="button"
+                  className="ptak-btn allin"
+                  disabled={!actions.canAllIn || busy}
+                  onClick={() => send('all-in')}
+                >
                   All-in
                 </button>
               )}
@@ -423,14 +450,6 @@ export default function PokerTable({ slug, onClose }) {
                   onChange={(e) => setRaiseTo(Number(e.target.value))}
                   aria-label="Importe de la subida"
                 />
-                <button
-                  type="button"
-                  className="ptak-btn primary"
-                  disabled={busy}
-                  onClick={() => send('raise', raiseTo)}
-                >
-                  Subir a {formatCoins(raiseTo)}
-                </button>
               </div>
             )}
             {!actions.yourTurn && !canDeal && (
