@@ -7415,11 +7415,14 @@
   padding: 6px 10px;
 }
 
+/* El panel flota sobre la mesa, anclado a la esquina derecha, justo bajo la
+   cabecera. Como la cabecera recorta lo que sobresale, vive fuera de ella y por
+   eso necesita su propio `position: fixed` y una capa por encima del tapete. */
 .ptak-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
+  position: fixed;
+  right: 10px;
+  top: 52px;
+  z-index: 80;
   min-width: 190px;
   display: flex;
   flex-direction: column;

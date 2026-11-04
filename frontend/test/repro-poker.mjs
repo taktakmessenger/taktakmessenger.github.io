@@ -100,6 +100,22 @@ try {
   console.log('caras host:', await host.page.locator('.ptak-face').count());
   console.log('botones head host:', await host.page.locator('.ptak-head-status .ptak-btn').count());
 
+  // El menú de tres puntos debe quedar POR ENCIMA de la mesa (antes se veía
+  // recortado por detrás).
+  await host.page.getByRole('button', { name: 'Más opciones de la mesa' }).click();
+  await host.page.waitForTimeout(400);
+  const menuTop = await host.page.evaluate(() => {
+    const menu = document.querySelector('.ptak-menu');
+    if (!menu) return null;
+    const r = menu.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { encima: menu.contains(top), z: getComputedStyle(menu).zIndex, visible: r.width > 0 && r.height > 0 };
+  });
+  console.log('menú sobre la mesa:', JSON.stringify(menuTop));
+  await host.page.screenshot({ path: `${OUT}-menu.png` });
+  await host.page.getByRole('button', { name: 'Más opciones de la mesa' }).click();
+  await host.page.waitForTimeout(300);
+
   // Entrada: mínimo, control de subida y atajos.
   console.log('mínimo de entrada:', (await host.page.locator('.ptak-buyin-custom label').textContent().catch(() => '')).trim());
   console.log('atajos de entrada:', await host.page.locator('.ptak-buyin-quick .ptak-btn').count());

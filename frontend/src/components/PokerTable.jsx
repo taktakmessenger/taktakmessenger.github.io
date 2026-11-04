@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useVoiceRoom } from '../contexts/VoiceRoomContext';
@@ -146,6 +146,30 @@ export default function PokerTable({ slug, onClose }) {
   // Menú de tres puntos de la cabecera: en un móvil no caben los botones
   // sueltos, así que el chat y el cerrar viven aquí dentro.
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtnRef = useRef(null);
+  const menuPanelRef = useRef(null);
+
+  // El menú de tres puntos se cierra al tocar fuera, con Escape o al cambiar el
+  // tamaño. El panel vive fuera de la cabecera porque esta recorta lo que
+  // sobresale (`overflow: hidden`) y el desplegable quedaba tapado por la mesa.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const close = () => setMenuOpen(false);
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const onDown = (e) => {
+      if (menuBtnRef.current?.contains(e.target)) return;
+      if (menuPanelRef.current?.contains(e.target)) return;
+      close();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('resize', close);
+    };
+  }, [menuOpen]);
 
   // Al abrir la mesa se pide el estado. Al cerrar, se avisa al servidor para que
   // devuelva las fichas al monedero.
@@ -247,7 +271,7 @@ export default function PokerTable({ slug, onClose }) {
         <div className="ptak-head-status">
           <span className="ptak-phase">{phaseLabel(state?.phase)}</span>
           {state && <span className="ptak-pot">🪙 {formatCoins(state.pot)}</span>}
-          <div className="ptak-menu-wrap">
+          <div className="ptak-menu-wrap" ref={menuBtnRef}>
             <button
               type="button"
               className="ptak-btn ghost ptak-menu-btn"
@@ -258,31 +282,35 @@ export default function PokerTable({ slug, onClose }) {
             >
               ⋯
             </button>
-            {menuOpen && (
-              <div className="ptak-menu" role="menu">
-                {voiceRoomInfo && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`ptak-menu-item${chatOpen ? ' on' : ''}`}
-                    onClick={() => { setChatOpen((open) => !open); setMenuOpen(false); }}
-                  >
-                    💬 {chatOpen ? 'Ocultar comentarios' : 'Ver comentarios'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="ptak-menu-item"
-                  onClick={() => { setMenuOpen(false); onClose(); }}
-                >
-                  ✕ Cerrar la mesa
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </header>
+
+      {/* El menú va aquí, fuera de la cabecera: como la cabecera recorta lo que
+          sobresale (`overflow: hidden`), dentro se quedaba por detrás de la mesa
+          y no se veía. Aquí flota por encima, anclado a la esquina derecha. */}
+      {menuOpen && (
+        <div className="ptak-menu" role="menu" ref={menuPanelRef}>
+          {voiceRoomInfo && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`ptak-menu-item${chatOpen ? ' on' : ''}`}
+              onClick={() => { setChatOpen((open) => !open); setMenuOpen(false); }}
+            >
+              💬 {chatOpen ? 'Ocultar comentarios' : 'Ver comentarios'}
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className="ptak-menu-item"
+            onClick={() => { setMenuOpen(false); onClose(); }}
+          >
+            ✕ Cerrar la mesa
+          </button>
+        </div>
+      )}
 
       {error && <p className="ptak-error" role="alert">{error}</p>}
 
