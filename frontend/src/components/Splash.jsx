@@ -1,43 +1,78 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
-// Pantalla de bienvenida de TAK TAK. Es lo primero que se ve al abrir la app,
-// así que cumple dos funciones: presentar la marca y tapar el hueco mientras
-// AuthContext comprueba si la sesión guardada sigue siendo válida.
+// Pantalla de bienvenida de TAK TAK. Es lo primero que se ve al abrir la app:
+// presenta la marca (el queso con la semilla de mango dorada) y tapa el hueco
+// mientras AuthContext comprueba si la sesión guardada sigue siendo válida.
 //
-// El temporizador es un mínimo, no una espera fija: si la sesión tarda más, el
-// splash se queda; si ya está lista, desaparece en cuanto se cumple el mínimo.
-export default function Splash({ minDuration = 1100 }) {
-  const [hidden, setHidden] = useState(false);
-
+// Quien manda en el tiempo es App: aquí solo se pinta y se aplica el fundido
+// cuando `fading` llega en true, para que no se vaya antes de que la sesión
+// esté lista. El mismo dibujo existe también en el HTML (ver index.html), que
+// se ve al instante y evita el destello blanco del primer pintado; aquí se
+// retira ese duplicado en cuanto React monta.
+export default function Splash({ fading = false }) {
   useEffect(() => {
-    const timer = setTimeout(() => setHidden(true), minDuration);
-    return () => clearTimeout(timer);
-  }, [minDuration]);
+    document.getElementById('boot-splash')?.remove();
+  }, []);
 
   return (
-    <div className={`splash ${hidden ? 'splash--hidden' : ''}`} aria-hidden={hidden}>
+    <div className={`splash ${fading ? 'splash--hidden' : ''}`} aria-hidden={fading}>
       <div className="splash-glow" />
 
       <div className="splash-logo">
-        <svg viewBox="0 0 64 64" width="92" height="92" role="img" aria-label="TAK TAK">
+        <svg
+          viewBox="0 0 100 100"
+          width="132"
+          height="132"
+          role="img"
+          aria-label="TAK TAK: un trozo de queso con una semilla de mango dorada"
+        >
           <defs>
-            <linearGradient id="splash-mark" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#ff2d8d" />
-              <stop offset="55%" stopColor="#b04bfb" />
-              <stop offset="100%" stopColor="#00f7d4" />
+            <linearGradient id="splash-cheese" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#ffd94a" />
+              <stop offset="1" stopColor="#f0a91b" />
             </linearGradient>
+            <linearGradient id="splash-seed" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#ffe98a" />
+              <stop offset="0.45" stopColor="#f7c531" />
+              <stop offset="1" stopColor="#c8860a" />
+            </linearGradient>
+            <radialGradient id="splash-seed-shine" cx="0.35" cy="0.3" r="0.7">
+              <stop offset="0" stopColor="#fffbe0" stopOpacity="0.95" />
+              <stop offset="1" stopColor="#fffbe0" stopOpacity="0" />
+            </radialGradient>
           </defs>
-          <g fill="url(#splash-mark)">
-            <rect x="12" y="19" width="18" height="4.6" rx="2.3" />
-            <rect x="18.7" y="19" width="4.6" height="26" rx="2.3" />
-            <rect x="34" y="19" width="18" height="4.6" rx="2.3" />
-            <rect x="40.7" y="19" width="4.6" height="26" rx="2.3" />
+
+          {/* Trozo de queso: cuña con la punta arriba a la izquierda. */}
+          <path
+            d="M18 74 L20 40 L74 26 L84 60 Q84 74 70 76 Z"
+            fill="url(#splash-cheese)"
+            stroke="#b9790a"
+            strokeWidth="3"
+            strokeLinejoin="round"
+          />
+          {/* Agujeros del queso. */}
+          <circle cx="34" cy="60" r="6" fill="#e0980f" opacity="0.75" />
+          <circle cx="52" cy="66" r="4.5" fill="#e0980f" opacity="0.7" />
+          <circle cx="64" cy="48" r="5" fill="#e0980f" opacity="0.7" />
+          <circle cx="30" cy="46" r="3.5" fill="#e0980f" opacity="0.6" />
+
+          {/* Corte por el que asoma la semilla. */}
+          <path d="M40 52 Q52 40 66 34 L70 44 Q56 50 48 60 Z" fill="#8a5a06" opacity="0.35" />
+
+          {/* Semilla de mango dorada saliendo del queso. */}
+          <g transform="rotate(-22 58 34)">
+            <ellipse cx="58" cy="32" rx="15" ry="20" fill="url(#splash-seed)" stroke="#a86e08" strokeWidth="2.5" />
+            <ellipse cx="52" cy="24" rx="6" ry="8" fill="url(#splash-seed-shine)" />
           </g>
+
+          {/* Brillo dorado alrededor de la semilla. */}
+          <path d="M76 20 l2.4 5.6 5.6 2.4 -5.6 2.4 -2.4 5.6 -2.4 -5.6 -5.6 -2.4 5.6 -2.4 z" fill="#ffe98a" />
+          <path d="M30 18 l1.6 3.6 3.6 1.6 -3.6 1.6 -1.6 3.6 -1.6 -3.6 -3.6 -1.6 3.6 -1.6 z" fill="#ffe98a" opacity="0.9" />
         </svg>
       </div>
 
       <h1 className="splash-word">TAK TAK</h1>
-      <p className="splash-tagline">Crea, regala, gana</p>
+      <p className="splash-tagline">Somos la PEPA DEL QUESO</p>
 
       <div className="splash-dots" aria-hidden="true">
         <span />

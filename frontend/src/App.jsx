@@ -159,6 +159,26 @@ function Shell() {
   const { user, loading } = useAuth();
   const { startCall } = useCall();
 
+  // Pantalla de bienvenida: se ve un mínimo de 5,5 s (con la marca y el eslogan
+  // ya en pantalla) y no se retira hasta que la sesión esté resuelta. Primero
+  // llega el fundido (`splashFading`) y, cuando termina, se desmonta. Si la
+  // comprobación de sesión tarda más de la cuenta, el splash se queda: nunca se
+  // ve la app a medias.
+  const SPLASH_MIN_MS = 5500;
+  const [splashMinDone, setSplashMinDone] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSplashMinDone(true), SPLASH_MIN_MS);
+    return () => clearTimeout(t);
+  }, []);
+  const splashVisible = !splashGone;
+  const splashFading = splashMinDone && !loading;
+  useEffect(() => {
+    if (!splashFading) return undefined;
+    const t = setTimeout(() => setSplashGone(true), 700);
+    return () => clearTimeout(t);
+  }, [splashFading]);
+
   // Anything other than the feed needs a session.
   const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'pago-exito'].includes(view);
   // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
@@ -250,10 +270,6 @@ function Shell() {
     },
     [user]
   );
-
-  if (loading) {
-    return <Splash />;
-  }
 
   function renderView() {
     // Pedir una vista protegida sin sesión abre el formulario de acceso ya
@@ -403,6 +419,12 @@ function Shell() {
   return (
     <div className={`app ${view === 'feed' ? 'app-feed' : ''}`}>
       <main className="main-content">{renderView()}</main>
+
+      {/* La pantalla de bienvenida va por encima de todo hasta que termina su
+          tiempo mínimo y la sesión está lista. Es un solo splash (el morado con
+          el queso): el dibujo que se ve al instante es el de index.html, que se
+          retira aquí al montar, así que nunca se solapan dos. */}
+      {splashVisible && <Splash fading={splashFading} />}
 
       {/* La barra inferior no se muestra en la portada: no hay a dónde ir
           todavía y las pestañas ofrecerían pantallas que piden sesión. */}
