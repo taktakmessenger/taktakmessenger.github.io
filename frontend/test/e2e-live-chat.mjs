@@ -123,7 +123,7 @@ try {
   await viewer.page.waitForTimeout(2500);
 
   const spectatorLabel = await viewer.page
-    .locator('.live-stage-title small')
+    .locator('.live-host-text small')
     .textContent()
     .catch(() => '');
   check('el espectador ve el directo', (await viewer.page.locator('.live-stage').count()) === 1);

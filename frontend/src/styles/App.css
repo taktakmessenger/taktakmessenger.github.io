@@ -2837,6 +2837,77 @@
   flex: 1;
 }
 
+/* Ficha del anfitrión en la cabecera, como la de TikTok: avatar redondo con
+   anillo de directo, nombre y, debajo, la insignia EN VIVO y cuánta gente mira. */
+.live-host-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.live-host-avatar {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 0 4px var(--pink);
+}
+
+.live-host-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.live-host-text strong {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-host-text small {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+/* Cuántos espectadores están mirando. */
+.live-viewers {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Rótulo del rol cuando entras como espectador. */
+.live-role {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #0d0a1a;
+  background: var(--accent);
+  white-space: nowrap;
+}
+
+/* Botones de la derecha de la cabecera (diseño, comentarios, minimizar). */
+.live-stage-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
 .live-stage-title strong {
   font-size: 0.98rem;
   white-space: nowrap;
@@ -2974,6 +3045,25 @@
 
 .live-grid .live-tile {
   aspect-ratio: 3 / 4;
+}
+
+/* Diseño "Rejilla" (el otro de TikTok): el anfitrión deja de ser la ventana
+   grande y pasa a ser una más de la cuadrícula, así que se anula la altura fija
+   que tiene en el diseño de panel y todos comparten la misma proporción. */
+.live-grid.all-equal .live-tile.host {
+  height: auto;
+  width: auto;
+  flex-shrink: 1;
+  aspect-ratio: 3 / 4;
+}
+
+/* Aviso cuando el anfitrión está solo: invita a compartir el enlace. */
+.live-stage-hint {
+  margin: 0.4rem 0 0;
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
 }
 
 .live-stage-controls {

@@ -62,6 +62,29 @@ function voiceMembers(room) {
   return members ? [...members.values()] : [];
 }
 
+// Cuántos espectadores hay ahora mismo en la sala: los que entraron a ver y
+// comentar, sin publicar cámara ni micrófono. Se cuenta por persona (el mapa ya
+// es por usuario), así que dos pestañas del mismo espectador no inflan el
+// número. El anfitrión y los invitados no cuentan aquí: ellos se ven en la
+// rejilla.
+function spectatorCount(room) {
+  return voiceMembers(room).filter((p) => p.spectate).length;
+}
+
+// Cuántos invitados publican ahora mismo (sin contar al anfitrión ni a los
+// espectadores). Es lo que se compara con el aforo del directo.
+function guestCount(room, hostId) {
+  const host = String(hostId ?? '');
+  return voiceMembers(room).filter((p) => !p.spectate && String(p.id) !== host).length;
+}
+
+// Avisa a toda la sala de cuántos espectadores hay. Se manda el número, no la
+// lista: al invitado no le sirve saber quién mira, solo cuántos son (es lo que
+// enseña TikTok junto al ojo).
+function broadcastViewers(io, room) {
+  io.to(voiceRoom(room)).emit('voice:viewers', { count: spectatorCount(room) });
+}
+
 // ¿Puede este usuario entrar al chat en vivo de esta sala? Las salas atadas a un
 // TAK Creator heredan su visibilidad: una privada solo se abre a sus miembros.
 // El nombre de la sala es público (sale en la lista de creators), así que sin
@@ -100,9 +123,13 @@ function leaveVoiceRoom(io, socket, notify = true) {
       (socketId) => io.sockets.sockets.get(socketId)?.data?.user?.id?.toString() === userId
     );
     if (!stillHere) {
+      const leaving = members.get(userId);
       members.delete(userId);
       if (notify) {
         io.to(voiceRoom(room)).emit('voice:peer-left', { userId });
+        // Si quien se va era espectador, el recuento baja: se avisa a los que
+        // quedan para que el número junto al ojo no se quede congelado.
+        if (leaving?.spectate) broadcastViewers(io, room);
       }
     }
     if (members.size === 0) {
@@ -741,9 +768,7 @@ function initLiveSockets(server) {
         // cualquier modo: es un límite de producto (la rejilla no da para más),
         // no de infraestructura. Los espectadores no ocupan plaza: solo miran.
         if (!isHost && !asSpectator && env.liveGuestLimit > 0) {
-          const guests = voiceMembers(room).filter(
-            (p) => String(p.id) !== hostId && !p.spectate
-          ).length;
+          const guests = guestCount(room, hostId);
           if (guests >= env.liveGuestLimit) {
             return socket.emit('voice:error', {
               error: `El directo está lleno (${env.liveGuestLimit} invitados)`,
@@ -817,6 +842,7 @@ function initLiveSockets(server) {
           mode,
           hostId: voiceRoomHosts.get(room),
           guestLimit: env.liveGuestLimit,
+          viewerCount: spectatorCount(room),
           routerRtpCapabilities,
           producers,
           peers: existing,
@@ -824,13 +850,20 @@ function initLiveSockets(server) {
 
         // A los que ya estaban se les avisa del nuevo; ellos no llaman, esperan
         // la oferta del que entra (en malla) o su productor (en SFU). Un
-        // espectador no publica, así que no se anuncia: nadie debe llamarle ni
-        // reservarle una ventana en la rejilla.
-        if (!asSpectator) {
+        // espectador no publica, así que no se anuncia como par (nadie debe
+        // llamarle ni reservarle una ventana en la rejilla), pero sí se avisa
+        // del nuevo recuento de espectadores: es lo que se ve junto al ojo.
+        if (asSpectator) {
+          broadcastViewers(io, room);
+        } else {
           socket.to(voiceRoom(room)).emit('voice:peer-joined', {
             id: String(me.id),
             username: me.username,
           });
+          // Si el que entra es un invitado, los espectadores ya le verán; el
+          // recuento de espectadores no cambia, pero se manda por si acaso para
+          // que todos los clientes queden con el mismo número.
+          broadcastViewers(io, room);
         }
       } catch {
         socket.emit('voice:error', { error: 'No se pudo entrar en la sala de voz' });

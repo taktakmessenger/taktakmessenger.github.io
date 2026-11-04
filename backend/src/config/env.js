@@ -522,10 +522,12 @@ const env = {
   // pueda agotar los puertos del rango de arriba.
   sfuMaxParticipants: Number(process.env.SFU_MAX_PARTICIPANTS ?? 0),
   // Aforo del directo de un TAK Creator, sin contar al anfitrión. Es lo que pide
-  // la idea: el creador más hasta veinte invitados. Se aplica en cualquier modo
-  // (SFU o malla), porque es un límite de producto y no de infraestructura: una
-  // rejilla de más de veintiuna ventanas no se ve en un móvil.
-  liveGuestLimit: Number(process.env.LIVE_GUEST_LIMIT ?? 20),
+  // la idea: el creador más hasta quince invitados publicando cámara (los
+  // espectadores no ocupan plaza: entran a mirar y comentar sin tope). Se aplica
+  // en cualquier modo (SFU o malla), porque es un límite de producto y no de
+  // infraestructura: una rejilla de más de dieciséis ventanas no se ve en un
+  // móvil.
+  liveGuestLimit: Number(process.env.LIVE_GUEST_LIMIT ?? 15),
 
   // ------------------------------------------------------------------
   // Traducción de WhaTaka

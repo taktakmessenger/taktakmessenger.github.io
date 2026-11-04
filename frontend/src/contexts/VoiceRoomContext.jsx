@@ -48,6 +48,10 @@ export function VoiceRoomProvider({ children }) {
   const [peers, setPeers] = useState([]); // [{ id, username, muted, cameraOff }]
   const [hostId, setHostId] = useState(null); // dueño del creator: su ventana es mayor
   const [guestLimit, setGuestLimit] = useState(null);
+  // Cuántos espectadores están mirando (entraron a ver y comentar). El servidor
+  // manda el número al entrar y cada vez que alguien entra o sale; es lo que se
+  // enseña junto al ojo, como en TikTok.
+  const [viewerCount, setViewerCount] = useState(0);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   // Espectador: entra a ver y comentar, sin publicar cámara ni micrófono. Es el
@@ -127,6 +131,7 @@ export function VoiceRoomProvider({ children }) {
     setMode(null);
     setHostId(null);
     setGuestLimit(null);
+    setViewerCount(0);
     setPeers([]);
     setMuted(false);
     setCamOff(false);
@@ -347,6 +352,7 @@ export function VoiceRoomProvider({ children }) {
           mode: roomMode,
           hostId: roomHostId,
           guestLimit: limit,
+          viewerCount: viewers,
           routerRtpCapabilities,
           producers = [],
           peers: existing = [],
@@ -358,6 +364,7 @@ export function VoiceRoomProvider({ children }) {
           setMode(roomMode);
           setHostId(roomHostId ? String(roomHostId) : null);
           setGuestLimit(Number.isFinite(limit) ? limit : null);
+          setViewerCount(Number.isFinite(viewers) ? viewers : 0);
           // Entrar al directo lo abre a pantalla completa; desde ahí se puede
           // minimizar a la barra para seguir en el feed.
           setStageOpen(true);
@@ -459,6 +466,12 @@ export function VoiceRoomProvider({ children }) {
         teardownPeer(String(userId));
       }),
 
+      // Recuento de espectadores. Llega al entrar y cada vez que alguien entra o
+      // sale de la sala como espectador; es el número que va junto al ojo.
+      subscribe('voice:viewers', ({ count }) => {
+        setViewerCount(Number.isFinite(count) ? count : 0);
+      }),
+
       subscribe('voice:peer-mute', ({ userId, muted: peerMuted }) => {
         setPeers((prev) =>
           prev.map((p) => (p.id === String(userId) ? { ...p, muted: !!peerMuted } : p))
@@ -494,6 +507,7 @@ export function VoiceRoomProvider({ children }) {
       peers,
       hostId,
       guestLimit,
+      viewerCount,
       muted,
       camOff,
       spectate,
@@ -517,6 +531,7 @@ export function VoiceRoomProvider({ children }) {
       peers,
       hostId,
       guestLimit,
+      viewerCount,
       muted,
       camOff,
       spectate,
