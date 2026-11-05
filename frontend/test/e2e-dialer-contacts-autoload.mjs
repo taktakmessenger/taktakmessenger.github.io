@@ -99,18 +99,19 @@ async function abrirMarcador(page) {
     check('una fila por teléfono', lista.filter((t) => t.includes('Oficina')).length === 2, JSON.stringify(lista));
     check('descarta el contacto sin número', !lista.some((t) => t.includes('Sin número')), JSON.stringify(lista));
 
-    console.log('\n▸ Tras conceder el permiso, se carga sola');
-    // Se recarga la app (simula volver a abrirla). La agenda debe aparecer sin
-    // tocar el botón: es exactamente lo que se pidió.
+    console.log('\n▸ Tras importar, los contactos quedan guardados y aparecen solos');
+    // Se recarga la app (simula volver a abrirla). Los contactos ya compartidos
+    // deben aparecer sin volver a tocar el botón: eso es lo que el navegador sí
+    // permite (recordar lo compartido), aunque no pueda releer la agenda sola.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2200);
     await cerrarModales(page);
     await abrirMarcador(page);
     await page.waitForTimeout(800);
     lista = await page.locator('.dialer-contact').allTextContents();
-    check('la agenda aparece sin pulsar nada', lista.some((t) => t.includes('Mamá')), JSON.stringify(lista));
+    check('los contactos aparecen sin pulsar nada', lista.some((t) => t.includes('Mamá')), JSON.stringify(lista));
     const boton = (await page.locator('.dialer-contacts-head button').textContent())?.trim();
-    check('el botón pasa a «Sincronizar»', /sincronizar/i.test(boton), boton);
+    check('el botón pasa a «Actualizar»', /actualizar/i.test(boton), boton);
 
     console.log('\n▸ La caché sobrevive sin la API de contactos');
     // Otra pestaña del MISMO contexto (comparte localStorage) pero SIN la

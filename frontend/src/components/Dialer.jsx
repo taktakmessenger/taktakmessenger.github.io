@@ -4,8 +4,6 @@ import { loadProviders } from '../lib/providers';
 import { matches } from '../lib/search';
 import {
   contactsApiAvailable,
-  rememberPermissionGranted,
-  shouldAutoSync,
   flattenContacts,
   mergeContacts,
   loadCache,
@@ -170,20 +168,20 @@ export default function Dialer({ onCall, onOpenChat }) {
     };
   }, [pickerOpen]);
 
-  // Lee la agenda del teléfono y la fusiona con los manuales. Devuelve la lista
-  // o null si el usuario cerró el diálogo/denegó el permiso.
+  // Lee la agenda del teléfono. El navegador no da permiso permanente, así que
+  // esta función siempre la dispara un toque del usuario.
   async function readDeviceContacts() {
     const picked = await navigator.contacts.select(['name', 'tel'], { multiple: true });
     const list = flattenContacts(picked);
     deviceContactsRef.current = list;
-    rememberPermissionGranted();
     saveCache(list);
     return list;
   }
 
-  // Sincroniza por gesto del usuario: es el único camino que garantiza que el
-  // navegador muestre el diálogo de permiso. Tras el primer "sí", las próximas
-  // aperturas del marcador ya sincronizan solas (ver el efecto de auto-sync).
+  // Sincroniza por gesto del usuario. Es el único camino que existe: la Contact
+  // Picker API no tiene permiso permanente, así que no se puede leer la agenda
+  // "sola" ni en segundo plano. El botón cambia de «Importar» (primera vez) a
+  // «Actualizar» (traer cambios recientes).
   async function importContacts() {
     if (!contactsApiAvailable()) {
       setContactsState('unsupported');
@@ -205,10 +203,9 @@ export default function Dialer({ onCall, onOpenChat }) {
     }
   }
 
-  // Contactos del teléfono. `navigator.contacts` solo existe en algunos
-  // navegadores móviles y exige permiso, así que la primera vez hace falta un
-  // gesto; a partir de ahí se recuerda que ya se concedió y se refresca solo al
-  // abrir el marcador, para que la agenda aparezca sin tener que pulsar nada.
+  // Al abrir el marcador se muestran los contactos que ya se compartieron antes
+  // (cacheados) y los manuales. Eso es lo máximo que permite el navegador sin un
+  // gesto nuevo: no se puede volver a leer la agenda sola.
   useEffect(() => {
     const cached = loadCache();
     deviceContactsRef.current = cached.list;
@@ -225,20 +222,6 @@ export default function Dialer({ onCall, onOpenChat }) {
     if (merged.length) {
       setContacts(merged);
       setContactsState('ready');
-    }
-
-    if (shouldAutoSync({ lastSync: cached.lastSync })) {
-      // Ya hay permiso: se refresca en segundo plano, sin diálogo. Si el
-      // navegador decidiera volver a preguntar, un fallo aquí solo deja la
-      // caché que ya se mostró.
-      readDeviceContacts()
-        .then((list) => {
-          setContacts((prev) => mergeContacts(list, prev.filter((c) => c.manual)));
-          setContactsState(list.length ? 'ready' : 'empty');
-        })
-        .catch(() => {
-          // Permiso revocado o diálogo cancelado: se mantiene lo cacheado.
-        });
     }
   }, []);
 
@@ -622,18 +605,20 @@ export default function Dialer({ onCall, onOpenChat }) {
             {syncing || contactsState === 'loading'
               ? 'Leyendo…'
               : contacts.length
-                ? 'Sincronizar'
+                ? 'Actualizar'
                 : 'Importar'}
           </button>
         </div>
 
-        {/* El permiso lo da el navegador, no la app: la primera vez hay que
-            pulsar el botón. Después se recuerda y la agenda se refresca sola al
-            abrir el marcador, así que no hace falta volver a tocar nada. */}
+        {/* El navegador no da permiso permanente para la agenda: la primera vez
+            hay que pulsar «Importar» y, a partir de ahí, los contactos quedan
+            guardados y aparecen solos al abrir el marcador. Para traer cambios
+            recientes hace falta volver a pulsar, porque el navegador exige un
+            gesto cada vez. */}
         {contacts.length > 0 && (
           <p className="muted dialer-hint">
-            Agenda cargada sola. Pulsa «Sincronizar» para traer los cambios más
-            recientes.
+            Tus contactos quedan guardados y aparecen solos. Pulsa «Actualizar» para
+            traer los cambios recientes de la agenda.
           </p>
         )}
 

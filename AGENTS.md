@@ -327,16 +327,17 @@ Detalles que cuesta descubrir:
   `cty: 'twilio-fpa;v=1'`; sin él el SDK lo rechaza con un error poco claro.
 - El token de acceso necesita **API Key + secreto + TwiML App SID**, no solo el
   auth token. `voiceService.isConfigured()` exige los cuatro.
-- `navigator.contacts` solo existe en algunos navegadores móviles y exige
-  permiso. El permiso **solo se puede pedir con un gesto del usuario**: la
-  primera vez hay que pulsar «Importar»; después la app recuerda que ya se
-  concedió (`taktak_contacts_granted` en localStorage) y **refresca la agenda
-  sola** al abrir el marcador, sin volver a preguntar. La lógica vive en
-  `frontend/src/lib/contacts.js` (pura y con tests en `test/contacts.test.js`):
-  `shouldAutoSync` decide si toca leer, `flattenContacts` aplana la agenda a una
-  fila por teléfono y `mergeContacts` fusiona con los manuales sin duplicar. La
-  última lectura se cachea (`taktak_contacts_cache`) para que la lista aparezca
-  aunque el navegador no dé la agenda en esa sesión.
+- `navigator.contacts` solo existe en algunos navegadores móviles y **no tiene
+  permiso permanente**: cada `select()` abre el selector del sistema y exige un
+  gesto del usuario, que vuelve a elegir qué comparte (Chrome y MDN lo dicen:
+  el acceso es por uso). Por eso **no se puede leer la agenda "sola"** desde la
+  web. Lo que hace la app: la primera vez se pulsa «Importar»; los contactos
+  compartidos se cachean (`taktak_contacts_cache`) y **aparecen solos** al abrir
+  el marcador; el botón pasa a «Actualizar» para traer cambios recientes (con su
+  gesto). La lógica pura está en `frontend/src/lib/contacts.js` con tests en
+  `test/contacts.test.js`: `flattenContacts` aplana a una fila por teléfono y
+  `mergeContacts` fusiona con los manuales sin duplicar. El e2e
+  `test/e2e-dialer-contacts-autoload.mjs` simula la agenda y verifica el flujo.
 - La pulsación larga del 0 para escribir "+" necesita `onPointerDown/Up`, no
   `onClick` (que no distingue corta de larga), y `onContextMenu` con
   `preventDefault`, porque el menú contextual del móvil cancela la pulsación.

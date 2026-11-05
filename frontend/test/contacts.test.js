@@ -2,12 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   contactsApiAvailable,
-  shouldAutoSync,
   flattenContacts,
   mergeContacts,
   loadCache,
   saveCache,
-  SYNC_INTERVAL_MS,
 } from '../src/lib/contacts.js';
 
 // Almacenamiento falso en memoria: el helper no debe tocar el localStorage real
@@ -21,35 +19,11 @@ function fakeStorage(initial = {}) {
   };
 }
 
-test('sin la API de contactos no se intenta sincronizar sola', () => {
+test('sin la API de contactos no se intenta importar', () => {
   assert.equal(contactsApiAvailable({}), false);
   assert.equal(contactsApiAvailable(null), false);
   assert.equal(contactsApiAvailable({ contacts: {} }), false);
   assert.equal(contactsApiAvailable({ contacts: { select: () => {} } }), true);
-});
-
-test('no sincroniza sola si el permiso no se concedió nunca', () => {
-  assert.equal(shouldAutoSync({ available: true, granted: false, lastSync: 0, now: 1e12 }), false);
-});
-
-test('no sincroniza sola si el navegador no da la agenda', () => {
-  assert.equal(shouldAutoSync({ available: false, granted: true, lastSync: 0, now: 1e12 }), false);
-});
-
-test('sincroniza sola si ya hay permiso y pasó el intervalo', () => {
-  const now = 1e12;
-  assert.equal(
-    shouldAutoSync({ available: true, granted: true, lastSync: now - SYNC_INTERVAL_MS - 1, now }),
-    true
-  );
-});
-
-test('no vuelve a sincronizar dentro del intervalo', () => {
-  const now = 1e12;
-  assert.equal(
-    shouldAutoSync({ available: true, granted: true, lastSync: now - 1000, now }),
-    false
-  );
 });
 
 test('aplana la agenda a una fila por teléfono', () => {
@@ -99,12 +73,12 @@ test('la caché sobrevive a un guardado y una lectura', () => {
   const storage = fakeStorage();
   const list = [{ name: 'Ana', phone: '+34600111222', source: 'device' }];
   saveCache(list, 1234, storage);
-  const { list: read, lastSync } = loadCache(storage);
+  const { list: read, savedAt } = loadCache(storage);
   assert.deepEqual(read, list);
-  assert.equal(lastSync, 1234);
+  assert.equal(savedAt, 1234);
 });
 
 test('una caché corrupta no rompe el marcador', () => {
   const storage = fakeStorage({ taktak_contacts_cache: '{no es json' });
-  assert.deepEqual(loadCache(storage), { list: [], lastSync: 0 });
+  assert.deepEqual(loadCache(storage), { list: [], savedAt: 0 });
 });
