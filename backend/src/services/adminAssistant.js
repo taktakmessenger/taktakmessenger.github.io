@@ -154,6 +154,127 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'listar_pagos',
+      description:
+        'Lista órdenes de compra de monedas (pagadas o pendientes) con usuario, monedas, precio, método y referencia. Sin filtros devuelve las 20 más recientes. Úsala para saber quién compró monedas y con qué detalle.',
+      parameters: {
+        type: 'object',
+        properties: {
+          estado: {
+            type: 'string',
+            enum: ['pending', 'approved', 'rejected'],
+            description: 'Filtra por estado de la orden. Opcional.',
+          },
+          metodo: { type: 'string', description: 'Filtra por método de pago (p. ej. zinli). Opcional.' },
+          desde: { type: 'string', description: 'Fecha ISO; solo órdenes desde ese momento. Opcional.' },
+          hasta: { type: 'string', description: 'Fecha ISO; solo órdenes hasta ese momento. Opcional.' },
+          limite: { type: 'number', description: 'Máximo de órdenes a devolver (por defecto 20, tope 100).' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resumen_compras',
+      description:
+        'Totales de compra de monedas: número de órdenes, monedas vendidas, importe en USD y la lista de quiénes compraron (ordenada por lo que gastaron). Acepta rango de fechas.',
+      parameters: {
+        type: 'object',
+        properties: {
+          estado: {
+            type: 'string',
+            enum: ['pending', 'approved', 'rejected'],
+            description: 'Cuenta solo las órdenes en ese estado. Opcional.',
+          },
+          desde: { type: 'string', description: 'Fecha ISO de inicio. Opcional.' },
+          hasta: { type: 'string', description: 'Fecha ISO de fin. Opcional.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'aprobar_pago',
+      description:
+        'Aprueba una orden de compra y acredita las monedas al usuario. Solo cuando el pago se ha comprobado por fuera. Requiere el id de la orden. Aprobar dos veces no duplica el abono.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id de la orden de pago' },
+          nota: { type: 'string', description: 'Nota interna sobre por qué se aprueba. Opcional.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rechazar_pago',
+      description:
+        'Rechaza una orden de compra pendiente (no acredita monedas). Úsala cuando el pago no aparece o la referencia no cuadra. Requiere el id y un motivo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id de la orden de pago' },
+          motivo: { type: 'string', description: 'Motivo del rechazo' },
+        },
+        required: ['id', 'motivo'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_retiros',
+      description:
+        'Lista solicitudes de retiro de Diamantes con usuario, monto, método y datos de cobro. Sin filtros devuelve las pendientes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          estado: {
+            type: 'string',
+            enum: ['pending', 'completed', 'rejected'],
+            description: 'Estado de la solicitud (por defecto pending). Opcional.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'pagar_retiro',
+      description:
+        'Marca una solicitud de retiro como pagada, después de enviar el dinero por fuera (PayPal, Zelle…). No mueve saldo: los Diamantes ya se descontaron al solicitarla. Requiere el id.',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string', description: 'id de la solicitud de retiro' } },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rechazar_retiro',
+      description:
+        'Rechaza una solicitud de retiro y devuelve los Diamantes al usuario. Requiere el id y un motivo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id de la solicitud de retiro' },
+          motivo: { type: 'string', description: 'Motivo del rechazo' },
+        },
+        required: ['id', 'motivo'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'suspender_usuario',
       description:
         'Suspende a un usuario unos días sin poder entrar a directos ni a la sala de juegos de POKERTAK. Requiere el id del usuario y un motivo.',
@@ -277,6 +398,18 @@ Cómo trabajar:
 - Responde en español, breve y claro, en texto normal (no JSON).
 
 Los ids son cadenas largas de MongoDB. Cuando el administrador se refiera a "ese usuario" o "ese vídeo", busca primero para obtener el id correcto.
+
+Compras de monedas (pagos):
+- Para saber QUIÉN compró monedas y con qué detalle usa "listar_pagos". Acepta estado (pending/approved/rejected), método, rango de fechas (desde/hasta en ISO) y límite.
+- Para totales (cuántas órdenes, cuántas monedas, cuánto en USD y quiénes compraron) usa "resumen_compras". Es la herramienta correcta para "cuántos usuarios han comprado" o "cuánto se vendió este mes"; NO hace falta un resumen general.
+- "pagos_pendientes" solo lista lo que está sin revisar; para el historial completo usa "listar_pagos".
+- Aprobar un pago ("aprobar_pago") acredita monedas de verdad: hazlo solo si el administrador confirma que el pago llegó. Aprobar dos veces no duplica el abono (da error). Rechazar ("rechazar_pago") no acredita nada.
+- Cuando el administrador no dé fechas, no las inventes: responde con el total acumulado y ofrece filtrar por fechas.
+
+Retiros de Diamantes:
+- "listar_retiros" muestra las solicitudes (por defecto las pendientes) con usuario, monto, método y datos de cobro.
+- "pagar_retiro" solo marca la solicitud como pagada, después de que el administrador envíe el dinero por fuera; no mueve saldo.
+- "rechazar_retiro" devuelve los Diamantes al usuario.
 
 Torneos de POKERTAK:
 - Para organizar uno usa "organizar_torneo_poker". Necesitas título, sala, fecha y hora (ISO 8601), entrada en monedas y aforo (2 a 9). Si el administrador no dice el reparto, se usa 40% al 1º, 30% al 2º y 20% al 3º, y la casa se queda el 10% de lo recaudado; eso es lo mismo que hace PokerStars en sus mesas de 9 jugadores (50/30/20 cuando solo paga el bote entero, 40/30/20 aquí porque el 10% es la tarifa).
@@ -440,6 +573,110 @@ async function runTool(name, args) {
     case 'revisar_pagos': {
       const result = await manualPaymentService.reviewPending({ limit: 20 });
       return { configurado: result.configured, revisadas: result.reviewed.length };
+    }
+
+    case 'listar_pagos': {
+      const orders = await manualPaymentService.listOrders({
+        status: args.estado,
+        method: args.metodo,
+        from: args.desde,
+        to: args.hasta,
+        limit: Math.min(Number(args.limite) || 20, 100),
+      });
+      return {
+        ordenes: orders.map((o) => ({
+          id: o._id.toString(),
+          usuario: o.user?.username || 'desconocido',
+          email: o.user?.email || null,
+          monedas: o.coins,
+          precioUsd: o.priceUsd,
+          metodo: o.method,
+          referencia: o.reference,
+          estado: o.status,
+          fecha: o.createdAt,
+        })),
+      };
+    }
+
+    case 'resumen_compras': {
+      return manualPaymentService.purchaseSummary({
+        status: args.estado,
+        from: args.desde,
+        to: args.hasta,
+      });
+    }
+
+    case 'aprobar_pago': {
+      try {
+        const result = await manualPaymentService.approveOrder({
+          orderId: args.id,
+          adminId: args.adminId,
+          note: args.nota ? String(args.nota).slice(0, 300) : undefined,
+        });
+        return {
+          ok: true,
+          monedas: result.coins,
+          acreditadas: result.credited,
+          usuario: result.order?.user?.username || undefined,
+        };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'rechazar_pago': {
+      try {
+        const order = await manualPaymentService.rejectOrder({
+          orderId: args.id,
+          adminId: args.adminId,
+          reason: String(args.motivo || '').slice(0, 300),
+        });
+        return { ok: true, estado: order.status, monedas: order.coins };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'listar_retiros': {
+      const withdrawals = await walletService.listWithdrawals({
+        status: args.estado || 'pending',
+      });
+      return {
+        retiros: withdrawals.map((w) => ({
+          id: w.id,
+          usuario: w.user?.username || 'desconocido',
+          diamantes: w.amount,
+          metodo: w.method,
+          datosCobro: w.details,
+          estado: w.status,
+          fecha: w.createdAt,
+        })),
+      };
+    }
+
+    case 'pagar_retiro': {
+      try {
+        const result = await walletService.payWithdrawal({
+          transactionId: args.id,
+          adminId: args.adminId,
+        });
+        return { ok: true, estado: result.status, diamantes: result.amount };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'rechazar_retiro': {
+      try {
+        const result = await walletService.rejectWithdrawal({
+          transactionId: args.id,
+          adminId: args.adminId,
+          reason: String(args.motivo || '').slice(0, 300),
+        });
+        return { ok: true, estado: result.status, diamantesDevueltos: result.amount };
+      } catch (err) {
+        return { error: err.message };
+      }
     }
 
     case 'suspender_usuario': {

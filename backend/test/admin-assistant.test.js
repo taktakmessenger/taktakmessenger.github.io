@@ -494,3 +494,202 @@ test('el asistente informa del error si la sala del torneo no existe', async () 
     }
   );
 });
+
+/* ------------------------------------------------------------------ */
+/* Compras de monedas y retiros                                        */
+/* ------------------------------------------------------------------ */
+
+const ManualOrder = require('../src/models/ManualOrder');
+const walletService = require('../src/services/walletService');
+
+// Crea una orden manual aprobada con su asiento, para que el resumen tenga algo
+// que agregar. Va por el modelo y no por el endpoint porque aquí se prueba la
+// lectura, no el cobro.
+async function seedPurchase({ user, coins, priceUsd, status = 'approved', method = 'zinli' }) {
+  return ManualOrder.create({
+    user: user._id,
+    packageId: 'starter',
+    coins,
+    priceUsd,
+    method,
+    reference: `REF-${Math.random().toString(36).slice(2, 10)}`,
+    status,
+  });
+}
+
+test('listar_pagos devuelve quién compró y con qué detalle', async () => {
+  const admin = await makeAdmin();
+  const buyer = await User.create({
+    username: 'comprador',
+    email: 'comprador@example.com',
+    password: 'clave12345',
+  });
+  await seedPurchase({ user: buyer, coins: 500, priceUsd: 6.99 });
+
+  const result = await assistant.runTool('listar_pagos', { adminId: admin._id });
+
+  assert.equal(result.ordenes.length, 1);
+  assert.equal(result.ordenes[0].usuario, 'comprador');
+  assert.equal(result.ordenes[0].monedas, 500);
+  assert.equal(result.ordenes[0].precioUsd, 6.99);
+  assert.equal(result.ordenes[0].estado, 'approved');
+});
+
+test('listar_pagos filtra por estado y respeta el límite', async () => {
+  const admin = await makeAdmin();
+  const buyer = await User.create({
+    username: 'comprador2',
+    email: 'comprador2@example.com',
+    password: 'clave12345',
+  });
+  await seedPurchase({ user: buyer, coins: 100, priceUsd: 1.99, status: 'pending' });
+  await seedPurchase({ user: buyer, coins: 200, priceUsd: 2.99, status: 'approved' });
+
+  const result = await assistant.runTool('listar_pagos', {
+    estado: 'pending',
+    limite: 5,
+    adminId: admin._id,
+  });
+
+  assert.equal(result.ordenes.length, 1);
+  assert.equal(result.ordenes[0].monedas, 100);
+});
+
+test('resumen_compras suma monedas, USD y lista compradores', async () => {
+  const admin = await makeAdmin();
+  const a = await User.create({ username: 'ana', email: 'ana@example.com', password: 'clave12345' });
+  const b = await User.create({ username: 'bruno', email: 'bruno@example.com', password: 'clave12345' });
+  await seedPurchase({ user: a, coins: 500, priceUsd: 6.99 });
+  await seedPurchase({ user: b, coins: 1000, priceUsd: 12.99 });
+  await seedPurchase({ user: b, coins: 100, priceUsd: 1.99, status: 'pending' });
+
+  const result = await assistant.runTool('resumen_compras', { adminId: admin._id });
+
+  assert.equal(result.ordenes, 3);
+  assert.equal(result.monedas, 1600);
+  assert.equal(result.usd, 21.97);
+  // Solo las aprobadas cuentan como compradores, y bruno va primero.
+  assert.equal(result.compradores.length, 2);
+  assert.equal(result.compradores[0].usuario, 'bruno');
+  assert.equal(result.compradores[0].usd, 12.99);
+});
+
+test('aprobar_pago acredita las monedas de una orden pendiente', async () => {
+  const admin = await makeAdmin();
+  const buyer = await User.create({
+    username: 'paganini',
+    email: 'paganini@example.com',
+    password: 'clave12345',
+  });
+  const order = await seedPurchase({ user: buyer, coins: 500, priceUsd: 6.99, status: 'pending' });
+
+  const result = await assistant.runTool('aprobar_pago', {
+    id: order._id.toString(),
+    adminId: admin._id,
+  });
+
+  assert.equal(result.ok, true);
+  const updated = await User.findById(buyer._id);
+  assert.equal(updated.wallet.bonusC + updated.wallet.ttcC, 500);
+});
+
+test('aprobar_pago dos veces no duplica el abono', async () => {
+  const admin = await makeAdmin();
+  const buyer = await User.create({
+    username: 'doble',
+    email: 'doble@example.com',
+    password: 'clave12345',
+  });
+  const order = await seedPurchase({ user: buyer, coins: 500, priceUsd: 6.99, status: 'pending' });
+
+  await assistant.runTool('aprobar_pago', { id: order._id.toString(), adminId: admin._id });
+  const second = await assistant.runTool('aprobar_pago', {
+    id: order._id.toString(),
+    adminId: admin._id,
+  });
+
+  assert.match(second.error, /revisada/i);
+  const updated = await User.findById(buyer._id);
+  assert.equal(updated.wallet.bonusC + updated.wallet.ttcC, 500);
+});
+
+test('rechazar_pago no acredita monedas', async () => {
+  const admin = await makeAdmin();
+  const buyer = await User.create({
+    username: 'rechazado',
+    email: 'rechazado@example.com',
+    password: 'clave12345',
+  });
+  const order = await seedPurchase({ user: buyer, coins: 500, priceUsd: 6.99, status: 'pending' });
+
+  const result = await assistant.runTool('rechazar_pago', {
+    id: order._id.toString(),
+    motivo: 'No aparece el pago',
+    adminId: admin._id,
+  });
+
+  assert.equal(result.estado, 'rejected');
+  const updated = await User.findById(buyer._id);
+  assert.equal(updated.wallet.bonusC + updated.wallet.ttcC, 0);
+});
+
+test('listar_retiros muestra las solicitudes pendientes con datos de cobro', async () => {
+  const admin = await makeAdmin();
+  const user = await User.create({
+    username: 'retiradora',
+    email: 'retiradora@example.com',
+    password: 'clave12345',
+    wallet: { ttcR: 500 },
+  });
+  await walletService.requestWithdrawal({
+    userId: user._id,
+    amount: 200,
+    method: 'paypal',
+    details: 'eliecerdepablos@gmail.com',
+  });
+
+  const result = await assistant.runTool('listar_retiros', { adminId: admin._id });
+
+  assert.equal(result.retiros.length, 1);
+  assert.equal(result.retiros[0].usuario, 'retiradora');
+  assert.equal(result.retiros[0].diamantes, 200);
+  assert.equal(result.retiros[0].datosCobro, 'eliecerdepablos@gmail.com');
+});
+
+test('pagar_retiro marca pagado y rechazar_retiro devuelve los Diamantes', async () => {
+  const admin = await makeAdmin();
+  const user = await User.create({
+    username: 'retira2',
+    email: 'retira2@example.com',
+    password: 'clave12345',
+    wallet: { ttcR: 500 },
+  });
+  const first = await walletService.requestWithdrawal({
+    userId: user._id,
+    amount: 200,
+    method: 'paypal',
+    details: 'x@y.com',
+  });
+  const paid = await assistant.runTool('pagar_retiro', {
+    id: first.transactionId.toString(),
+    adminId: admin._id,
+  });
+  assert.equal(paid.estado, 'completed');
+
+  const second = await walletService.requestWithdrawal({
+    userId: user._id,
+    amount: 100,
+    method: 'paypal',
+    details: 'x@y.com',
+  });
+  const rejected = await assistant.runTool('rechazar_retiro', {
+    id: second.transactionId.toString(),
+    motivo: 'Datos incorrectos',
+    adminId: admin._id,
+  });
+  assert.equal(rejected.estado, 'rejected');
+
+  const updated = await User.findById(user._id);
+  // 500 - 200 (pagado, no vuelve) - 100 + 100 (rechazado, vuelve) = 300.
+  assert.equal(updated.wallet.ttcR, 300);
+});

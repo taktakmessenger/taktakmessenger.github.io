@@ -302,3 +302,79 @@ test('el usuario ve el estado de sus propias órdenes', async () => {
     restore();
   }
 });
+
+test('la cola se filtra por método y por rango de fechas', async () => {
+  const restore = withManualMethods();
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    await createOrder(agent, user.token, { reference: 'REF-A' });
+    await createOrder(agent, user.token, { reference: 'REF-B' });
+
+    // Fuera de rango: todo lo anterior a mañana no debe salir si pedimos a partir
+    // de una fecha futura.
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const empty = await agent
+      .get('/api/admin/manual-orders')
+      .query({ from: future })
+      .set('Authorization', `Bearer ${(await makeAdmin('adminf')).token}`);
+    assert.equal(empty.status, 200);
+    assert.equal(empty.body.orders.length, 0);
+
+    const all = await agent
+      .get('/api/admin/manual-orders')
+      .query({ method: 'zinli' })
+      .set('Authorization', `Bearer ${(await makeAdmin('adming')).token}`);
+    assert.equal(all.body.orders.length, 2);
+
+    const none = await agent
+      .get('/api/admin/manual-orders')
+      .query({ method: 'paypal' })
+      .set('Authorization', `Bearer ${(await makeAdmin('adminh')).token}`);
+    assert.equal(none.body.orders.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('el resumen de compras cuenta órdenes, monedas y compradores', async () => {
+  const restore = withManualMethods();
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    const created = await createOrder(agent, user.token);
+    const admin = await makeAdmin('adminres');
+
+    await agent
+      .post(`/api/admin/manual-orders/${created.body.order._id}/approve`)
+      .set('Authorization', `Bearer ${admin.token}`);
+
+    const res = await agent
+      .get('/api/admin/manual-orders/summary')
+      .query({ status: 'approved' })
+      .set('Authorization', `Bearer ${admin.token}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ordenes, 1);
+    assert.equal(res.body.monedas, 500);
+    assert.equal(res.body.usd, 6.99);
+    assert.equal(res.body.compradores.length, 1);
+    assert.equal(res.body.compradores[0].monedas, 500);
+  } finally {
+    restore();
+  }
+});
+
+test('solo un admin ve el resumen de compras', async () => {
+  const restore = withManualMethods();
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    const res = await agent
+      .get('/api/admin/manual-orders/summary')
+      .set('Authorization', `Bearer ${user.token}`);
+    assert.equal(res.status, 403);
+  } finally {
+    restore();
+  }
+});

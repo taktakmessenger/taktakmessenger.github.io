@@ -11,6 +11,7 @@ export default function AdminPanel({ onBack }) {
   const [sources, setSources] = useState([]);
   const [reports, setReports] = useState([]);
   const [manualOrders, setManualOrders] = useState([]);
+  const [salesSummary, setSalesSummary] = useState(null);
   const [withdrawals, setWithdrawals] = useState([]);
   const [suggestions, setSuggestions] = useState({});
   const [reviewing, setReviewing] = useState(false);
@@ -40,7 +41,7 @@ export default function AdminPanel({ onBack }) {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes, withdrawalsRes] =
+      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes, withdrawalsRes, summaryRes] =
         await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/videos', { params: { status: 'pending' } }),
@@ -50,6 +51,7 @@ export default function AdminPanel({ onBack }) {
           api.get('/admin/reports', { params: { status: reportFilter } }),
           api.get('/admin/manual-orders', { params: { status: 'pending' } }),
           api.get('/admin/withdrawals', { params: { status: 'pending' } }),
+          api.get('/admin/manual-orders/summary'),
         ]);
       setStats(statsRes.data);
       setPending(videosRes.data.videos);
@@ -59,6 +61,7 @@ export default function AdminPanel({ onBack }) {
       setReports(reportsRes.data.reports);
       setManualOrders(manualRes.data.orders);
       setWithdrawals(withdrawalsRes.data.withdrawals);
+      setSalesSummary(summaryRes.data);
     } catch (err) {
       setError(err.message);
     }
@@ -322,6 +325,41 @@ export default function AdminPanel({ onBack }) {
             {chatBusy ? '…' : 'Enviar'}
           </button>
         </form>
+      </div>
+
+      {/* Resumen de ventas de monedas: cuánto entró y quiénes compraron. Es la
+          vista que responde "¿cuántos usuarios compran monedas?" sin tener que
+          recorrer orden por orden. */}
+      <div className="moderation">
+        <div className="admin-section-head">
+          <h3>Ventas de monedas</h3>
+        </div>
+        {!salesSummary || salesSummary.ordenes === 0 ? (
+          <p>Todavía no hay compras de monedas registradas.</p>
+        ) : (
+          <>
+            <div className="stat-grid">
+              <div className="stat-card"><h3>Órdenes</h3><span className="amount">{salesSummary.ordenes}</span></div>
+              <div className="stat-card"><h3>Monedas vendidas</h3><span className="amount">{salesSummary.monedas.toLocaleString('es')}</span></div>
+              <div className="stat-card"><h3>Total cobrado</h3><span className="amount">{salesSummary.usd.toFixed(2)} USD</span></div>
+              <div className="stat-card"><h3>Compradores</h3><span className="amount">{salesSummary.compradores.length}</span></div>
+            </div>
+            {salesSummary.compradores.length > 0 && (
+              <ul>
+                {salesSummary.compradores.map((c) => (
+                  <li key={c.usuario} className="moderation-item">
+                    <div>
+                      <strong>@{c.usuario}</strong>
+                      <small>
+                        {c.ordenes} compra{c.ordenes === 1 ? '' : 's'} · {c.monedas.toLocaleString('es')} monedas · {c.usd.toFixed(2)} USD
+                      </small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </div>
 
       {/* Cobro manual: el administrador comprueba el ingreso por fuera y

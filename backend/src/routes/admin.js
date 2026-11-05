@@ -423,11 +423,43 @@ router.patch(
 
 router.get(
   '/manual-orders',
-  [query('status').optional().isIn(['pending', 'approved', 'rejected'])],
+  [
+    query('status').optional().isIn(['pending', 'approved', 'rejected']),
+    query('method').optional().isString().trim().isLength({ max: 40 }),
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
+    query('limit').optional().isInt({ min: 1, max: 500 }),
+  ],
   validate,
   asyncHandler(async (req, res) => {
-    const orders = await manualPaymentService.listOrders({ status: req.query.status });
+    const orders = await manualPaymentService.listOrders({
+      status: req.query.status,
+      method: req.query.method,
+      from: req.query.from,
+      to: req.query.to,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
     res.json({ orders });
+  })
+);
+
+// Totales de venta y quiénes compraron. Es la vista que el administrador (y
+// GLENIS IA) usan para saber cuánto entró sin recorrer orden por orden.
+router.get(
+  '/manual-orders/summary',
+  [
+    query('status').optional().isIn(['pending', 'approved', 'rejected']),
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const summary = await manualPaymentService.purchaseSummary({
+      status: req.query.status,
+      from: req.query.from,
+      to: req.query.to,
+    });
+    res.json(summary);
   })
 );
 
