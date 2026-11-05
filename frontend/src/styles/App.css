@@ -6424,7 +6424,7 @@
    solos y no se pisen cuando el texto del selector crece. */
 .home-topbar {
   position: absolute;
-  top: 0.9rem;
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   z-index: 6;
