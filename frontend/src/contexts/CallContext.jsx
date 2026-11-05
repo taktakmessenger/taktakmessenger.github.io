@@ -226,6 +226,10 @@ export function CallProvider({ children }) {
   // Evita registrar dos veces el mismo final: `hangUp` y `call:ended` pueden
   // dispararse los dos (quien cuelga y quien recibe el aviso).
   const loggedRef = useRef(false);
+  // ¿Llegó a establecerse la conexión alguna vez? Distingue "se cortó a mitad"
+  // de "nunca conectó", que casi siempre es un problema de red (falta TURN) y
+  // merece un mensaje distinto.
+  const everConnectedRef = useRef(false);
 
   // Deja la llamada en el hilo, como WhatsApp. Se envía el resultado tal como
   // acabó y el servidor lo guarda junto a los mensajes.
@@ -288,6 +292,7 @@ export function CallProvider({ children }) {
     activeSinceRef.current = null;
     isCallerRef.current = false;
     loggedRef.current = false;
+    everConnectedRef.current = false;
 
     setStatus(IDLE);
     setPeer(null);
@@ -372,8 +377,21 @@ export function CallProvider({ children }) {
       };
 
       pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          everConnectedRef.current = true;
+          return;
+        }
         if (['failed', 'disconnected'].includes(pc.connectionState)) {
-          if (statusRef.current !== IDLE) fail('La llamada se ha cortado');
+          if (statusRef.current !== IDLE) {
+            // Si nunca llegó a conectar, no fue un corte: la red no dejó
+            // cruzar los medios (falta TURN). Decirlo así evita que el usuario
+            // crea que el otro colgó.
+            fail(
+              everConnectedRef.current
+                ? 'La llamada se ha cortado'
+                : 'No se pudo conectar la llamada. Puede ser tu red o la del otro'
+            );
+          }
         }
       };
 
