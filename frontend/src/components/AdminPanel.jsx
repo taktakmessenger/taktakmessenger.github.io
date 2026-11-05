@@ -11,6 +11,7 @@ export default function AdminPanel({ onBack }) {
   const [sources, setSources] = useState([]);
   const [reports, setReports] = useState([]);
   const [manualOrders, setManualOrders] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
   const [suggestions, setSuggestions] = useState({});
   const [reviewing, setReviewing] = useState(false);
   const [reportFilter, setReportFilter] = useState('open');
@@ -39,7 +40,7 @@ export default function AdminPanel({ onBack }) {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes] =
+      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes, withdrawalsRes] =
         await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/videos', { params: { status: 'pending' } }),
@@ -48,6 +49,7 @@ export default function AdminPanel({ onBack }) {
           api.get('/admin/news-sources'),
           api.get('/admin/reports', { params: { status: reportFilter } }),
           api.get('/admin/manual-orders', { params: { status: 'pending' } }),
+          api.get('/admin/withdrawals', { params: { status: 'pending' } }),
         ]);
       setStats(statsRes.data);
       setPending(videosRes.data.videos);
@@ -56,6 +58,7 @@ export default function AdminPanel({ onBack }) {
       setSources(sourcesRes.data.sources);
       setReports(reportsRes.data.reports);
       setManualOrders(manualRes.data.orders);
+      setWithdrawals(withdrawalsRes.data.withdrawals);
     } catch (err) {
       setError(err.message);
     }
@@ -150,6 +153,28 @@ export default function AdminPanel({ onBack }) {
     }
   }
 
+  // Resuelve un retiro: pagar solo lo marca (el saldo ya se descontó al
+  // solicitarlo), rechazar devuelve los Diamantes. El pago real lo hace el
+  // administrador por fuera (PayPal, Zelle…); aquí queda el registro.
+  async function decideWithdrawal(id, pay) {
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await api.post(
+        `/admin/withdrawals/${id}/${pay ? 'pay' : 'reject'}`,
+        pay ? {} : { reason: 'Datos de cobro incorrectos' }
+      );
+      setNotice(
+        pay
+          ? `Retiro marcado como pagado (${data.amount} Diamantes)`
+          : `Retiro rechazado: ${data.amount} Diamantes devueltos`
+      );
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   // Envía un turno al asistente. Solo se manda el mensaje nuevo: el historial
   // lo guarda el servidor por administrador, así que la conversación no depende
   // de esta pestaña. Al volver, se añade la respuesta y se recargan los datos
@@ -235,7 +260,7 @@ export default function AdminPanel({ onBack }) {
           <div className="stat-card"><h3>Pendientes</h3><span className="amount">{stats.pendingVideos}</span></div>
           <div className="stat-card"><h3>Transacciones</h3><span className="amount">{stats.transactions}</span></div>
           <div className="stat-card total">
-            <h3>Ingresos (25%)</h3>
+            <h3>Ingresos ({Math.round((stats.platformShare ?? 0.4) * 100)}%)</h3>
             <span className="amount">{Number(stats.platformEarnings ?? 0).toFixed(2)}</span>
             <small>{stats.giftsProcessed ?? 0} regalos</small>
           </div>
@@ -359,6 +384,50 @@ export default function AdminPanel({ onBack }) {
                 </li>
               );
             })}
+          </ul>
+        )}
+      </div>
+
+      {/* Retiros de Diamantes: aquí el administrador comprueba la cuenta de
+          cobro, paga por fuera y lo marca. Rechazar devuelve los Diamantes. */}
+      <div className="moderation">
+        <div className="admin-section-head">
+          <h3>Retiros pendientes ({withdrawals.length})</h3>
+        </div>
+        {withdrawals.length === 0 ? (
+          <p>No hay retiros pendientes de pago.</p>
+        ) : (
+          <ul>
+            {withdrawals.map((w) => (
+              <li key={w.id} className="moderation-item">
+                <div>
+                  <strong>
+                    {w.amount} Diamantes · {w.method}
+                  </strong>
+                  <small>
+                    @{w.user?.username || 'desconocido'}
+                    {w.user?.displayName ? ` (${w.user.displayName})` : ''} · {w.details}
+                  </small>
+                  <small>{new Date(w.createdAt).toLocaleString()}</small>
+                </div>
+                <div className="moderation-buttons">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => decideWithdrawal(w.id, true)}
+                  >
+                    Marcar como pagado
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    onClick={() => decideWithdrawal(w.id, false)}
+                  >
+                    Rechazar y devolver
+                  </button>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </div>

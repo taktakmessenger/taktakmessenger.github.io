@@ -17,6 +17,7 @@ const assistantThreadService = require('../services/assistantThreadService');
 const { auth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
+const env = require('../config/env');
 
 const router = express.Router();
 
@@ -38,9 +39,11 @@ router.get(
       videos,
       pendingVideos,
       transactions,
-      // Revenue booked from the 40% platform cut on gifts.
+      // Revenue booked from the platform cut on gifts. The percentage comes from
+      // config so the label can never drift from the real split.
       platformEarnings: earnings.total,
       giftsProcessed: earnings.gifts,
+      platformShare: env.platformShare,
     });
   })
 );
@@ -473,6 +476,48 @@ router.post(
       reason: req.body.reason,
     });
     res.json({ order });
+  })
+);
+
+// Cola de retiros de Diamantes. Pagar aquí no mueve saldo (se descontó al
+// solicitarlo): solo marca la solicitud como pagada para que quede registrado
+// quién la pagó. Rechazar sí devuelve los Diamantes al usuario.
+router.get(
+  '/withdrawals',
+  [query('status').optional().isIn(['pending', 'completed', 'rejected'])],
+  validate,
+  asyncHandler(async (req, res) => {
+    const withdrawals = await walletService.listWithdrawals({
+      status: req.query.status || 'pending',
+    });
+    res.json({ withdrawals });
+  })
+);
+
+router.post(
+  '/withdrawals/:id/pay',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await walletService.payWithdrawal({
+      transactionId: req.params.id,
+      adminId: req.user.userId,
+    });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/withdrawals/:id/reject',
+  [param('id').isMongoId(), body('reason').optional().isString().trim().isLength({ max: 300 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await walletService.rejectWithdrawal({
+      transactionId: req.params.id,
+      adminId: req.user.userId,
+      reason: req.body.reason,
+    });
+    res.json(result);
   })
 );
 

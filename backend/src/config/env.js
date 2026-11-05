@@ -246,6 +246,36 @@ function resolveReferralPercent() {
 
 const referralPercent = resolveReferralPercent();
 
+/**
+ * Retiros de Diamantes: los topes que protegen al usuario y a la casa.
+ *
+ * `min` es en Diamantes (1 Diamante = 1 TTC). Un mínimo de 100 Diamantes son
+ * $1,00 con la tasa por defecto: por debajo, la comisión de la pasarela se come
+ * el importe y el retiro no tiene sentido. `dailyCap` es el máximo de Diamantes
+ * que una cuenta puede pedir en 24 h; frena tanto un error del usuario como el
+ * vaciado de una cuenta robada, que es el riesgo real de dejar retiros sin tope.
+ * `holdHours` es el tiempo que un retiro queda retenido antes de poder pagarse,
+ * para dar margen a revertir un fraude detectado tarde.
+ */
+function resolveWithdrawals() {
+  const min = Number(process.env.WITHDRAWAL_MIN ?? 100);
+  const dailyCap = Number(process.env.WITHDRAWAL_DAILY_CAP ?? 10000);
+  const holdHours = Number(process.env.WITHDRAWAL_HOLD_HOURS ?? 0);
+
+  if (!Number.isFinite(min) || min <= 0) {
+    throw new Error('WITHDRAWAL_MIN must be a positive number');
+  }
+  if (!Number.isFinite(dailyCap) || dailyCap < min) {
+    throw new Error('WITHDRAWAL_DAILY_CAP must be a number >= WITHDRAWAL_MIN');
+  }
+  if (!Number.isFinite(holdHours) || holdHours < 0) {
+    throw new Error('WITHDRAWAL_HOLD_HOURS must be zero or a positive number');
+  }
+  return { min, dailyCap, holdHours };
+}
+
+const withdrawals = resolveWithdrawals();
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction,
@@ -321,6 +351,20 @@ const env = {
     // ambiguas bastan de sobra: el código no es un secreto (se comparte), solo
     // tiene que ser único y fácil de leer por teléfono.
     codeLength: Number(process.env.REFERRAL_CODE_LENGTH ?? 8),
+  },
+
+  withdrawals: {
+    // Mínimo por solicitud, en Diamantes. Por debajo, la comisión del proveedor
+    // de pago se come el importe.
+    min: withdrawals.min,
+    // Tope por cuenta en 24 h, en Diamantes. Frena el vaciado de una cuenta
+    // comprometida y los errores de dedo.
+    dailyCap: withdrawals.dailyCap,
+    // Horas que un retiro queda retenido antes de poder marcarse como pagado.
+    holdHours: withdrawals.holdHours,
+    // 1 Diamante = `ttcUsdRate` dólares. Se expone para que la UI pueda enseñar
+    // el equivalente en dinero sin duplicar la tasa.
+    usdRate: ttcUsdRate,
   },
 
   maxVideoBytes: Number(process.env.MAX_VIDEO_BYTES ?? 50 * 1024 * 1024),

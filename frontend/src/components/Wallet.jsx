@@ -11,6 +11,7 @@ export default function Wallet({ onBack, onNavigate }) {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [gift, setGift] = useState({ recipient: '', amount: '', giftName: '' });
   const [withdraw, setWithdraw] = useState({ amount: '', method: 'paypal', details: '' });
+  const [withdrawConfig, setWithdrawConfig] = useState(null);
   const [referral, setReferral] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -39,6 +40,15 @@ export default function Wallet({ onBack, onNavigate }) {
     api
       .get('/wallet/referral')
       .then(({ data }) => setReferral(data))
+      .catch(() => {});
+  }, []);
+
+  // Los límites de retiro los fija el servidor. Se piden al montar para poder
+  // validar en el formulario con las mismas cifras que aplica el backend.
+  useEffect(() => {
+    api
+      .get('/wallet/withdraw/config')
+      .then(({ data }) => setWithdrawConfig(data))
       .catch(() => {});
   }, []);
 
@@ -252,16 +262,30 @@ export default function Wallet({ onBack, onNavigate }) {
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modal-content">
             <h3>Retirar Diamantes</h3>
+            <p className="muted">
+              Tienes <strong>{wallet.diamonds.toFixed(2)}</strong> Diamantes retirables.
+              {withdrawConfig && (
+                <>
+                  {' '}Mínimo {withdrawConfig.min} · máximo {withdrawConfig.dailyCap} al día.
+                  {' '}1 Diamante = {withdrawConfig.usdRate} USD.
+                </>
+              )}
+            </p>
             <form onSubmit={handleWithdraw}>
               <input
                 type="number"
                 placeholder="Monto en Diamantes"
                 value={withdraw.amount}
                 onChange={(e) => setWithdraw({ ...withdraw, amount: e.target.value })}
-                min="0.01"
+                min={withdrawConfig?.min ?? 0.01}
                 step="0.01"
                 required
               />
+              {withdrawConfig && Number(withdraw.amount) > 0 && (
+                <small className="muted">
+                  Recibirás ≈ {(Number(withdraw.amount) * withdrawConfig.usdRate).toFixed(2)} USD
+                </small>
+              )}
               <select
                 value={withdraw.method}
                 onChange={(e) => setWithdraw({ ...withdraw, method: e.target.value })}
@@ -272,10 +296,15 @@ export default function Wallet({ onBack, onNavigate }) {
               </select>
               <input
                 type="text"
-                placeholder="Detalles de pago"
+                placeholder="Correo o cuenta donde cobrar"
                 value={withdraw.details}
                 onChange={(e) => setWithdraw({ ...withdraw, details: e.target.value })}
+                maxLength={200}
+                required
               />
+              <small className="muted">
+                Revisa bien estos datos: el pago se envía a la cuenta que escribas aquí.
+              </small>
               <div className="modal-buttons">
                 <button type="submit" className="btn-primary">Solicitar</button>
                 <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(false)}>
@@ -308,6 +337,16 @@ export default function Wallet({ onBack, onNavigate }) {
                             ? '✨'
                             : '📘'}{' '}
                   {tx.amount} TTC
+                  {tx.type === 'withdraw' && (
+                    <small className="tx-paid">
+                      {' · '}
+                      {tx.status === 'completed'
+                        ? '✅ Pagado'
+                        : tx.status === 'rejected'
+                          ? '❌ Rechazado'
+                          : '⏳ Pendiente'}
+                    </small>
+                  )}
                   {tx.type === 'purchase' && tx.amountPaid != null && (
                     <small className="tx-paid"> · {tx.amountPaid.toFixed(2)} {tx.currency || 'USD'}</small>
                   )}

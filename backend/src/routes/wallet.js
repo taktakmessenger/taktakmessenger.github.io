@@ -145,8 +145,12 @@ router.post(
   moneyLimiter,
   [
     body('amount').isFloat({ gt: 0 }).withMessage('Monto inválido').toFloat(),
-    body('method').trim().notEmpty().withMessage('Método de retiro requerido'),
-    body('details').optional().trim().isLength({ max: 200 }),
+    body('method').trim().isIn(['paypal', 'zelle', 'crypto']).withMessage('Método no admitido'),
+    body('details')
+      .trim()
+      .notEmpty()
+      .withMessage('Indica la cuenta o los datos de cobro')
+      .isLength({ max: 200 }),
   ],
   validate,
   asyncHandler(async (req, res) => {
@@ -157,6 +161,22 @@ router.post(
       details: req.body.details,
     });
     res.json({ message: 'Solicitud de retiro procesada', ...result });
+  })
+);
+
+// Parámetros que la pantalla de retiro necesita para validar antes de enviar:
+// mínimo, tope diario y tasa de conversión a dólares. Van aquí y no en el
+// cliente para que un cambio de configuración no deje la UI mintiendo.
+router.get(
+  '/withdraw/config',
+  auth,
+  asyncHandler(async (_req, res) => {
+    res.json({
+      min: env.withdrawals.min,
+      dailyCap: env.withdrawals.dailyCap,
+      usdRate: env.withdrawals.usdRate,
+      methods: ['paypal', 'zelle', 'crypto'],
+    });
   })
 );
 

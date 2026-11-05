@@ -60,14 +60,26 @@ const transactionSchema = new mongoose.Schema(
     details: String,
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed'],
+      enum: ['pending', 'completed', 'failed', 'rejected'],
       default: 'completed',
     },
+
+    // Solo para retiros: quién y cuándo resolvió la solicitud. Sin esto no hay
+    // forma de saber qué administrador pagó (o rechazó) un retiro, que es justo
+    // lo que hace falta para responder a una reclamación del usuario.
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedAt: { type: Date, default: null },
+    // Motivo del rechazo, visible para el usuario cuando se le devuelven los
+    // Diamantes.
+    reason: { type: String, trim: true, maxlength: 300, default: '' },
   },
   { timestamps: true }
 );
 
 transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ from: 1, createdAt: -1 });
+// La cola de retiros se lista por tipo y estado, del más antiguo al más nuevo:
+// es la consulta que hace el panel de administración.
+transactionSchema.index({ type: 1, status: 1, createdAt: 1 });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

@@ -245,12 +245,62 @@ async function compensate({ userId, bonusC = 0, ttcC = 0 }) {
 }
 
 /**
- * Request a withdrawal of TTC-R. The balance is debited atomically and a
- * pending transaction is recorded; actual payout is handled out of band.
+ * Métodos de cobro admitidos para un retiro. Es una lista cerrada a propósito:
+ * `method` viaja desde el cliente y acaba en el registro contable, así que un
+ * valor libre permitiría etiquetas arbitrarias ("banco-que-no-existe") que luego
+ * nadie sabe interpretar al pagar.
+ */
+const PAYOUT_METHODS = ['paypal', 'zelle', 'crypto'];
+
+/**
+ * Solicita un retiro de Diamantes (TTC-R).
+ *
+ * Orden de las comprobaciones, de la más barata a la que toca el saldo: importe,
+ * método, tope diario y, por último, el débito atómico. El débito es la guarda
+ * real: el `$gte` sobre `wallet.ttcR` impide que dos solicitudes simultáneas
+ * dejen el saldo en negativo.
+ *
+ * Los Diamantes se descuentan ya, al pedir: si se dejaran en el saldo hasta
+ * pagarlos, el usuario podría gastarlos o pedir otro retiro con los mismos y la
+ * suma de solicitudes superaría lo que tiene. El dinero "en vuelo" queda
+ * registrado en la transacción `pending`.
  */
 async function requestWithdrawal({ userId, amount, method, details }) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpError(400, 'Monto inválido');
+  }
+  if (amount < env.withdrawals.min) {
+    throw new HttpError(400, `El mínimo para retirar es ${env.withdrawals.min} Diamantes`);
+  }
+  if (!PAYOUT_METHODS.includes(method)) {
+    throw new HttpError(400, 'Método de retiro no admitido');
+  }
+  // El dato de cobro es obligatorio: un retiro sin cuenta a la que pagar se
+  // queda en la cola para siempre y hay que rechazarlo a mano.
+  if (!details || !String(details).trim()) {
+    throw new HttpError(400, 'Indica la cuenta o los datos de cobro');
+  }
+
+  // Tope diario: se cuentan las solicitudes vivas de las últimas 24 h. Las
+  // rechazadas no cuentan porque sus Diamantes ya volvieron al usuario.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [recent] = await Transaction.aggregate([
+    {
+      $match: {
+        from: new mongoose.Types.ObjectId(String(userId)),
+        type: 'withdraw',
+        status: { $in: ['pending', 'completed'] },
+        createdAt: { $gte: since },
+      },
+    },
+    { $group: { _id: null, total: { $sum: '$amount' } } },
+  ]);
+  const used = recent?.total || 0;
+  if (used + amount > env.withdrawals.dailyCap) {
+    throw new HttpError(
+      400,
+      `Superas el tope diario de ${env.withdrawals.dailyCap} Diamantes. Ya pediste ${round2(used)} en las últimas 24 h.`
+    );
   }
 
   const user = await User.findOneAndUpdate(
@@ -266,11 +316,121 @@ async function requestWithdrawal({ userId, amount, method, details }) {
     type: 'withdraw',
     ttcType: 'ttcR',
     method,
-    details,
+    details: String(details).trim().slice(0, 200),
     status: 'pending',
   });
 
   return { amount, method, transactionId: transaction._id };
+}
+
+/**
+ * Cola de retiros para el administrador. Se listan del más antiguo al más nuevo
+ * (FIFO): el que lleva más esperando es el que toca pagar.
+ */
+async function listWithdrawals({ status, limit = 50 } = {}) {
+  const query = { type: 'withdraw' };
+  if (status) query.status = status;
+
+  const withdrawals = await Transaction.find(query)
+    .sort({ createdAt: 1 })
+    .limit(Math.min(Number(limit) || 50, 200))
+    .populate('from', 'username profile.displayName profile.avatar');
+
+  return withdrawals.map((w) => ({
+    id: w._id,
+    amount: w.amount,
+    method: w.method,
+    details: w.details,
+    status: w.status,
+    createdAt: w.createdAt,
+    reviewedAt: w.reviewedAt,
+    reason: w.reason,
+    user: w.from
+      ? {
+          id: w.from._id,
+          username: w.from.username,
+          displayName: w.from.profile?.displayName || null,
+        }
+      : null,
+  }));
+}
+
+/**
+ * Marca un retiro como pagado.
+ *
+ * No mueve saldo: los Diamantes se descontaron al solicitarlo. El `status:
+ * 'pending'` en el filtro es la guarda de idempotencia: si dos administradores
+ * pulsan "pagar" a la vez, solo el primero actualiza algo y el segundo recibe
+ * un 409 en vez de marcar dos veces el mismo pago.
+ */
+async function payWithdrawal({ transactionId, adminId }) {
+  const withdrawal = await Transaction.findOne({ _id: transactionId, type: 'withdraw' });
+  if (!withdrawal) throw new HttpError(404, 'Retiro no encontrado');
+  if (withdrawal.status !== 'pending') {
+    throw new HttpError(409, 'Ese retiro ya fue resuelto');
+  }
+
+  // Periodo de retención: da margen a detectar un fraude antes de sacar el
+  // dinero. Con `holdHours = 0` (por defecto) no retiene nada.
+  if (env.withdrawals.holdHours > 0) {
+    const releasableAt = new Date(withdrawal.createdAt).getTime() + env.withdrawals.holdHours * 3600 * 1000;
+    if (Date.now() < releasableAt) {
+      throw new HttpError(
+        409,
+        `Este retiro está en retención hasta ${new Date(releasableAt).toISOString()}`
+      );
+    }
+  }
+
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: transactionId, type: 'withdraw', status: 'pending' },
+    { $set: { status: 'completed', reviewedBy: adminId, reviewedAt: new Date() } },
+    { new: true }
+  );
+  if (!updated) throw new HttpError(409, 'Ese retiro ya fue resuelto');
+
+  return { id: updated._id, status: updated.status, amount: updated.amount, userId: updated.from };
+}
+
+/**
+ * Rechaza un retiro y devuelve los Diamantes.
+ *
+ * La devolución va después del cambio de estado, no antes: el filtro
+ * `status: 'pending'` es el que garantiza que solo se devuelve una vez. Si el
+ * proceso se cortara entre las dos escrituras, quedaría un retiro rechazado sin
+ * devolver, que es recuperable a mano; al revés (devolver y no cambiar el
+ * estado) se podría devolver dos veces.
+ */
+async function rejectWithdrawal({ transactionId, adminId, reason }) {
+  const withdrawal = await Transaction.findOne({ _id: transactionId, type: 'withdraw' });
+  if (!withdrawal) throw new HttpError(404, 'Retiro no encontrado');
+  if (withdrawal.status !== 'pending') {
+    throw new HttpError(409, 'Ese retiro ya fue resuelto');
+  }
+
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: transactionId, type: 'withdraw', status: 'pending' },
+    {
+      $set: {
+        status: 'rejected',
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+        reason: reason ? String(reason).trim().slice(0, 300) : '',
+      },
+    },
+    { new: true }
+  );
+  if (!updated) throw new HttpError(409, 'Ese retiro ya fue resuelto');
+
+  await User.updateOne({ _id: updated.from }, { $inc: { 'wallet.ttcR': updated.amount } });
+
+  return {
+    id: updated._id,
+    status: updated.status,
+    amount: updated.amount,
+    userId: updated.from,
+    reason: updated.reason,
+  };
 }
 
 async function getWallet(userId) {
@@ -315,6 +475,9 @@ function round2(n) {
 module.exports = {
   sendGift,
   requestWithdrawal,
+  listWithdrawals,
+  payWithdrawal,
+  rejectWithdrawal,
   getWallet,
   getPlatformEarnings,
   listTransactions,
