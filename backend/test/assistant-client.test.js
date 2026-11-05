@@ -80,12 +80,12 @@ test('si la principal falla con 401 usa la de respaldo', async () => {
   }
 });
 
-test('reintenta también con 429 (límite agotado)', async () => {
+test('reintenta el 429 con la misma clave y luego usa la de respaldo', async () => {
   const seen = [];
   const server = await startServer((key, res) => {
     seen.push(key);
     if (key === 'limitada') {
-      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '1' });
       res.end('{"error":"rate limited"}');
       return;
     }
@@ -94,8 +94,14 @@ test('reintenta también con 429 (límite agotado)', async () => {
   });
   const restore = withEnv({ key: 'limitada', fallback: ['buena'], base: `http://127.0.0.1:${server.address().port}` });
   try {
-    await assistantClient.callAssistant({ body: { model: 'x', messages: [] } });
-    assert.deepEqual(seen, ['limitada', 'buena']);
+    // El 429 se reintenta con la misma clave (límite por minuto) antes de pasar
+    // a la siguiente: la primera clave aparece varias veces.
+    const data = await assistantClient.callAssistant({
+      body: { model: 'x', messages: [] },
+      maxRateLimitRetries: 1,
+    });
+    assert.equal(data.choices[0].message.content, 'hola');
+    assert.deepEqual(seen, ['limitada', 'limitada', 'buena']);
   } finally {
     restore();
     server.close();

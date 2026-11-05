@@ -19,6 +19,13 @@ export default function AdminPanel({ onBack }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  // Cartera del administrador: es el único que puede convertir Monedas en
+  // Diamantes retirables. Se pide junto al resto del panel.
+  const [adminWallet, setAdminWallet] = useState(null);
+  const [convertRate, setConvertRate] = useState(1);
+  const [convertAmount, setConvertAmount] = useState('');
+  const [converting, setConverting] = useState(false);
+
   // Asistente del administrador. El historial vive en el servidor (uno por
   // administrador), así que aquí solo se guarda el mensaje nuevo; al montar el
   // panel se pide el hilo para que reaparezca tras recargar o cambiar de móvil.
@@ -41,7 +48,7 @@ export default function AdminPanel({ onBack }) {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes, withdrawalsRes, summaryRes] =
+      const [statsRes, videosRes, ageRes, claimsRes, sourcesRes, reportsRes, manualRes, withdrawalsRes, summaryRes, walletRes] =
         await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/videos', { params: { status: 'pending' } }),
@@ -52,6 +59,7 @@ export default function AdminPanel({ onBack }) {
           api.get('/admin/manual-orders', { params: { status: 'pending' } }),
           api.get('/admin/withdrawals', { params: { status: 'pending' } }),
           api.get('/admin/manual-orders/summary'),
+          api.get('/admin/wallet'),
         ]);
       setStats(statsRes.data);
       setPending(videosRes.data.videos);
@@ -62,6 +70,8 @@ export default function AdminPanel({ onBack }) {
       setManualOrders(manualRes.data.orders);
       setWithdrawals(withdrawalsRes.data.withdrawals);
       setSalesSummary(summaryRes.data);
+      setAdminWallet(walletRes.data.wallet);
+      setConvertRate(walletRes.data.rate || 1);
     } catch (err) {
       setError(err.message);
     }
@@ -216,6 +226,28 @@ export default function AdminPanel({ onBack }) {
       setChatMessages([]);
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  // Convierte Monedas propias en Diamantes retirables. Es exclusivo del
+  // administrador: el servidor rechaza la petición para cualquier otra cuenta.
+  async function handleConvert(e) {
+    e.preventDefault();
+    const coins = Number(convertAmount);
+    if (!Number.isFinite(coins) || coins <= 0 || converting) return;
+    setError('');
+    setNotice('');
+    setConverting(true);
+    try {
+      const { data } = await api.post('/admin/wallet/convert', { coins });
+      setNotice(data.message);
+      setConvertAmount('');
+      setAdminWallet(data.wallet);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -425,6 +457,41 @@ export default function AdminPanel({ onBack }) {
           </ul>
         )}
       </div>
+
+      {/* Cartera del administrador: convertir Monedas en Diamantes retirables.
+          Es la única cuenta que puede hacerlo; el servidor lo exige. */}
+      {adminWallet && (
+        <div className="moderation">
+          <div className="admin-section-head">
+            <h3>💎 Convertir Monedas en Diamantes</h3>
+          </div>
+          <p className="hint">
+            Solo tú puedes hacer esta conversión. Tienes{' '}
+            <strong>{Number(adminWallet.coins || 0).toFixed(2)}</strong> Monedas y{' '}
+            <strong>{Number(adminWallet.diamonds || 0).toFixed(2)}</strong> Diamantes.
+            Tasa: 1 Moneda = {convertRate} Diamante{convertRate === 1 ? '' : 's'}.
+          </p>
+          <form className="admin-chat-form" onSubmit={handleConvert}>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              inputMode="decimal"
+              placeholder="Monedas a convertir"
+              value={convertAmount}
+              onChange={(e) => setConvertAmount(e.target.value)}
+              disabled={converting}
+            />
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={converting || !(Number(convertAmount) > 0)}
+            >
+              {converting ? '…' : 'Convertir'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Retiros de Diamantes: aquí el administrador comprueba la cuenta de
           cobro, paga por fuera y lo marca. Rechazar devuelve los Diamantes. */}

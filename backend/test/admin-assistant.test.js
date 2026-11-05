@@ -277,6 +277,150 @@ test('an unknown tool is reported, not crashed on', async () => {
   assert.match(result.error, /desconocida/i);
 });
 
+/* ------------------------------------------------------------------ */
+/* Acceso de lectura completo y conversión                            */
+/* ------------------------------------------------------------------ */
+
+test('consultar_datos lee cualquier colección de la app', async () => {
+  const admin = await makeAdmin();
+  await User.create({ username: 'ana', email: 'ana@example.com', password: 'clave12345' });
+  await User.create({ username: 'bea', email: 'bea@example.com', password: 'clave12345' });
+
+  const result = await assistant.runTool('consultar_datos', {
+    coleccion: 'usuarios',
+    adminId: admin._id,
+  });
+  assert.ok(Array.isArray(result.documentos));
+  assert.ok(result.total >= 3);
+  assert.ok(result.documentos.some((u) => u.username === 'ana'));
+  // La proyección por defecto no filtra la contraseña de la salida.
+  assert.equal(result.documentos[0].password, undefined);
+});
+
+test('consultar_datos busca por texto y filtra por igualdad', async () => {
+  const admin = await makeAdmin();
+  await User.create({ username: 'carlos', email: 'carlos@example.com', password: 'clave12345' });
+  await User.create({ username: 'diana', email: 'diana@example.com', password: 'clave12345' });
+
+  const found = await assistant.runTool('consultar_datos', {
+    coleccion: 'users',
+    buscar: 'carlos',
+    adminId: admin._id,
+  });
+  assert.equal(found.documentos.length, 1);
+  assert.equal(found.documentos[0].username, 'carlos');
+
+  const filtered = await assistant.runTool('consultar_datos', {
+    coleccion: 'users',
+    filtro: JSON.stringify({ username: 'diana' }),
+    adminId: admin._id,
+  });
+  assert.equal(filtered.documentos.length, 1);
+  assert.equal(filtered.documentos[0].username, 'diana');
+});
+
+test('consultar_datos rechaza una colección desconocida y no ejecuta filtros raros', async () => {
+  const admin = await makeAdmin();
+  const bad = await assistant.runTool('consultar_datos', {
+    coleccion: 'passwords',
+    adminId: admin._id,
+  });
+  assert.match(bad.error, /desconocida/i);
+  assert.ok(bad.disponibles.includes('users'));
+
+  // Un filtro con operadores ($where) se descarta: solo entran igualdades.
+  await User.create({ username: 'eva', email: 'eva@example.com', password: 'clave12345' });
+  const res = await assistant.runTool('consultar_datos', {
+    coleccion: 'users',
+    filtro: JSON.stringify({ $where: 'this.username' }),
+    adminId: admin._id,
+  });
+  // Sin filtro efectivo, devuelve las cuentas (no revienta por el $where).
+  assert.ok(res.total >= 1);
+});
+
+test('esquema_app lista las colecciones y sus campos', async () => {
+  const admin = await makeAdmin();
+  const res = await assistant.runTool('esquema_app', { adminId: admin._id });
+  const names = res.colecciones.map((c) => c.coleccion);
+  assert.ok(names.includes('users'));
+  assert.ok(names.includes('transactions'));
+  assert.ok(names.includes('messages'));
+});
+
+test('convertir_monedas_a_diamantes convierte las Monedas del administrador', async () => {
+  const admin = await makeAdmin();
+  await User.updateOne({ _id: admin._id }, { $set: { 'wallet.ttcC': 1000, 'wallet.ttcR': 0 } });
+
+  const result = await assistant.runTool('convertir_monedas_a_diamantes', {
+    cantidad: 300,
+    adminId: admin._id,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.monedasConvertidas, 300);
+  assert.equal(result.diamantes, 300);
+
+  const updated = await User.findById(admin._id);
+  assert.equal(updated.wallet.ttcC, 700);
+  assert.equal(updated.wallet.ttcR, 300);
+
+  const ledger = await require('../src/models/Transaction').findOne({ type: 'convert' });
+  assert.ok(ledger);
+  assert.equal(ledger.amount, 300);
+});
+
+test('convertir_monedas_a_diamantes avisa si no hay Monedas suficientes', async () => {
+  const admin = await makeAdmin();
+  await User.updateOne({ _id: admin._id }, { $set: { 'wallet.ttcC': 10, 'wallet.ttcR': 0 } });
+
+  const result = await assistant.runTool('convertir_monedas_a_diamantes', {
+    cantidad: 500,
+    adminId: admin._id,
+  });
+  assert.match(result.error, /suficientes/i);
+
+  const updated = await User.findById(admin._id);
+  assert.equal(updated.wallet.ttcC, 10);
+  assert.equal(updated.wallet.ttcR, 0);
+});
+
+/* ------------------------------------------------------------------ */
+/* Ruta de conversión (solo administrador)                            */
+/* ------------------------------------------------------------------ */
+
+test('la ruta de conversión es solo para administradores', async () => {
+  const agent = app();
+  const reg = await registerUser(agent);
+  const res = await agent
+    .post('/api/admin/wallet/convert')
+    .set('Authorization', `Bearer ${reg.token}`)
+    .send({ coins: 100 });
+  assert.equal(res.status, 403, JSON.stringify(res.body));
+});
+
+test('la ruta de conversión convierte y devuelve el saldo nuevo', async () => {
+  const admin = await makeAdmin();
+  await User.updateOne({ _id: admin._id }, { $set: { 'wallet.ttcC': 500, 'wallet.ttcR': 0 } });
+
+  const res = await app()
+    .post('/api/admin/wallet/convert')
+    .set('Authorization', `Bearer ${signToken(admin)}`)
+    .send({ coins: 200 });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.diamonds, 200);
+  assert.equal(res.body.wallet.ttcC, 300);
+  assert.equal(res.body.wallet.ttcR, 200);
+});
+
+test('la ruta de conversión rechaza una cantidad inválida', async () => {
+  const admin = await makeAdmin();
+  const res = await app()
+    .post('/api/admin/wallet/convert')
+    .set('Authorization', `Bearer ${signToken(admin)}`)
+    .send({ coins: -5 });
+  assert.equal(res.status, 400, JSON.stringify(res.body));
+});
+
 // Regresión: el modelo rellena los opcionales con `null` y el proveedor rechaza
 // el esquema si no son nullables, tumbando la petición con un 400.
 test('los parámetros opcionales de las herramientas admiten null', () => {

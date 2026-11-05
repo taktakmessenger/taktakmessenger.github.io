@@ -3,6 +3,22 @@ const User = require('../models/User');
 const Video = require('../models/Video');
 const Report = require('../models/Report');
 const Transaction = require('../models/Transaction');
+const Comment = require('../models/Comment');
+const Post = require('../models/Post');
+const PostComment = require('../models/PostComment');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
+const Notification = require('../models/Notification');
+const Listing = require('../models/Listing');
+const ManualOrder = require('../models/ManualOrder');
+const PaymentMethod = require('../models/PaymentMethod');
+const Gift = require('../models/Gift');
+const PokerEvent = require('../models/PokerEvent');
+const Squad = require('../models/Squad');
+const Sound = require('../models/Sound');
+const WatchEvent = require('../models/WatchEvent');
+const Verification = require('../models/Verification');
+const NewsSource = require('../models/NewsSource');
 const walletService = require('../services/walletService');
 const manualPaymentService = require('../services/manualPaymentService');
 const asistak = require('../services/asistakService');
@@ -24,6 +40,186 @@ const assistantThreadService = require('./assistantThreadService');
 // no puede inventarse un dato ni una operación que no exista.
 
 const MAX_TOOL_ROUNDS = 6;
+
+// Registro de colecciones que el asistente puede consultar en modo lectura.
+//
+// En vez de una herramienta por cada pantalla de la app (que multiplicaría el
+// esquema de herramientas y dispararía el gasto de tokens por turno, que es lo
+// que agotaba la cuota del proveedor), se expone una única herramienta
+// `consultar_datos` que acepta el nombre de la colección. La lista es blanca:
+// solo entran colecciones de lectura; nada de credenciales (`Verification`,
+// `PaymentMethod`) ni del hilo interno del propio asistente.
+//
+// `campos` son los que se devuelven por defecto (proyección) para no volcar
+// documentos enteros ni gastar contexto de más; `buscar` son los campos sobre
+// los que actúa el texto libre.
+const COLLECTIONS = {
+  users: {
+    model: () => User,
+    campos: 'username email role wallet stats createdAt lastSeenAt phone emailVerified',
+    buscar: ['username', 'email'],
+    descripcion: 'Cuentas de la app: saldo (wallet), rol, estado y fechas.',
+  },
+  videos: {
+    model: () => Video,
+    campos: 'title creator views likes moderationStatus createdAt duration isLive tags',
+    buscar: ['title', 'tags'],
+    descripcion: 'Vídeos del feed: autor, vistas, me gusta y estado de moderación.',
+  },
+  transactions: {
+    model: () => Transaction,
+    campos: 'from to amount type ttcType status method details createdAt',
+    buscar: ['type', 'details'],
+    descripcion: 'Libro de movimientos de dinero: regalos, compras, retiros, conversiones, rake.',
+  },
+  reports: {
+    model: () => Report,
+    campos: 'reporter targetType targetId reason status details createdAt',
+    buscar: ['reason', 'details'],
+    descripcion: 'Reportes de usuarios sobre contenido o cuentas.',
+  },
+  comments: {
+    model: () => Comment,
+    campos: 'video author text likes createdAt deletedAt',
+    buscar: ['text'],
+    descripcion: 'Comentarios de los vídeos.',
+  },
+  posts: {
+    model: () => Post,
+    campos: 'kind author text likes comments visibility createdAt hiddenAt',
+    buscar: ['text'],
+    descripcion: 'Publicaciones de Facetak.',
+  },
+  postcomments: {
+    model: () => PostComment,
+    campos: 'post author text likes createdAt deletedAt',
+    buscar: ['text'],
+    descripcion: 'Comentarios de las publicaciones de Facetak.',
+  },
+  conversations: {
+    model: () => Conversation,
+    campos: 'type participants lastMessageAt lastMessagePreview unread',
+    buscar: ['type'],
+    descripcion: 'Conversaciones de WhaTaka (chats).',
+  },
+  messages: {
+    model: () => Message,
+    campos: 'kind conversation sender text status createdAt deletedAt',
+    buscar: ['text'],
+    descripcion: 'Mensajes de WhaTaka, incluidos los avisos de llamada.',
+  },
+  notifications: {
+    model: () => Notification,
+    campos: 'recipient actor type read createdAt amount giftName',
+    buscar: ['type'],
+    descripcion: 'Notificaciones enviadas a los usuarios.',
+  },
+  listings: {
+    model: () => Listing,
+    campos: 'seller title price category condition status views createdAt',
+    buscar: ['title', 'category'],
+    descripcion: 'Artículos del mercadillo.',
+  },
+  manualorders: {
+    model: () => ManualOrder,
+    campos: 'user coins priceUsd method reference status createdAt',
+    buscar: ['reference', 'method'],
+    descripcion: 'Órdenes de compra de monedas con pago manual (Zinli, etc.).',
+  },
+  gifts: {
+    model: () => Gift,
+    campos: 'name coinCost category isActive sortOrder',
+    buscar: ['name', 'category'],
+    descripcion: 'Catálogo de regalos y su coste en monedas.',
+  },
+  pokerevents: {
+    model: () => PokerEvent,
+    campos: 'title createdBy scheduledAt entryCost maxPlayers status prizePool',
+    buscar: ['title'],
+    descripcion: 'Torneos de POKERTAK.',
+  },
+  squads: {
+    model: () => Squad,
+    campos: 'name slug owner visibility members createdAt',
+    buscar: ['name', 'slug'],
+    descripcion: 'Salas/squads de la app.',
+  },
+  sounds: {
+    model: () => Sound,
+    campos: 'title artist usageCount createdBy createdAt',
+    buscar: ['title', 'artist'],
+    descripcion: 'Catálogo de sonidos.',
+  },
+  watchevents: {
+    model: () => WatchEvent,
+    campos: 'userId videoId watchDuration completed completionRate createdAt',
+    buscar: [],
+    descripcion: 'Eventos de visualización (analítica del feed).',
+  },
+  newssources: {
+    model: () => NewsSource,
+    campos: 'name domains status verifiedAt notes',
+    buscar: ['name', 'domains'],
+    descripcion: 'Fuentes de noticias verificadas.',
+  },
+};
+
+// Traduce el nombre que escribe el modelo a la clave del registro, tolerando
+// singular/plural y mayúsculas ("usuario" → "users"). Sin esto, el modelo tendría
+// que acertar el plural exacto y fallaría a menudo.
+function resolveCollection(name) {
+  const raw = String(name || '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!raw) return null;
+  if (COLLECTIONS[raw]) return { key: raw, def: COLLECTIONS[raw] };
+
+  // Alias en singular que no salen de añadir/quitar la "s".
+  const aliases = {
+    usuario: 'users',
+    user: 'users',
+    video: 'videos',
+    transaccion: 'transactions',
+    transacciones: 'transactions',
+    reporte: 'reports',
+    reportes: 'reports',
+    comentario: 'comments',
+    comentarios: 'comments',
+    mensaje: 'messages',
+    mensajes: 'messages',
+    conversacion: 'conversations',
+    conversaciones: 'conversations',
+    notificacion: 'notifications',
+    notificaciones: 'notifications',
+    publicacion: 'posts',
+    publicaciones: 'posts',
+    regalo: 'gifts',
+    regalos: 'gifts',
+    torneo: 'pokerevents',
+    torneos: 'pokerevents',
+    sala: 'squads',
+    salas: 'squads',
+    sonido: 'sounds',
+    sonidos: 'sounds',
+    orden: 'manualorders',
+    ordenes: 'manualorders',
+    compra: 'manualorders',
+    compras: 'manualorders',
+  };
+
+  // Se prueban el nombre tal cual, en plural y en singular (quitando la "s" o
+  // "es"), tanto contra el registro como contra los alias. Así "usuarios",
+  // "usuario" y "users" caen todos en la misma colección.
+  const variants = new Set([
+    raw,
+    `${raw}s`,
+    raw.replace(/s$/, ''),
+    raw.replace(/es$/, ''),
+  ]);
+  for (const v of variants) {
+    if (COLLECTIONS[v]) return { key: v, def: COLLECTIONS[v] };
+    if (aliases[v]) return { key: aliases[v], def: COLLECTIONS[aliases[v]] };
+  }
+  return null;
+}
 
 // El modelo rellena con `null` los parámetros opcionales que no usa, y el
 // validador de esquema del proveedor rechaza `null` donde espera un `string`.
@@ -150,6 +346,65 @@ const TOOLS = [
           bucket: { type: 'string', enum: ['bonusC', 'ttcC', 'ttcR'] },
         },
         required: ['id', 'cantidad'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_datos',
+      description:
+        'Consulta cualquier colección de la app en modo lectura (usuarios, vídeos, transacciones, mensajes, chats, publicaciones, comentarios, reportes, notificaciones, mercadillo, órdenes de compra, regalos, torneos, salas, sonidos, fuentes de noticias…). Úsala para responder cualquier pregunta sobre datos que no cubra otra herramienta. `buscar` hace coincidencia parcial en los campos de texto; `filtro` es un objeto JSON de igualdades exactas.',
+      parameters: {
+        type: 'object',
+        properties: {
+          coleccion: {
+            type: 'string',
+            description:
+              'Nombre de la colección (singular o plural). Ej: users, videos, transactions, messages, posts, comments, reports, manualorders, pokerevents, squads, gifts, listings, notifications.',
+          },
+          buscar: { type: 'string', description: 'Texto a buscar (parcial) en los campos de texto de la colección. Opcional.' },
+          filtro: {
+            type: 'string',
+            description:
+              'Filtros exactos en JSON, p. ej. {"status":"pending"} o {"role":"admin"}. Opcional.',
+          },
+          campos: {
+            type: 'string',
+            description: 'Campos a devolver separados por coma. Si se omite, se usan los campos por defecto de esa colección.',
+          },
+          limite: { type: 'number', description: 'Máximo de documentos (por defecto 20, tope 100).' },
+          orden: {
+            type: 'string',
+            enum: ['reciente', 'antiguo'],
+            description: 'Orden por fecha de creación. Por defecto reciente.',
+          },
+        },
+        required: ['coleccion'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'esquema_app',
+      description:
+        'Devuelve la lista de colecciones consultables y los campos de cada una. Úsala cuando no sepas en qué colección o campo está un dato.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'convertir_monedas_a_diamantes',
+      description:
+        'Convierte Monedas de la cuenta del administrador en Diamantes retirables (1 a 1 por defecto). Solo funciona sobre la cuenta del propio administrador. Requiere la cantidad de Monedas.',
+      parameters: {
+        type: 'object',
+        properties: {
+          cantidad: { type: 'number', description: 'Monedas a convertir en Diamantes' },
+        },
+        required: ['cantidad'],
       },
     },
   },
@@ -423,6 +678,16 @@ Compras de monedas (pagos):
 - "pagos_pendientes" solo lista lo que está sin revisar; para el historial completo usa "listar_pagos".
 - Aprobar un pago ("aprobar_pago") acredita monedas de verdad: hazlo solo si el administrador confirma que el pago llegó. Aprobar dos veces no duplica el abono (da error). Rechazar ("rechazar_pago") no acredita nada.
 - Cuando el administrador no dé fechas, no las inventes: responde con el total acumulado y ofrece filtrar por fechas.
+
+Monedas y Diamantes:
+- Monedas (TTC) se gastan en la app (regalos, torneos). Diamantes son el saldo retirable.
+- El administrador SÍ puede convertir sus Monedas en Diamantes: usa "convertir_monedas_a_diamantes" con la cantidad. La tasa por defecto es 1 Moneda = 1 Diamante. Solo funciona sobre la cuenta del administrador.
+- Si te preguntan si las monedas se pueden convertir en Diamantes, la respuesta es que sí: el administrador puede hacerlo con "convertir_monedas_a_diamantes" (1 a 1 por defecto), y las monedas de regalo (bonusC) no son convertibles, solo las Monedas compradas (ttcC).
+
+Consultar cualquier dato de la app:
+- Tienes acceso de lectura a toda la app. Para preguntas que no cubra una herramienta específica, usa "consultar_datos" indicando la colección (usuarios, vídeos, transacciones, mensajes, conversaciones, publicaciones, comentarios, reportes, notificaciones, mercadillo, órdenes de compra, regalos, torneos, salas, sonidos, fuentes de noticias…).
+- Si no sabes en qué colección o campo está un dato, llama antes a "esquema_app" y te devuelve la lista de colecciones y sus campos.
+- Usa "buscar" para texto libre y "filtro" (JSON) para igualdades exactas. Nunca inventes datos: si la consulta no devuelve nada, dilo.
 
 Retiros de Diamantes:
 - "listar_retiros" muestra las solicitudes (por defecto las pendientes) con usuario, monto, método y datos de cobro.
@@ -785,6 +1050,106 @@ async function runTool(name, args) {
       }
     }
 
+    case 'esquema_app': {
+      return {
+        colecciones: Object.entries(COLLECTIONS).map(([key, def]) => ({
+          coleccion: key,
+          descripcion: def.descripcion,
+          campos: def.campos.split(' '),
+        })),
+      };
+    }
+
+    case 'consultar_datos': {
+      const resolved = resolveCollection(args.coleccion);
+      if (!resolved) {
+        return {
+          error: `Colección desconocida: ${args.coleccion}`,
+          disponibles: Object.keys(COLLECTIONS),
+        };
+      }
+      const { key, def } = resolved;
+
+      // Filtro: solo igualdades sobre valores escalares. Se descartan objetos y
+      // arrays (que podrían colar operadores como `$where`) y las claves que
+      // empiezan por `$`, para que el modelo no pueda ejecutar nada raro.
+      let filtro = {};
+      if (args.filtro) {
+        let parsed = args.filtro;
+        if (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch {
+            return { error: 'El filtro no es JSON válido' };
+          }
+        }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (const [k, v] of Object.entries(parsed)) {
+            if (k.startsWith('$')) continue;
+            if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) {
+              filtro[k] = v;
+            }
+          }
+        }
+      }
+
+      // Texto libre: OR de coincidencias parciales sobre los campos de texto
+      // declarados para esa colección. Se escapa el término para que no se
+      // interprete como expresión regular.
+      const term = String(args.buscar || '').trim();
+      if (term && def.buscar.length) {
+        const rx = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        filtro = { $and: [filtro, { $or: def.buscar.map((f) => ({ [f]: rx })) }] };
+      }
+
+      // Campos: los que pida el modelo, siempre en modo inclusivo y excluyendo
+      // lo que empiece por `$`. Si no pide, la proyección por defecto.
+      let projection = def.campos;
+      if (typeof args.campos === 'string' && args.campos.trim()) {
+        const wanted = args.campos
+          .split(',')
+          .map((c) => c.trim())
+          .filter((c) => c && !c.startsWith('$'));
+        if (wanted.length) projection = wanted.join(' ');
+      }
+
+      const limit = Math.min(Math.max(Number(args.limite) || 20, 1), 100);
+      const sort = args.orden === 'antiguo' ? 1 : -1;
+
+      const Model = def.model();
+      const docs = await Model.find(filtro)
+        .select(projection)
+        .sort({ createdAt: sort })
+        .limit(limit)
+        .lean();
+      const total = await Model.countDocuments(filtro);
+
+      return {
+        coleccion: key,
+        total,
+        devueltos: docs.length,
+        documentos: docs.map((d) => ({ ...d, _id: d._id?.toString?.() ?? d._id })),
+      };
+    }
+
+    case 'convertir_monedas_a_diamantes': {
+      try {
+        const result = await walletService.convertCoinsToDiamonds({
+          userId: args.adminId,
+          coins: args.cantidad,
+          rate: env.coinToDiamondRate,
+        });
+        return {
+          ok: true,
+          monedasConvertidas: result.coins,
+          diamantes: result.diamonds,
+          saldo: result.wallet,
+        };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
     default:
       return { error: `Herramienta desconocida: ${name}` };
   }
@@ -814,11 +1179,20 @@ async function chat({ message, adminId }) {
   // Hilo previo (sin el mensaje nuevo) para reconstruir el contexto.
   const history = await assistantThreadService.load(adminId);
 
+  // El límite del proveedor es por tokens por minuto, y el esquema de
+  // herramientas más el prompt ya gastan una parte fija en cada vuelta. Mandar
+  // 40 turnos de hasta 4000 caracteres disparaba el 429: se recorta el contexto
+  // a los últimos turnos y a una longitud útil. La conversación completa sigue
+  // guardada; solo se manda al modelo lo reciente.
+  const CONTEXT_TURNS = 12;
+  const CONTEXT_CHARS = 1500;
+  const recent = history.slice(-CONTEXT_TURNS);
+
   const conversation = [
     { role: 'system', content: SYSTEM_PROMPT },
-    ...history.map((m) => ({
+    ...recent.map((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: String(m.content || '').slice(0, 4000),
+      content: String(m.content || '').slice(0, CONTEXT_CHARS),
     })),
     { role: 'user', content: String(message || '').slice(0, 4000) },
   ];
@@ -833,6 +1207,9 @@ async function chat({ message, adminId }) {
         temperature: 0,
         messages: conversation,
         tools: TOOLS,
+        // Acota la respuesta: sin tope, el modelo puede gastar cientos de
+        // tokens en texto que no aporta y agotar antes la cuota.
+        max_tokens: 700,
       },
       timeoutMs: 30000,
       log: '[ASISTENTE]',
@@ -869,7 +1246,10 @@ async function chat({ message, adminId }) {
       conversation.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: JSON.stringify(result),
+        // Un resultado grande (p. ej. 100 documentos) se reenvía al modelo en
+        // cada vuelta y cuenta para el límite. Se recorta para que una consulta
+        // amplia no deje sin cuota el resto de la conversación.
+        content: JSON.stringify(result).slice(0, 6000),
       });
     }
   }

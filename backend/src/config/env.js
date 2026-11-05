@@ -331,6 +331,12 @@ const env = {
   // regalo.
   welcomeBonusCoins: Number(process.env.WELCOME_BONUS_COINS ?? 100),
 
+  // Cuántos Diamantes da cada Moneda pagada al convertir. Solo el administrador
+  // puede convertir (ver `convertCoinsToDiamonds` y la ruta admin), así que la
+  // tasa por defecto es 1 a 1. Se deja configurable por si el dueño quiere
+  // aplicar un descuento al canje.
+  coinToDiamondRate: Number(process.env.COIN_TO_DIAMOND_RATE ?? 1),
+
   // Programa de referidos: quien invita cobra un porcentaje de lo que su
   // invitado compre, en monedas de regalo.
   //

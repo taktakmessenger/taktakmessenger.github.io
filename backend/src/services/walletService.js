@@ -433,6 +433,61 @@ async function rejectWithdrawal({ transactionId, adminId, reason }) {
   };
 }
 
+/**
+ * Convierte Monedas pagadas (`ttcC`) en Diamantes retirables (`ttcR`).
+ *
+ * Solo la usa el administrador: es la válvula que permite al dueño convertir
+ * monedas que ya están en su cuenta. La conversión es 1 a 1 por defecto
+ * (`COIN_TO_DIAMOND_RATE`), sin pasar por el reparto de regalos, y queda
+ * registrada en el libro con `type: 'convert'` para poder auditarla.
+ *
+ * El débito va primero y con `$gte`, así que nunca deja el saldo en negativo: si
+ * dos conversiones coinciden, la segunda no encuentra documento y reintenta con
+ * el saldo ya actualizado.
+ */
+async function convertCoinsToDiamonds({ userId, coins, rate }) {
+  const amount = round2(Number(coins));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HttpError(400, 'Cantidad inválida');
+  }
+
+  const appliedRate = Number.isFinite(Number(rate)) && Number(rate) > 0 ? Number(rate) : 1;
+  const diamonds = round2(amount * appliedRate);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const user = await User.findOneAndUpdate(
+      { _id: userId, 'wallet.ttcC': { $gte: amount } },
+      { $inc: { 'wallet.ttcC': -amount, 'wallet.ttcR': diamonds } },
+      { new: true }
+    );
+    if (user) {
+      await Transaction.create({
+        from: userId,
+        to: userId,
+        amount,
+        type: 'convert',
+        ttcType: 'ttcR',
+        details: `${amount} Monedas → ${diamonds} Diamantes (tasa ${appliedRate})`,
+      });
+      return { coins: amount, diamonds, rate: appliedRate, wallet: user.wallet };
+    }
+
+    // El saldo no alcanzaba en este intento. Si de verdad no llega, no hay
+    // nada que reintentar; se comprueba para dar un mensaje claro en vez de un
+    // fallo opaco tras diez vueltas.
+    const current = await User.findById(userId).select('wallet');
+    if (!current) throw new HttpError(404, 'Usuario no encontrado');
+    if ((current.wallet.ttcC || 0) < amount) {
+      throw new HttpError(
+        400,
+        `No tienes suficientes Monedas: ${round2(current.wallet.ttcC || 0)} disponibles, ${amount} pedidas`
+      );
+    }
+  }
+
+  throw new HttpError(409, 'No se pudo completar la conversión, inténtalo de nuevo');
+}
+
 async function getWallet(userId) {
   const user = await User.findById(userId).select('wallet stats');
   if (!user) throw new HttpError(404, 'Usuario no encontrado');
@@ -478,6 +533,7 @@ module.exports = {
   listWithdrawals,
   payWithdrawal,
   rejectWithdrawal,
+  convertCoinsToDiamonds,
   getWallet,
   getPlatformEarnings,
   listTransactions,

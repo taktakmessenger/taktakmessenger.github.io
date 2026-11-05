@@ -90,11 +90,24 @@ router.post(
         error: 'El asistente no está configurado (falta ASSISTANT_API_KEY).',
       });
     }
-    const result = await adminAssistant.chat({
-      message: req.body.message,
-      adminId: req.user.userId,
-    });
-    res.json(result);
+    try {
+      const result = await adminAssistant.chat({
+        message: req.body.message,
+        adminId: req.user.userId,
+      });
+      return res.json(result);
+    } catch (err) {
+      // La cuota del proveedor (429) es lo que más ve el administrador. En vez
+      // de volcar el JSON del proveedor, se devuelve una frase útil y un 503
+      // para que el cliente la muestre tal cual.
+      if (err.status === 429) {
+        return res.status(503).json({
+          error:
+            'GLENIS IA está saturada en este momento (límite del proveedor). Espera unos segundos y vuelve a preguntar.',
+        });
+      }
+      throw err;
+    }
   })
 );
 
@@ -106,6 +119,44 @@ router.delete(
   asyncHandler(async (req, res) => {
     await assistantThreadService.clear(req.user.userId);
     res.json({ cleared: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Cartera del administrador                                           */
+/* ------------------------------------------------------------------ */
+//
+// Convertir Monedas en Diamantes retirables es una facultad exclusiva del
+// administrador: es la única vía por la que monedas sin reparto de regalos se
+// vuelven saldo canjeable. Todo el router ya pasa por `requireAdmin`, así que
+// ninguna cuenta normal puede llegar aquí.
+
+router.get(
+  '/wallet',
+  asyncHandler(async (req, res) => {
+    res.json({
+      wallet: await walletService.getWallet(req.user.userId),
+      rate: env.coinToDiamondRate,
+    });
+  })
+);
+
+router.post(
+  '/wallet/convert',
+  [
+    body('coins').isFloat({ gt: 0 }).withMessage('Cantidad inválida').toFloat(),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await walletService.convertCoinsToDiamonds({
+      userId: req.user.userId,
+      coins: req.body.coins,
+      rate: env.coinToDiamondRate,
+    });
+    res.json({
+      message: `Convertiste ${result.coins} Monedas en ${result.diamonds} Diamantes`,
+      ...result,
+    });
   })
 );
 
