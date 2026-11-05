@@ -149,6 +149,10 @@ const userSchema = new mongoose.Schema(
     // de nada. Se puede apagar para quien trabaja en silencio y prefiere ver
     // solo la notificación.
     callRingtone: { type: Boolean, default: true },
+    // Qué repique suena al entrar una llamada. Es un id del catálogo del
+    // frontend (`lib/ringtones.js`); aquí se guarda como texto libre para no
+    // atar el backend a la lista, y el cliente cae al clásico si no lo conoce.
+    callRingtoneId: { type: String, default: 'clasico', maxlength: 40 },
 
     // Moderación de Asistak, el asistente administrativo. Cuando el asistente
     // detecta faltas de respeto en un directo o en la sala de juegos, puede

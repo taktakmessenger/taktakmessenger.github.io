@@ -9,6 +9,8 @@
 // esté en el sitio correcto. La vibración usa la Vibration API (Android; en iOS
 // y escritorio se ignora sin más).
 
+import { findRingtone, DEFAULT_RINGTONE_ID } from './ringtones.js';
+
 let ctx = null;
 let stopCurrent = null;
 let ringingMode = null;
@@ -69,29 +71,30 @@ function beep(context, { startAt, frequency, duration, gain = 0.08 }) {
   osc.stop(startAt + duration);
 }
 
-// Patrones en segundos. Entrante: doble timbre, como un teléfono. Saliente: un
-// tono más grave y espaciado, para saber que suena pero no molestar.
-const PATTERNS = {
-  incoming: [
-    { offset: 0, frequency: 660, duration: 0.35 },
-    { offset: 0.45, frequency: 880, duration: 0.35 },
-  ],
-  outgoing: [{ offset: 0, frequency: 440, duration: 0.5 }],
+// Patrones en segundos. El saliente (se está llamando) es un tono más grave y
+// espaciado, para saber que suena sin molestar; el entrante sale del catálogo
+// de repiques elegido por la persona.
+const OUTGOING = {
+  pattern: [{ offset: 0, frequency: 440, duration: 0.5 }],
+  periodMs: 3000,
+  vibration: [200],
 };
-
-const PERIOD_MS = { incoming: 2000, outgoing: 3000 };
-const VIBRATION = { incoming: [400, 200, 400, 200], outgoing: [200] };
 
 /**
  * Empieza a sonar y vibrar. `mode` es 'incoming' (alguien llama) o 'outgoing'
- * (se está llamando a alguien). Es idempotente para el mismo modo: llamarlo dos
- * veces no apila dos tonos.
+ * (se está llamando a alguien).
+ *
+ * `ringtoneId` elige el repique del catálogo; solo aplica al modo entrante, que
+ * es el que la persona configura. Es idempotente para la misma combinación:
+ * llamarlo dos veces no apila dos tonos.
  */
-export function startRingtone(mode = 'incoming') {
+export function startRingtone(mode = 'incoming', ringtoneId = DEFAULT_RINGTONE_ID) {
   stopRingtone();
 
-  const pattern = PATTERNS[mode] || PATTERNS.incoming;
-  const periodMs = PERIOD_MS[mode] || PERIOD_MS.incoming;
+  const preset = mode === 'outgoing' ? OUTGOING : findRingtone(ringtoneId);
+  const pattern = preset.pattern;
+  const periodMs = preset.periodMs;
+  const vibratePattern = preset.vibration;
   ringingMode = mode;
   announce(mode);
 
@@ -111,7 +114,6 @@ export function startRingtone(mode = 'incoming') {
   // La vibración va por su cuenta: aunque el navegador tenga el audio bloqueado
   // (nunca hubo un toque), el teléfono debe notarse.
   let vibrateTimer = null;
-  const vibratePattern = VIBRATION[mode] || VIBRATION.incoming;
   const vibrate = () => {
     globalThis.navigator?.vibrate?.(vibratePattern);
   };

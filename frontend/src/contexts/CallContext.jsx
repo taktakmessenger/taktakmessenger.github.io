@@ -207,7 +207,7 @@ export function CallProvider({ children }) {
       return;
     }
     if (status === 'incoming') {
-      startRingtone('incoming');
+      startRingtone('incoming', user?.callRingtoneId);
       return;
     }
     if (status === 'ringing') {
@@ -215,7 +215,7 @@ export function CallProvider({ children }) {
       return;
     }
     stopRingtone();
-  }, [status, ringtoneOn]);
+  }, [status, ringtoneOn, user?.callRingtoneId]);
 
   // Al desmontar no debe quedar un tono sonando para siempre.
   useEffect(() => () => stopRingtone(), []);

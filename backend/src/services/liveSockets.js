@@ -350,6 +350,15 @@ function broadcastMessage(message, participants, senderId) {
     if (String(participant) === String(senderId)) continue;
     ioInstance.to(userRoom(String(participant))).emit('chat:notify', message);
 
+    // Si el destinatario no tiene ningún socket abierto (app cerrada o en
+    // segundo plano), el `chat:notify` no llega a nadie: sin este push el
+    // mensaje se quedaba mudo hasta que abriera la app. Es la mitad que hace
+    // que TAK TAK avise como WhatsApp. Con la app abierta no se manda: el aviso
+    // en vivo ya lo muestra y un push duplicaría la vibración.
+    if (!isOnline(participant)) {
+      pushService.sendToUser(participant, messagePushPayload(message)).catch(() => {});
+    }
+
     // Recibo de entrega: si el destinatario tiene algún socket abierto, el
     // mensaje acaba de llegar a su dispositivo y el emisor puede pasar al
     // segundo tick. Se comprueba por sockets en vez de darlo por hecho porque
@@ -367,6 +376,30 @@ function broadcastMessage(message, participants, senderId) {
       })
       .catch(() => {});
   }
+}
+
+// Payload del push de un mensaje. Se manda lo justo para una pantalla de
+// bloqueo: quién escribe y un recorte del texto. La etiqueta es estable por
+// conversación, así que varios mensajes seguidos del mismo hilo se agrupan en
+// una sola notificación en vez de apilar una por mensaje.
+function messagePushPayload(message) {
+  const sender = message.sender?.username ? `@${message.sender.username}` : 'Nuevo mensaje';
+  const body = message.text
+    ? String(message.text).slice(0, 120)
+    : message.kind === 'attachment'
+      ? 'Te envió un archivo'
+      : 'Tienes un mensaje nuevo';
+  return {
+    type: 'message',
+    title: sender,
+    body,
+    tag: `chat-${message.conversation}`,
+    data: {
+      url: `/?chat=${message.conversation}`,
+      type: 'message',
+      conversationId: String(message.conversation),
+    },
+  };
 }
 
 function initLiveSockets(server) {
