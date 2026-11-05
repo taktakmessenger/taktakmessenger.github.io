@@ -421,6 +421,91 @@ test('la ruta de conversión rechaza una cantidad inválida', async () => {
   assert.equal(res.status, 400, JSON.stringify(res.body));
 });
 
+/* ------------------------------------------------------------------ */
+/* Vincular teléfono sin SMS                                           */
+/* ------------------------------------------------------------------ */
+
+test('el administrador vincula un teléfono sin SMS', async () => {
+  const admin = await makeAdmin();
+  const target = await User.create({
+    username: 'sintelefono',
+    email: 'sintelefono@example.com',
+    password: 'clave12345',
+  });
+
+  const res = await app()
+    .post(`/api/admin/users/${target._id}/phone`)
+    .set('Authorization', `Bearer ${signToken(admin)}`)
+    .send({ phone: '305 2111153', country: 'CO' });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+
+  const updated = await User.findById(target._id);
+  assert.equal(updated.phone, '+573052111153');
+  assert.equal(updated.phoneVerified, true);
+});
+
+test('vincular un teléfono que ya es de otra cuenta da 409', async () => {
+  const admin = await makeAdmin();
+  const owner = await User.create({
+    username: 'duena',
+    email: 'duena@example.com',
+    password: 'clave12345',
+    phone: '+573001112233',
+    phoneVerified: true,
+  });
+  const other = await User.create({
+    username: 'otro',
+    email: 'otro@example.com',
+    password: 'clave12345',
+  });
+
+  const res = await app()
+    .post(`/api/admin/users/${other._id}/phone`)
+    .set('Authorization', `Bearer ${signToken(admin)}`)
+    .send({ phone: '+573001112233', country: 'CO' });
+  assert.equal(res.status, 409, JSON.stringify(res.body));
+
+  const still = await User.findById(other._id);
+  assert.equal(still.phone, undefined);
+  assert.ok(owner.phone);
+});
+
+test('vincular un teléfono inválido da 400', async () => {
+  const admin = await makeAdmin();
+  const target = await User.create({
+    username: 'malnumero',
+    email: 'malnumero@example.com',
+    password: 'clave12345',
+  });
+  const res = await app()
+    .post(`/api/admin/users/${target._id}/phone`)
+    .set('Authorization', `Bearer ${signToken(admin)}`)
+    .send({ phone: '123', country: 'CO' });
+  assert.equal(res.status, 400, JSON.stringify(res.body));
+});
+
+test('la herramienta vincular_telefono del asistente asigna el número', async () => {
+  const admin = await makeAdmin();
+  const target = await User.create({
+    username: 'porasistente',
+    email: 'porasistente@example.com',
+    password: 'clave12345',
+  });
+
+  const result = await assistant.runTool('vincular_telefono', {
+    id: target._id.toString(),
+    telefono: '305 2111153',
+    pais: 'CO',
+    adminId: admin._id,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.telefono, '+573052111153');
+
+  const updated = await User.findById(target._id);
+  assert.equal(updated.phone, '+573052111153');
+  assert.equal(updated.phoneVerified, true);
+});
+
 // Regresión: el modelo rellena los opcionales con `null` y el proveedor rechaza
 // el esquema si no son nullables, tumbando la petición con un 400.
 test('los parámetros opcionales de las herramientas admiten null', () => {

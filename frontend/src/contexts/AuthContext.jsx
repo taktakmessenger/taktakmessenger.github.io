@@ -166,6 +166,10 @@ export function AuthProvider({ children }) {
 
   // Phone sign-up is two steps: request a code, then verify it. The account is
   // created by the second call, so an unverified number cannot take it.
+  //
+  // Con un proveedor de SMS configurado el primer paso solo manda el código. Sin
+  // proveedor no hay código que esperar: el servidor crea la cuenta y devuelve
+  // la sesión ya lista, así que se persiste aquí mismo.
   async function startPhoneSignup({ phone, country, username, password }) {
     const { data } = await api.post('/auth/phone/start', {
       phone,
@@ -173,6 +177,7 @@ export function AuthProvider({ children }) {
       username: username || undefined,
       password: password || undefined,
     });
+    if (data.token) persist(data);
     return data;
   }
 

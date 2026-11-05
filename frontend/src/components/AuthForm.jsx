@@ -151,6 +151,37 @@ function CodeInput({ value, onChange, disabled }) {
   );
 }
 
+// País + número para el registro por teléfono. Reutiliza el mismo aspecto que
+// el selector de la pantalla de vincular teléfono.
+function PhoneCountryFields({ countries, country, onCountry, phone, onPhone, disabled }) {
+  return (
+    <>
+      <select
+        value={country}
+        onChange={onCountry}
+        aria-label="País"
+        className="country-select"
+        disabled={disabled}
+      >
+        {countries.map((c) => (
+          <option key={c.code} value={c.code}>
+            {c.name} ({c.dialCode})
+          </option>
+        ))}
+      </select>
+      <input
+        type="tel"
+        placeholder="Número de teléfono"
+        value={phone}
+        onChange={onPhone}
+        autoComplete="tel"
+        disabled={disabled}
+        required
+      />
+    </>
+  );
+}
+
 // Shown only when the API returned the code because no provider could deliver
 // the message (development). Tapping it fills the field, so the user does not
 // have to transcribe six digits from the screen.
@@ -269,10 +300,13 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     loginWithFacebook,
     forgotPassword,
     resetPassword,
+    startPhoneSignup,
+    verifyPhoneSignup,
   } = useAuth();
 
   // view: 'welcome' | 'login' | 'register' | 'forgot' | 'reset'
   //     | 'verify-email' | 'terms' | 'privacy'
+  //     | 'register-phone' | 'verify-phone'
   const [view, setView] = useState(initialView);
 
   const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '', ref: '' });
@@ -285,6 +319,11 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
   });
   const [code, setCode] = useState('');
   const [accepted, setAccepted] = useState(false);
+  // Registro por teléfono: país, número y el teléfono pendiente de verificar.
+  const [countries, setCountries] = useState([]);
+  const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState('CO');
+  const [pendingPhone, setPendingPhone] = useState({ phone: '', country: '' });
 
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -308,6 +347,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       .then((data) => {
         if (cancelled || !data) return;
         setProviders(data);
+        if (Array.isArray(data.countries)) setCountries(data.countries);
       })
       .catch(() => {
         // Sin respuesta se dejan los botones ocultos: es preferible a mostrar
@@ -428,6 +468,73 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     });
   };
 
+  const handleRegisterPhone = (e) => {
+    e.preventDefault();
+    // Un teléfono sin usuario ni contraseña dejaría una cuenta a la que no se
+    // puede volver a entrar: el número solo sirve para el alta.
+    if (!form.username.trim()) {
+      setError('Escribe un nombre de usuario');
+      return;
+    }
+    if (!form.password || form.password.length < MIN_PASSWORD_LENGTH) {
+      setError(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+      return;
+    }
+    run(async () => {
+      setDevCode('');
+      const data = await startPhoneSignup({
+        phone,
+        country: phoneCountry,
+        username: form.username,
+        password: form.password,
+      });
+
+      // Un número ya registrado es un inicio de sesión, no un alta nueva.
+      if (data.existingAccount) {
+        setNotice('Ese número ya tiene cuenta. Entra con tu contraseña.');
+        setView('login');
+        return;
+      }
+
+      // Sin SMS el servidor ya creó la cuenta y devolvió la sesión: no hay
+      // código que esperar, así que se entra directamente.
+      if (data.token) {
+        onDone?.();
+        return;
+      }
+
+      setPendingPhone({ phone, country: phoneCountry });
+      setCode('');
+      setView('verify-phone');
+      setNotice(`Enviamos un código por SMS a ${data.phone || phone}.`);
+    });
+  };
+
+  const handleVerifyPhone = (e) => {
+    e.preventDefault();
+    run(async () => {
+      await verifyPhoneSignup({ ...pendingPhone, code });
+      onDone?.();
+    });
+  };
+
+  const handleResendPhone = () =>
+    run(async () => {
+      const data = await startPhoneSignup({
+        phone: pendingPhone.phone,
+        country: pendingPhone.country,
+        username: form.username,
+        password: form.password,
+      });
+      setCode('');
+      if (data.delivered === false && data.code) {
+        setDevCode(data.code);
+        setNotice('El envío de SMS no está configurado en este servidor.');
+      } else {
+        setNotice('Enviamos otro código. Puede tardar un minuto en llegar.');
+      }
+    });
+
   const handleResendEmail = () =>
     run(async () => {
       const data = await resendVerification(pendingEmail);
@@ -539,6 +646,14 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
             >
               <span aria-hidden="true">✉️</span> Registrarse o iniciar sesión con correo
             </button>
+
+            <button
+              type="button"
+              className="btn-provider"
+              onClick={() => reset('register-phone')}
+            >
+              <span aria-hidden="true">📱</span> Registrarme con mi teléfono
+            </button>
           </div>
 
           <div className="auth-landing-links">
@@ -634,6 +749,8 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
         {view === 'login' && 'Iniciar sesión'}
         {view === 'register' && 'Crear cuenta'}
         {view === 'verify-email' && 'Verifica tu correo'}
+        {view === 'register-phone' && 'Registrarme con teléfono'}
+        {view === 'verify-phone' && 'Confirma tu teléfono'}
         {view === 'forgot' && 'Recuperar contraseña'}
         {view === 'reset' && 'Nueva contraseña'}
       </h2>
@@ -712,6 +829,9 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
           <button type="submit" className="btn-primary" disabled={busy}>
             {busy ? 'Procesando…' : 'Registrarme'}
           </button>
+          <button type="button" className="btn-link" onClick={() => reset('register-phone')}>
+            Registrarme con teléfono
+          </button>
         </form>
       )}
 
@@ -740,6 +860,65 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
           </button>
           <button type="button" className="btn-link" onClick={() => onDone?.()}>
             Lo verificaré más tarde
+          </button>
+        </form>
+      )}
+
+      {/* ---------------- Registro por teléfono ---------------- */}
+      {view === 'register-phone' && (
+        <form onSubmit={handleRegisterPhone}>
+          <p className="settings-hint">
+            {providers.sms
+              ? 'Te enviaremos un SMS con un código para confirmar tu número.'
+              : 'El envío de SMS aún no está activo: tu cuenta se creará directamente, sin código.'}
+          </p>
+          <input
+            type="text"
+            placeholder="Nombre de usuario"
+            value={form.username}
+            onChange={update('username')}
+          />
+          <PhoneCountryFields
+            countries={countries}
+            country={phoneCountry}
+            onCountry={(e) => setPhoneCountry(e.target.value)}
+            phone={phone}
+            onPhone={(e) => setPhone(e.target.value)}
+            disabled={busy}
+          />
+          <PasswordField
+            value={form.password}
+            onChange={update('password')}
+            placeholder={`Contraseña (mínimo ${MIN_PASSWORD_LENGTH} caracteres)`}
+            autoComplete="new-password"
+            disabled={busy}
+            name="phone-password"
+          />
+          {notice && <p className="notice" role="status">{notice}</p>}
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="submit" className="btn-primary" disabled={busy}>
+            {busy ? 'Procesando…' : providers.sms ? 'Enviar código' : 'Crear cuenta'}
+          </button>
+          <button type="button" className="btn-link" onClick={() => reset('register')}>
+            Registrarme con correo
+          </button>
+        </form>
+      )}
+
+      {view === 'verify-phone' && (
+        <form onSubmit={handleVerifyPhone}>
+          <p className="hint">
+            Enviamos un código de 6 dígitos por SMS a {pendingPhone.phone || 'tu teléfono'}.
+          </p>
+          {notice && <p className="notice" role="status">{notice}</p>}
+          <DevCodeBox code={devCode} onUse={setCode} />
+          <CodeInput value={code} onChange={setCode} disabled={busy} />
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="submit" className="btn-primary" disabled={busy || code.length !== 6}>
+            {busy ? 'Verificando…' : 'Confirmar teléfono'}
+          </button>
+          <button type="button" className="btn-link" onClick={handleResendPhone} disabled={busy}>
+            Enviar otro código
           </button>
         </form>
       )}

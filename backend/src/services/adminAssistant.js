@@ -21,6 +21,7 @@ const Verification = require('../models/Verification');
 const NewsSource = require('../models/NewsSource');
 const walletService = require('../services/walletService');
 const manualPaymentService = require('../services/manualPaymentService');
+const phoneService = require('../services/phoneService');
 const asistak = require('../services/asistakService');
 const pokerEventService = require('../services/pokerEventService');
 const assistantClient = require('./assistantClient');
@@ -577,6 +578,23 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'vincular_telefono',
+      description:
+        'Vincula un número de teléfono a la cuenta de un usuario, sin SMS. Sirve cuando el envío de SMS no está configurado y la persona no puede recibir el código. Requiere el id del usuario y el número; indica el país con su código ISO de dos letras (por ejemplo "CO" para Colombia) si el número no lleva prefijo internacional.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'id del usuario' },
+          telefono: { type: 'string', description: 'Número de teléfono, con o sin prefijo internacional' },
+          pais: { type: 'string', description: 'Código ISO del país, p. ej. CO, VE, ES, MX. Opcional si el número lleva +.' },
+        },
+        required: ['id', 'telefono'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'organizar_torneo_poker',
       description:
         'Organiza un torneo de POKERTAK: un evento con día, hora, aforo (2 a 9 jugadores), coste de entrada y reparto de premios. No cobra nada al crearlo: el jugador paga la entrada al inscribirse. Por defecto reparte 40% al 1º, 30% al 2º y 20% al 3º, y la casa se queda el 10% de lo recaudado.',
@@ -688,6 +706,11 @@ Consultar cualquier dato de la app:
 - Tienes acceso de lectura a toda la app. Para preguntas que no cubra una herramienta específica, usa "consultar_datos" indicando la colección (usuarios, vídeos, transacciones, mensajes, conversaciones, publicaciones, comentarios, reportes, notificaciones, mercadillo, órdenes de compra, regalos, torneos, salas, sonidos, fuentes de noticias…).
 - Si no sabes en qué colección o campo está un dato, llama antes a "esquema_app" y te devuelve la lista de colecciones y sus campos.
 - Usa "buscar" para texto libre y "filtro" (JSON) para igualdades exactas. Nunca inventes datos: si la consulta no devuelve nada, dilo.
+
+Teléfonos:
+- Con "vincular_telefono" puedes añadir un número a la cuenta de un usuario (id + número; el país con su código ISO si el número no lleva prefijo, p. ej. "CO" para Colombia). El número queda verificado.
+- Es la vía correcta cuando el SMS no está configurado y la persona no recibe el código. Si te piden "ponle el teléfono a @fulano" y tienes el número, búscala con "buscar_usuario" y luego vincula.
+- El envío de SMS (el código que la app pide al añadir un número) NO está configurado en este servidor. Si alguien se queja de que no le llega el código, esa es la causa: no es un fallo del teléfono de la persona. Ofrece vincularlo tú con "vincular_telefono".
 
 Retiros de Diamantes:
 - "listar_retiros" muestra las solicitudes (por defecto las pendientes) con usuario, monto, método y datos de cobro.
@@ -977,6 +1000,26 @@ async function runTool(name, args) {
     case 'levantar_suspension': {
       await asistak.liftSuspension(args.id);
       return { ok: true };
+    }
+
+    case 'vincular_telefono': {
+      try {
+        const phone = phoneService.normalizePhone(args.telefono, args.pais);
+        const user = await User.findById(args.id).select('username phone');
+        if (!user) return { error: 'Usuario no encontrado' };
+
+        const owner = await User.findOne({ phone }).select('_id username');
+        if (owner && String(owner._id) !== String(user._id)) {
+          return { error: `Ese número ya está vinculado a @${owner.username}` };
+        }
+
+        user.phone = phone;
+        user.phoneVerified = true;
+        await user.save();
+        return { ok: true, usuario: user.username, telefono: phone };
+      } catch (err) {
+        return { error: err.message };
+      }
     }
 
     case 'organizar_torneo_poker': {

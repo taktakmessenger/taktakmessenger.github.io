@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const NewsSource = require('../models/NewsSource');
 const Report = require('../models/Report');
 const walletService = require('../services/walletService');
+const phoneService = require('../services/phoneService');
 const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
@@ -189,6 +190,59 @@ router.delete(
   asyncHandler(async (req, res) => {
     await asistakService.liftSuspension(req.params.id);
     res.json({ lifted: true });
+  })
+);
+
+// Vincula un teléfono a una cuenta sin pasar por el SMS.
+//
+// El flujo normal (`/auth/phone/link/*`) exige un código que llega por SMS, y
+// en un despliegue sin proveedor de SMS ese código nunca sale: la persona se
+// queda en la pantalla del código esperando un mensaje que no llega. Como el
+// administrador ya conoce al usuario y responde de la vinculación, se le da una
+// vía directa. Marca el número como verificado porque es una acción deliberada
+// del dueño de la app, no una autoverificación del usuario.
+router.post(
+  '/users/:id/phone',
+  [
+    param('id').isMongoId(),
+    body('phone').trim().notEmpty().withMessage('Número de teléfono requerido'),
+    body('country').optional().trim().isLength({ min: 2, max: 2 }),
+    body('verified').optional().isBoolean().toBoolean(),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const phone = phoneService.normalizePhone(req.body.phone, req.body.country);
+
+    const user = await User.findById(req.params.id).select('username phone');
+    if (!user) throw new HttpError(404, 'Usuario no encontrado');
+
+    // Un número solo puede estar en una cuenta. Se comprueba antes de guardar
+    // para dar un mensaje claro en vez del error de índice único.
+    const owner = await User.findOne({ phone }).select('_id username');
+    if (owner && String(owner._id) !== String(user._id)) {
+      throw new HttpError(409, `Ese número ya está vinculado a @${owner.username}`);
+    }
+
+    user.phone = phone;
+    user.phoneVerified = req.body.verified !== false;
+    try {
+      await user.save();
+    } catch (err) {
+      if (err.code === 11000) {
+        throw new HttpError(409, 'Ese número ya está vinculado a otra cuenta');
+      }
+      throw err;
+    }
+
+    res.json({
+      linked: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+      },
+    });
   })
 );
 

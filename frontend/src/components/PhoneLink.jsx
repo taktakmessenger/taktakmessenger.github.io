@@ -120,6 +120,14 @@ export default function PhoneLink({ onDone, onSkip, skipLabel = 'Ahora no', auto
         return;
       }
 
+      // Sin SMS configurado el servidor vincula el número directamente, sin
+      // paso de código: no tiene sentido pedir un código que no puede llegar.
+      if (data.linked) {
+        setNotice(data.notice || 'Teléfono vinculado.');
+        onDone?.();
+        return;
+      }
+
       setMaskedPhone(data.phone);
       setStep('code');
       // En producción el servidor no manda el código (sería un secuestro de
