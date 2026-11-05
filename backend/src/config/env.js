@@ -554,6 +554,20 @@ const env = {
   // Minimum age for adult content, configurable per market.
   adultAge: Number(process.env.ADULT_AGE ?? 18),
 
+  // Didit (proveedor de verificación de identidad). El documento y la selfie
+  // los trata Didit: aquí solo se guarda el id de sesión y el veredicto.
+  //
+  //  - `diditApiKey` autentica las llamadas salientes (cabecera `x-api-key`).
+  //  - `diditWorkflowId` es el flujo configurado en la consola de Didit (define
+  //    qué comprobaciones se hacen).
+  //  - `diditWebhookSecret` verifica que el webhook viene de Didit de verdad.
+  //  - `diditApiBase` es configurable para poder apuntar los tests a un
+  //    servidor falso, igual que Stripe y PayPal.
+  diditApiKey: process.env.DIDIT_API_KEY || null,
+  diditWorkflowId: process.env.DIDIT_WORKFLOW_ID || null,
+  diditWebhookSecret: process.env.DIDIT_WEBHOOK_SECRET || null,
+  diditApiBase: process.env.DIDIT_API_BASE || 'https://verification.didit.me',
+
   // Refresh tokens are separate from access tokens so a stolen access token
   // cannot be used to mint new ones. The secret is derived from the JWT secret
   // unless one is supplied.

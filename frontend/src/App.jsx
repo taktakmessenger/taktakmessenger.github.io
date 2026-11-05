@@ -199,6 +199,10 @@ function Shell() {
     if (target === 'activity') setView('activity');
     if (target === 'wall') setView('wall');
     if (target === 'squads') setView('squads');
+    // Vuelta de la verificación de edad: Didit redirige aquí al terminar. La
+    // pantalla de verificación refresca el estado al montarse, así que basta
+    // con abrirla.
+    if (target === 'verification') setView('verification');
     if (target === 'pago-exito') {
       setPaymentProvider(params.get('provider') || 'stripe');
       setView('pago-exito');

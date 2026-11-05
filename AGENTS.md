@@ -453,13 +453,34 @@ no está disponible". Con Web Push suena como WhatsApp: el servicio de push
   proveedor configurado, **falla cerrado**: `startVerification` lanza 503 en vez
   de dejar pasar. El proveedor `dev` (por defecto fuera de producción) **nunca
   auto-aprueba**: abre una sesión `pending` y solo un administrador la resuelve.
+- **Proveedor real: Didit** (`AGE_PROVIDER=didit`, `services/diditService.js`).
+  El flujo es hospedado: `POST /v3/session/` con `workflow_id` y `vendor_data`
+  (el id del usuario) devuelve una `url` a la que se manda al usuario; el
+  documento y la selfie los trata Didit, aquí solo se guarda `session_id` y
+  veredicto. Hacen falta `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` y
+  `DIDIT_WEBHOOK_SECRET`; sin la API key y el workflow, `start` lanza 503.
+  `DIDIT_API_BASE` permite apuntar los tests a un servidor falso.
+- Didit devuelve estados con espacios (`Approved`, `Declined`, `In Review`,
+  `Awaiting User`, `Expired`, `Abandoned`…). `diditService.mapStatus` traduce
+  solo `Approved`→`verified` y `Declined/Expired/Abandoned`→`rejected`; **todo
+  lo demás queda en `pending`**. Un mapeo optimista convertiría "In Review" en
+  acceso, así que cualquier estado desconocido se trata como pendiente.
+- El webhook (`POST /api/verification/didit/webhook`) va **antes** del `auth`
+  (lo llama Didit, no el navegador) y se autentica con la firma HMAC
+  (`X-Signature-V2` sobre el JSON canónico de claves ordenadas, o `X-Signature`
+  sobre el cuerpo crudo). Se rechaza si el `X-Timestamp` tiene más de 5 minutos,
+  para que un webhook capturado no se pueda reenviar. `verifyWebhook` **solo
+  añade `req.rawBody` al JSON de la app** (ya estaba puesto para Stripe).
+  `applyProviderVerdict` busca por `vendor_data` y **nunca degrada** una cuenta
+  ya `verified`.
 - **Declarar la fecha de nacimiento no verifica.** `PUT /api/verification/age/declaration`
   guarda `dateOfBirth` para la experiencia de edad, pero deja el estado como
   está. Si esa ruta tocase `ageVerification.status`, cualquiera se verificaría
   escribiendo una fecha. La fecha se rechaza si es futura.
-- **El único camino que el propio usuario puede usar para llegar a `verified` es
-  `POST /api/verification/age/refresh`**, que relee el veredicto del proveedor.
-  No lo escribas a mano en una ruta de usuario.
+- **Los dos caminos que pueden llevar a `verified`** son
+  `POST /api/verification/age/refresh` (relee el veredicto del proveedor) y el
+  webhook de Didit. Los dos escriben solo lo que decidió el proveedor. No
+  escribas `verified` a mano en una ruta de usuario.
 - El gating del contenido adulto es **404, no 403**, y se aplica en tres sitios
   (feed, listado y vídeo individual): un 403 confirmaría que el vídeo existe. El
   creador conserva acceso a su propia subida. La misma comprobación

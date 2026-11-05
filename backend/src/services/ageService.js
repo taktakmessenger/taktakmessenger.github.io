@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const env = require('../config/env');
 const { HttpError } = require('../utils/http');
+const didit = require('./diditService');
 
 // Age verification is the gate in front of adult content. It is written against
 // a provider interface rather than a concrete vendor, because the sensitive
@@ -40,8 +41,12 @@ const devProvider = {
 
 // The registry. Adding a vendor means adding one entry here and its credentials
 // to `env`; nothing else in the codebase changes.
+//
+// Didit es el proveedor real: crea una sesión hospedada y solo se fía del
+// veredicto que devuelve su API (nunca de lo que diga el cliente).
 const PROVIDERS = {
   dev: devProvider,
+  didit,
 };
 
 function resolveProvider() {
@@ -89,7 +94,7 @@ async function startVerification(userId) {
     return { status: 'verified', alreadyVerified: true };
   }
 
-  const { ref, redirectUrl } = await provider.start({ userId: String(userId) });
+  const { ref, redirectUrl } = await provider.start({ userId: String(userId), email: user.email });
 
   user.ageVerification = {
     ...(user.ageVerification || {}),
@@ -166,9 +171,48 @@ async function setVerificationByAdmin(userId, status, adminId) {
   };
 }
 
+/**
+ * Apply a verdict that arrived by webhook.
+ *
+ * The webhook is a second, faster path to the same outcome as
+ * `refreshVerification`: it lets the account become `verified` while the user
+ * is still in the provider's flow, without waiting for them to come back and
+ * poll. The signature is verified by the route before this is called, so the
+ * status here is trusted.
+ *
+ * The account is looked up by its own id (from `vendor_data`), never by
+ * anything else, and an unknown id is ignored rather than created.
+ */
+async function applyProviderVerdict({ userId, status, ref }) {
+  const next = ['pending', 'verified', 'rejected'].includes(status) ? status : 'pending';
+
+  const user = await User.findById(userId);
+  if (!user) return { applied: false };
+
+  // Never downgrade a verified account: a later, unrelated event (or a replay)
+  // must not take away a status that was already granted.
+  if (user.ageVerification?.status === 'verified' && next !== 'verified') {
+    return { applied: false };
+  }
+
+  user.ageVerification = {
+    ...(user.ageVerification || {}),
+    status: next,
+    providerRef: ref || user.ageVerification?.providerRef || null,
+  };
+  if (next === 'verified') {
+    user.ageVerification.verifiedAt = new Date();
+    user.ageVerification.method = 'document';
+  }
+  await user.save();
+
+  return { applied: true, status: next };
+}
+
 module.exports = {
   startVerification,
   refreshVerification,
   setVerificationByAdmin,
+  applyProviderVerdict,
   resolveProvider,
 };
