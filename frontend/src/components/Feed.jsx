@@ -178,6 +178,11 @@ function VideoCard({ video, active, soundOn, onSoundBlocked, onLike, liked, onGi
           <div className={`reel-disc ${active && soundOn ? 'spin' : ''}`} aria-hidden="true">
             <span>♪</span>
           </div>
+          {video.sound?.title && (
+            <span className="reel-sound-name" title={video.sound.artist}>
+              ♪ {video.sound.title}
+            </span>
+          )}
         </div>
 
         <div className="reel-actions">

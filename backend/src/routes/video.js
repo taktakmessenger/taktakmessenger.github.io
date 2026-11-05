@@ -83,7 +83,16 @@ function startTranscode(video, inputPath, username) {
   }
 
   transcodeService
-    .processVideoToHLS(inputPath, env.uploadsDir, video._id.toString(), username)
+    .resolveMusicUrl(video)
+    .then((musicUrl) =>
+      transcodeService.processVideoToHLS(
+        inputPath,
+        env.uploadsDir,
+        video._id.toString(),
+        username,
+        musicUrl
+      )
+    )
     .then(async (result) => {
       if (!result) {
         // `null` significa "no hay ffmpeg o está apagado", no "algo se rompió".
@@ -171,7 +180,8 @@ router.get(
     const videos = await Video.find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('creator', 'username profile.displayName profile.avatar');
+      .populate('creator', 'username profile.displayName profile.avatar')
+      .populate('sound', 'title artist audioUrl');
 
     res.json({
       videos,
@@ -279,6 +289,8 @@ router.post(
     body('isNSFW').optional().isIn(['true', 'false']).withMessage('Valor NSFW inválido'),
     body('newsSource').optional().isMongoId().withMessage('Fuente de noticia inválida'),
     body('sourceUrl').optional({ values: 'falsy' }).trim().isURL().withMessage('Enlace de la noticia inválido'),
+    // Música elegida del catálogo. Opcional: un vídeo sin música es válido.
+    body('sound').optional({ values: 'falsy' }).isMongoId().withMessage('Sonido inválido'),
   ],
   validate,
   asyncHandler(async (req, res) => {
@@ -315,10 +327,18 @@ router.post(
       isNSFW,
       newsSource: req.body.newsSource || null,
       sourceUrl: req.body.sourceUrl,
+      sound: req.body.sound || undefined,
       creator: req.user.userId,
       moderationStatus: 'approved',
       transcodeStatus: 'processing',
     });
+
+    // La pista suma un uso para que el catálogo ordene por popularidad, como el
+    // "sonido en tendencia" de TikTok.
+    if (req.body.sound) {
+      const Sound = require('../models/Sound');
+      await Sound.updateOne({ _id: req.body.sound }, { $inc: { usageCount: 1 } });
+    }
 
     await User.updateOne({ _id: req.user.userId }, { $set: { 'profile.isCreator': true } });
 

@@ -1085,6 +1085,19 @@
   .reel-disc.spin { animation: none; }
 }
 
+.reel-sound-name {
+  display: block;
+  max-width: 140px;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: #fff;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
 .reel-author p {
   margin: 0.3rem 0 0;
   font-weight: 600;
@@ -4004,6 +4017,26 @@
   padding: 0 0.4rem;
   font-size: 0.85rem;
   opacity: 0.8;
+}
+
+.upload-sound {
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.upload-sound legend {
+  padding: 0 0.4rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.sound-preview {
+  width: 100%;
+  height: 36px;
 }
 
 /* Panel de comentarios. Ocupa la parte inferior de la pantalla, como una hoja

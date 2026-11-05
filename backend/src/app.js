@@ -58,7 +58,17 @@ function cspDirectives(storageOrigins = []) {
     objectSrc: ["'none'"],
     // hls.js adjunta los segmentos por Blob, y las previews de subida son
     // object URLs del propio archivo elegido.
-    mediaSrc: ["'self'", 'blob:', 'data:', ...storageOrigins],
+    mediaSrc: [
+      "'self'",
+      'blob:',
+      'data:',
+      // Las pistas del catálogo de música viven en Wikimedia Commons (dominio
+      // público, CC0). El creador las previsualiza ahí mismo antes de publicar;
+      // en el vídeo ya van mezcladas, así que este origen solo hace falta para
+      // esa previsualización.
+      'https://upload.wikimedia.org',
+      ...storageOrigins,
+    ],
     imgSrc: ["'self'", 'data:', 'blob:', ...storageOrigins],
     fontSrc: ["'self'", 'https:', 'data:'],
     styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
