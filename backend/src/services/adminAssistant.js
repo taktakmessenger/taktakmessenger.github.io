@@ -25,6 +25,24 @@ const assistantThreadService = require('./assistantThreadService');
 
 const MAX_TOOL_ROUNDS = 6;
 
+// El modelo rellena con `null` los parámetros opcionales que no usa, y el
+// validador de esquema del proveedor rechaza `null` donde espera un `string`.
+// Marcando los opcionales como nullables, una petición por lo demás válida no
+// se cae con un 400 por un campo que el modelo decidió dejar vacío.
+function nullableOptionals(tools) {
+  for (const tool of tools) {
+    const params = tool.function?.parameters;
+    if (!params?.properties) continue;
+    const required = new Set(params.required || []);
+    for (const [name, schema] of Object.entries(params.properties)) {
+      if (required.has(name)) continue;
+      if (typeof schema.type === 'string') schema.type = [schema.type, 'null'];
+      if (Array.isArray(schema.enum) && !schema.enum.includes(null)) schema.enum.push(null);
+    }
+  }
+  return tools;
+}
+
 function isConfigured() {
   return assistantClient.isConfigured();
 }
@@ -838,6 +856,12 @@ async function chat({ message, adminId }) {
       } catch {
         args = {};
       }
+      // El modelo manda `null` en los opcionales que no usa. Se descartan para
+      // que cada herramienta aplique su valor por defecto: un `null` colado en
+      // la tarifa del póker se leería como 0 (sin comisión) en vez de 10%.
+      for (const key of Object.keys(args)) {
+        if (args[key] === null) delete args[key];
+      }
       args.adminId = adminId;
       // eslint-disable-next-line no-await-in-loop
       const result = await runTool(call.function.name, args);
@@ -865,4 +889,4 @@ async function chat({ message, adminId }) {
   return { reply, executed };
 }
 
-module.exports = { isConfigured, chat, runTool, TOOLS };
+module.exports = { isConfigured, chat, runTool, TOOLS: nullableOptionals(TOOLS) };

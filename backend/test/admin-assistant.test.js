@@ -277,6 +277,23 @@ test('an unknown tool is reported, not crashed on', async () => {
   assert.match(result.error, /desconocida/i);
 });
 
+// Regresión: el modelo rellena los opcionales con `null` y el proveedor rechaza
+// el esquema si no son nullables, tumbando la petición con un 400.
+test('los parámetros opcionales de las herramientas admiten null', () => {
+  for (const tool of assistant.TOOLS) {
+    const params = tool.function.parameters;
+    const required = new Set(params.required || []);
+    for (const [name, schema] of Object.entries(params.properties || {})) {
+      if (required.has(name)) continue;
+      const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+      assert.ok(
+        types.includes('null'),
+        `${tool.function.name}.${name} debería admitir null (types=${JSON.stringify(schema.type)})`
+      );
+    }
+  }
+});
+
 test('the tool loop is bounded so a stuck model cannot hang the request', async () => {
   const admin = await makeAdmin();
   // El modelo pide la misma herramienta en todos los turnos. Sin tope, esto
