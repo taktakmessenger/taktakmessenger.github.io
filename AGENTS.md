@@ -328,8 +328,15 @@ Detalles que cuesta descubrir:
 - El token de acceso necesita **API Key + secreto + TwiML App SID**, no solo el
   auth token. `voiceService.isConfigured()` exige los cuatro.
 - `navigator.contacts` solo existe en algunos navegadores móviles y exige
-  permiso. Se pide con un botón ("Importar"), nunca al montar: pedir los
-  contactos al abrir el marcador es invasivo y en escritorio la API no existe.
+  permiso. El permiso **solo se puede pedir con un gesto del usuario**: la
+  primera vez hay que pulsar «Importar»; después la app recuerda que ya se
+  concedió (`taktak_contacts_granted` en localStorage) y **refresca la agenda
+  sola** al abrir el marcador, sin volver a preguntar. La lógica vive en
+  `frontend/src/lib/contacts.js` (pura y con tests en `test/contacts.test.js`):
+  `shouldAutoSync` decide si toca leer, `flattenContacts` aplana la agenda a una
+  fila por teléfono y `mergeContacts` fusiona con los manuales sin duplicar. La
+  última lectura se cachea (`taktak_contacts_cache`) para que la lista aparezca
+  aunque el navegador no dé la agenda en esa sesión.
 - La pulsación larga del 0 para escribir "+" necesita `onPointerDown/Up`, no
   `onClick` (que no distingue corta de larga), y `onContextMenu` con
   `preventDefault`, porque el menú contextual del móvil cancela la pulsación.
