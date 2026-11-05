@@ -884,10 +884,12 @@
   position: relative;
 }
 
-/* Control de sonido, fijo arriba a la derecha, por encima del vídeo. */
+/* Control de sonido, fijo arriba a la derecha, por encima del vídeo. Se
+   separa del borde superior con el área segura para no quedar bajo la barra de
+   estado ni el recorte redondeado del móvil. */
 .reel-sound {
   position: absolute;
-  top: 0.9rem;
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
   right: 0.9rem;
   z-index: 5;
   width: 2.4rem;
@@ -919,6 +921,7 @@
   top: 0.9rem;
   left: 50%;
   transform: translateX(-50%);
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
   z-index: 5;
   padding: 0.5rem 0.9rem;
   border-radius: 999px;
@@ -929,6 +932,36 @@
   font-weight: 600;
   backdrop-filter: blur(8px);
   cursor: pointer;
+}
+
+/* Botón de pausa/reanudar. Va debajo del de sonido para no taparlo y se
+   mantiene discreto: el vídeo es el protagonista, no el control. */
+.reel-pause {
+  position: absolute;
+  top: calc(0.9rem + 2.4rem + 0.5rem + env(safe-area-inset-top, 0px));
+  right: 0.9rem;
+  z-index: 5;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.6);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.2s ease;
+}
+.reel-pause:hover {
+  transform: scale(1.08);
+}
+.reel-pause.paused {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--glow-cyan);
 }
 
 .reel {
