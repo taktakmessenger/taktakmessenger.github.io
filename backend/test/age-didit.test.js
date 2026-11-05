@@ -69,12 +69,14 @@ function withDiditEnv(fake, overrides = {}) {
     diditApiKey: env.diditApiKey,
     diditWorkflowId: env.diditWorkflowId,
     diditWebhookSecret: env.diditWebhookSecret,
+    diditSandboxScenario: env.diditSandboxScenario,
   };
   env.ageProvider = 'didit';
   env.diditApiBase = fake.base;
   env.diditApiKey = 'test-key';
   env.diditWorkflowId = 'wf-test';
   env.diditWebhookSecret = 'whsec_test';
+  env.diditSandboxScenario = null;
   Object.assign(env, overrides);
   return () => Object.assign(env, original);
 }
@@ -284,6 +286,41 @@ test('un webhook viejo se rechaza aunque la firma cuadre', async () => {
       .send(payload);
 
     assert.equal(res.status, 401);
+  } finally {
+    restore();
+    await fake.close();
+  }
+});
+
+test('en modo sandbox manda el escenario y no necesita documento real', async () => {
+  const fake = await startFakeDidit();
+  const restore = withDiditEnv(fake, { diditSandboxScenario: 'approve' });
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+
+    const res = await agent
+      .post('/api/verification/age/start')
+      .set('Authorization', `Bearer ${user.token}`);
+
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(fake.calls.created[0].body.sandbox_scenario, 'approve');
+  } finally {
+    restore();
+    await fake.close();
+  }
+});
+
+test('sin escenario configurado no se manda el campo sandbox_scenario', async () => {
+  const fake = await startFakeDidit();
+  const restore = withDiditEnv(fake);
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+
+    await agent.post('/api/verification/age/start').set('Authorization', `Bearer ${user.token}`);
+
+    assert.equal('sandbox_scenario' in fake.calls.created[0].body, false);
   } finally {
     restore();
     await fake.close();

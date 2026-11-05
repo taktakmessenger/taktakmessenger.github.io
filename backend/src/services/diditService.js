@@ -59,6 +59,8 @@ async function start({ userId, email }) {
   const callback = callbackUrl();
   if (callback) body.callback = callback;
   if (email) body.contact_details = { email };
+  // Solo lo usa la app de sandbox: en una app live Didit rechaza el campo.
+  if (env.diditSandboxScenario) body.sandbox_scenario = env.diditSandboxScenario;
 
   let response;
   try {
@@ -76,6 +78,14 @@ async function start({ userId, email }) {
 
   const data = await response.json().catch(() => null);
   if (!response.ok || !data?.session_id || !data?.url) {
+    // El detalle del proveedor se registra pero no se devuelve al cliente: puede
+    // traer datos internos. Sin esto, un fallo como "sin créditos" solo se ve
+    // como un 502 opaco y no hay forma de diagnosticarlo.
+    console.error(
+      '[didit] POST /v3/session/ falló:',
+      response.status,
+      typeof data?.detail === 'string' ? data.detail : JSON.stringify(data)
+    );
     throw new HttpError(502, 'El proveedor de verificación rechazó la solicitud');
   }
 

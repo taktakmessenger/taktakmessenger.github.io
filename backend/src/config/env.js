@@ -567,6 +567,10 @@ const env = {
   diditWorkflowId: process.env.DIDIT_WORKFLOW_ID || null,
   diditWebhookSecret: process.env.DIDIT_WEBHOOK_SECRET || null,
   diditApiBase: process.env.DIDIT_API_BASE || 'https://verification.didit.me',
+  // Solo para la app de sandbox de Didit: fuerza el desenlace de cada sesión
+  // (`approve`, `decline_...`, `review_...`) sin escribir un documento real.
+  // Vacío en producción. Ver https://docs.didit.me/integration/sandbox-testing
+  diditSandboxScenario: process.env.DIDIT_SANDBOX_SCENARIO || null,
 
   // Refresh tokens are separate from access tokens so a stolen access token
   // cannot be used to mint new ones. The secret is derived from the JWT secret
