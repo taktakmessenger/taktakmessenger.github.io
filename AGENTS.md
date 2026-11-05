@@ -273,8 +273,10 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   la señalización (`call:invite`, `call:offer`, `call:answer`, `call:ice`,
   `call:accept`, `call:reject`, `call:end`). Con solo STUN configurado, una
   llamada funciona en la misma red pero se corta detrás de NAT estricto: para eso
-  hace falta un TURN (`VITE_TURN_URL`, `VITE_TURN_USERNAME`,
-  `VITE_TURN_CREDENTIAL`).
+  hace falta un TURN. Se configura **en el backend** (no en el frontend) con
+  `TURN_URL` (varias separadas por coma), `TURN_USERNAME` y `TURN_CREDENTIAL`, o
+  con `ICE_SERVERS_JSON` para el array completo. El cliente los pide a
+  `GET /api/calls/ice` (con sesión) y avisa con `hasTurn` cuando no hay ninguno.
 - El historial de llamadas reutiliza el hilo de mensajes. Una llamada es un
   `Message` con `kind: 'call'` y un subdocumento `call` (`kind`, `status`,
   `durationSeconds`). Así comparte orden, no leídos y paginación con el texto sin
