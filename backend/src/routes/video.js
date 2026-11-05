@@ -15,7 +15,7 @@ const feedService = require('../services/feedService');
 const newsService = require('../services/newsService');
 const commentService = require('../services/commentService');
 const notificationService = require('../services/notificationService');
-const { auth, optionalAuth } = require('../middleware/auth');
+const { auth, optionalAuth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
 
@@ -379,6 +379,40 @@ router.post(
   })
 );
 
+// Editar los datos de un vídeo ya publicado: título, descripción y etiquetas.
+// No se toca el archivo ni el HLS: reemplazar el vídeo de un post que ya tiene
+// vistas y comentarios cambiaría lo que la gente vio y comentó.
+router.patch(
+  '/:id',
+  auth,
+  [
+    param('id').isMongoId().withMessage('ID inválido'),
+    body('title').optional().trim().notEmpty().withMessage('El título no puede quedar vacío').isLength({ max: 100 }),
+    body('description').optional({ values: 'null' }).trim().isLength({ max: 500 }),
+    body('tags').optional().isArray({ max: 10 }).withMessage('Máximo 10 etiquetas'),
+    body('tags.*').optional().trim().isLength({ max: 30 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findById(req.params.id);
+    if (!video) throw new HttpError(404, 'Video no encontrado');
+    if (video.creator.toString() !== req.user.userId && req.user.role !== 'admin') {
+      throw new HttpError(403, 'No autorizado para editar este video');
+    }
+
+    const updates = {};
+    if (req.body.title !== undefined) updates.title = req.body.title;
+    if (req.body.description !== undefined) updates.description = req.body.description;
+    if (req.body.tags !== undefined) updates.tags = req.body.tags;
+
+    const updated = await Video.findByIdAndUpdate(req.params.id, updates, { new: true }).populate(
+      'creator',
+      'username profile.displayName profile.avatar'
+    );
+    res.json({ video: updated });
+  })
+);
+
 router.delete(
   '/:id',
   auth,
@@ -619,6 +653,59 @@ router.post(
     startTranscode(video, inputPath, owner?.username);
 
     res.status(202).json({ queued: true, transcodeStatus: 'processing' });
+  })
+);
+
+// Reencola la conversión de todos los vídeos que se quedaron sin HLS (subidos
+// antes de que la transcodificación estuviera activada). Sin esto, un original
+// HEVC o AV1 sigue sirviéndose tal cual y se ve en negro en la mayoría de los
+// móviles. Es idempotente y se puede llamar varias veces.
+//
+// Va antes de `/:id` en el archivo a propósito: una ruta POST con el mismo
+// patrón que `/:id/...` no colisiona, pero mantenerlo junto al retranscode deja
+// la lógica de reproceso en un solo sitio.
+router.post(
+  '/optimize-missing',
+  auth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!(await transcodeService.hasFfmpeg())) {
+      throw new HttpError(
+        503,
+        'La conversión de video no está disponible en este servidor (falta ffmpeg)'
+      );
+    }
+
+    const videos = await Video.find({
+      $or: [{ hlsUrl: null }, { hlsUrl: { $exists: false } }],
+      transcodeStatus: { $ne: 'processing' },
+    }).select('_id videoUrl creator');
+
+    let queued = 0;
+    for (const video of videos) {
+      const originalName = path.basename(video.videoUrl || '');
+      if (!originalName) continue;
+
+      let inputPath = path.join(env.uploadsDir, originalName);
+      try {
+        await fs.access(inputPath);
+      } catch {
+        if (!storageService.isConfigured()) continue;
+        inputPath = path.join(env.uploadsDir, `reprocess-${video._id}${path.extname(originalName)}`);
+        try {
+          await storageService.getFileToTemp(originalName, inputPath);
+        } catch {
+          continue;
+        }
+      }
+
+      await Video.updateOne({ _id: video._id }, { transcodeStatus: 'processing' });
+      const owner = await User.findById(video.creator).select('username');
+      startTranscode(video, inputPath, owner?.username);
+      queued += 1;
+    }
+
+    res.json({ queued, total: videos.length });
   })
 );
 

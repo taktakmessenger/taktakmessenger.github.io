@@ -63,10 +63,14 @@ services:
           name: taktak
           type: web
           envVarKey: RENDER_EXTERNAL_URL
-      # ffmpeg sí está en la imagen; se apaga la transcodificación para no pagar
-      # su coste en runtime en el plan gratuito.
+      # ffmpeg sí está en la imagen. La transcodificación se deja ACTIVADA
+      # porque sin ella el vídeo se sirve tal cual y un original de iPhone
+      # (H.265/HEVC) o de Android reciente (AV1) se ve en negro en la mayoría de
+      # los navegadores: no hay H.264 que decodificar ni miniatura que enseñar.
+      # El coste es ffmpeg en runtime dentro del plan gratuito, que es asumible
+      # frente a tener los vídeos ilegibles.
       - key: TRANSCODE_ENABLED
-        value: false
+        value: "true"
       # Tamaño máximo por vídeo. El valor por defecto (50 MB) se queda corto: un
       # vídeo normal de móvil pesa más y la subida fallaba con 413. El plan free
       # tiene 512 MB de RAM, pero multer escribe a disco en streaming, así que el

@@ -111,6 +111,24 @@ export default function AdminPanel({ onBack }) {
     }
   }
 
+  // Reencola la conversión de los vídeos que se quedaron sin HLS. Es la forma de
+  // arreglar de golpe los vídeos subidos antes de activar la transcodificación.
+  async function optimizeMissing() {
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await api.post('/videos/optimize-missing');
+      setNotice(
+        data.queued > 0
+          ? `Optimizando ${data.queued} de ${data.total} vídeos sin HLS…`
+          : 'No hay vídeos pendientes de optimizar.'
+      );
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function decideAge(id, status) {
     setError('');
     setNotice('');
@@ -616,7 +634,12 @@ export default function AdminPanel({ onBack }) {
       </div>
 
       <div className="moderation">
-        <h3>Cola de moderación ({pending.length})</h3>
+        <div className="admin-section-head">
+          <h3>Cola de moderación ({pending.length})</h3>
+          <button type="button" className="btn-ghost" onClick={optimizeMissing}>
+            ⚙️ Optimizar vídeos sin HLS
+          </button>
+        </div>
         {pending.length === 0 ? (
           <p>No hay videos pendientes.</p>
         ) : (

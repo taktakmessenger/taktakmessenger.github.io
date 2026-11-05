@@ -6,6 +6,8 @@ import CreatorSheet from './CreatorSheet';
 import ShareSheet from './ShareSheet';
 import ReportDialog from './ReportDialog';
 import BlockDialog from './BlockDialog';
+import EditVideoDialog from './EditVideoDialog';
+import ConfirmDialog from './ConfirmDialog';
 import { readSoundOn, writeSoundOn, isMuted, shouldPlay } from '../lib/sound';
 import { downloadVideo } from '../lib/download';
 import { attachVideoSource } from '../lib/video';
@@ -241,6 +243,11 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false,
   // diálogos distintos y excluyentes, así que un estado cada uno.
   const [reportFor, setReportFor] = useState(null);
   const [blockFor, setBlockFor] = useState(null);
+  // Edición y borrado de un vídeo propio. Se abren desde la hoja de compartir.
+  const [editFor, setEditFor] = useState(null);
+  const [deleteFor, setDeleteFor] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const containerRef = useRef(null);
 
   const toggleSound = useCallback(() => {
@@ -437,6 +444,38 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false,
     setVideos((prev) => prev.map((v) => (v._id === video._id ? { ...v, shares } : v)));
   }
 
+  // Tras editar, se actualiza la tarjeta con los campos editables. Solo esos:
+  // el `creator` que devuelve el PATCH viene con menos campos que el del feed,
+  // y reemplazarlo entero dejaría el avatar sin pintar.
+  function applyVideoUpdate(updated) {
+    if (!updated?._id) return;
+    setVideos((prev) =>
+      prev.map((v) =>
+        v._id === updated._id
+          ? { ...v, title: updated.title, description: updated.description, tags: updated.tags }
+          : v
+      )
+    );
+  }
+
+  // Al eliminar, la tarjeta desaparece del feed en el acto. El índice activo se
+  // recalcula para no quedarse apuntando a una posición que ya no existe.
+  async function removeVideo(video) {
+    if (!video?._id) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/videos/${video._id}`);
+      setVideos((prev) => prev.filter((v) => v._id !== video._id));
+      setDeleteFor(null);
+      setActiveIndex((idx) => Math.max(0, Math.min(idx, videos.length - 2)));
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   // The card crossing the viewport midpoint becomes the active one.
   function handleScroll() {
     const container = containerRef.current;
@@ -580,6 +619,35 @@ export default function Feed({ onGiftRequest, onCall, onMessage, paused = false,
             onReport={(video) => setReportFor({ type: 'video', item: video })}
             onBlock={(creator) => setBlockFor(creator)}
             onShared={adjustShareCount}
+            onEdit={(video) => setEditFor(video)}
+            onDelete={(video) => setDeleteFor(video)}
+          />
+        )}
+
+        {/* Editar un vídeo propio: título, descripción y etiquetas. Al guardar,
+            la tarjeta del feed se actualiza en el sitio sin recargar. */}
+        {editFor && (
+          <EditVideoDialog
+            video={editFor}
+            onClose={() => setEditFor(null)}
+            onSaved={applyVideoUpdate}
+          />
+        )}
+
+        {/* Eliminar un vídeo propio: es irreversible, así que se confirma. */}
+        {deleteFor && (
+          <ConfirmDialog
+            title="¿Eliminar este vídeo?"
+            message="Se borrará el vídeo y sus comentarios. Esta acción no se puede deshacer."
+            confirmLabel="Eliminar"
+            danger
+            busy={deleting}
+            error={deleteError}
+            onConfirm={() => removeVideo(deleteFor)}
+            onClose={() => {
+              setDeleteFor(null);
+              setDeleteError('');
+            }}
           />
         )}
 

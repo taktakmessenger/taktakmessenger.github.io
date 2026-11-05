@@ -6834,6 +6834,26 @@
   gap: 0.5rem;
 }
 
+/* Formulario de edición de un vídeo: los mismos campos que la subida, en el
+   diálogo de confirmación. */
+.edit-video-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.edit-video-form input,
+.edit-video-form textarea {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: inherit;
+  resize: vertical;
+}
+
 .report-done {
   display: flex;
   flex-direction: column;
