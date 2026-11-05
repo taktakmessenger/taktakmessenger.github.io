@@ -323,7 +323,12 @@ router.post(
     await User.updateOne({ _id: req.user.userId }, { $set: { 'profile.isCreator': true } });
 
     // Fire and forget: the response must not wait for ffmpeg.
-    startTranscode(video, req.file.path, req.user.username);
+    //
+    // El @usuario de la marca sale de la base, no del token: el token es viejo y
+    // arrastra el nombre que el creador tenía al iniciar sesión, así que tras un
+    // cambio de nombre el vídeo quedaría sellado con el anterior.
+    const me = await User.findById(req.user.userId).select('username');
+    startTranscode(video, req.file.path, me?.username || req.user.username);
 
     res.status(201).json({ video });
   })
