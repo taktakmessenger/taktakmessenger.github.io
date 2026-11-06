@@ -149,6 +149,48 @@ const userSchema = new mongoose.Schema(
     // de nada. Se puede apagar para quien trabaja en silencio y prefiere ver
     // solo la notificación.
     callRingtone: { type: Boolean, default: true },
+    // Qué repique suena al entrar una llamada. Es un id del catálogo del
+    // frontend (`lib/ringtones.js`); aquí se guarda como texto libre para no
+    // atar el backend a la lista, y el cliente cae al clásico si no lo conoce.
+    callRingtoneId: { type: String, default: 'clasico', maxlength: 40 },
+
+    // Moderación de Asistak, el asistente administrativo. Cuando el asistente
+    // detecta faltas de respeto en un directo o en la sala de juegos, puede
+    // dejar una suspensión temporal: mientras `until` esté en el futuro, el
+    // usuario no puede entrar a un directo ni sentarse en POKERTAK. Se guarda el
+    // motivo y quién la puso para poder auditarla (y levantarla a mano).
+    moderation: {
+      suspendedUntil: { type: Date, default: null },
+      suspensionReason: { type: String, default: null, maxlength: 300 },
+      suspendedBy: { type: String, enum: ['asistak', 'admin', null], default: null },
+      // Avisos que ha dado el asistente en los directos/salas. Solo se cuenta
+      // para que Asistak escale a suspensión si reincide, no se enseña en la UI.
+      warnings: { type: Number, default: 0 },
+      lastWarningAt: { type: Date, default: null },
+    },
+
+    // Programa de referidos. `code` es el enlace que comparte esta cuenta; quien
+    // se registra con él queda apuntado en su `referredBy`. Cuando el invitado
+    // compra monedas, el que invitó cobra un porcentaje (ver
+    // `services/referralService`) en monedas de regalo: se pueden gastar en la
+    // app, pero no retirar, para que invitar no abra una vía de sacar dinero.
+    //
+    // `referredBy` se fija una sola vez, al crear la cuenta, y no cambia nunca:
+    // un usuario no puede "reapuntarse" a otro invitador para repartir el premio
+    // entre varios. `code` es único y disperso (`sparse`) porque las cuentas
+    // anteriores al programa no lo tienen.
+    referral: {
+      code: { type: String, unique: true, sparse: true, trim: true, uppercase: true },
+      referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      referredAt: { type: Date, default: null },
+      // Cuánto ha generado esta cuenta a quien la invitó. Se guarda para poder
+      // enseñarlo y para auditar el programa sin agregar el libro entero.
+      earnedByReferrer: { type: Number, default: 0, min: 0 },
+      // Lo que esta cuenta, como invitada, ha hecho ganar a su invitador. Es el
+      // otro lado del mismo premio: sirve para detectar cuentas que compran
+      // mucho y para cuadrar el total pagado por el programa.
+      earnedForReferrer: { type: Number, default: 0, min: 0 },
+    },
   },
   { timestamps: true }
 );
@@ -220,6 +262,13 @@ userSchema.statics.existsByUsername = function existsByUsername(username) {
 // unverifiable and would make the gate trivial to bypass.
 userSchema.methods.isAdult = function isAdult() {
   return this.ageVerification?.status === 'verified';
+};
+
+// ¿Está suspendido ahora mismo? La suspensión es temporal: una fecha pasada ya
+// no cuenta, así que el usuario vuelve solo sin que nadie tenga que levantarla.
+userSchema.methods.isSuspended = function isSuspended() {
+  const until = this.moderation?.suspendedUntil;
+  return Boolean(until && new Date(until).getTime() > Date.now());
 };
 
 userSchema.set('toJSON', {

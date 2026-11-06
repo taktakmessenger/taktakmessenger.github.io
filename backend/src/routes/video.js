@@ -9,12 +9,13 @@ const User = require('../models/User');
 const NewsSource = require('../models/NewsSource');
 const env = require('../config/env');
 const transcodeService = require('../services/transcodeService');
+const storageService = require('../services/storageService');
 const { isAcceptedVideo } = require('../lib/videoUpload');
 const feedService = require('../services/feedService');
 const newsService = require('../services/newsService');
 const commentService = require('../services/commentService');
 const notificationService = require('../services/notificationService');
-const { auth, optionalAuth } = require('../middleware/auth');
+const { auth, optionalAuth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
 
@@ -68,18 +69,57 @@ function startTranscode(video, inputPath, username) {
     })
     .catch(() => {});
 
+  // El original se publica en el bucket antes de transcodificar: es lo que
+  // convierte `videoUrl` en una URL permanente. Va aquí, en segundo plano, y no
+  // en la respuesta de la subida, porque subir un fichero de cientos de megas
+  // tardaría más que el tiempo de espera del proxy y la petición se cortaría.
+  // Mientras tanto el vídeo ya se ve por la ruta local.
+  const originalKey = path.basename(inputPath);
+  if (storageService.isConfigured()) {
+    storageService
+      .putFile(inputPath, originalKey)
+      .then((url) => Video.updateOne({ _id: video._id }, { videoUrl: url }))
+      .catch((err) => console.error('[storage] no se pudo publicar el original:', err.message));
+  }
+
   transcodeService
-    .processVideoToHLS(inputPath, env.uploadsDir, video._id.toString(), username)
+    .resolveMusicUrl(video)
+    .then((musicUrl) =>
+      transcodeService.processVideoToHLS(
+        inputPath,
+        env.uploadsDir,
+        video._id.toString(),
+        username,
+        musicUrl
+      )
+    )
     .then(async (result) => {
       if (!result) {
-        await Video.updateOne({ _id: video._id }, { transcodeStatus: 'failed' });
+        // `null` significa "no hay ffmpeg o está apagado", no "algo se rompió".
+        // Antes se guardaba `failed`, y la app mostraba "⚠️ No se pudo optimizar"
+        // en cada vídeo aunque el original se reprodujera perfectamente: el
+        // creador creía que la subida había fallado. `none` es la verdad.
+        await Video.updateOne({ _id: video._id }, { transcodeStatus: 'none' });
         return;
       }
+
+      let { playlistUrl, thumbnailUrl } = result;
+
+      // La escalera HLS también vive en el bucket: si se quedara en el disco
+      // efímero, el vídeo se vería bien hoy y daría 404 tras el próximo
+      // despliegue, que es justo el fallo que esto evita.
+      if (storageService.isConfigured()) {
+        const renditionsDir = path.join(env.uploadsDir, video._id.toString());
+        await storageService.putDirectory(renditionsDir, video._id.toString());
+        playlistUrl = storageService.publicUrl(`${video._id}/index.m3u8`);
+        thumbnailUrl = storageService.publicUrl(`${video._id}/thumbnail.jpg`);
+      }
+
       await Video.updateOne(
         { _id: video._id },
         {
-          hlsUrl: result.playlistUrl,
-          thumbnailUrl: result.thumbnailUrl,
+          hlsUrl: playlistUrl,
+          thumbnailUrl,
           transcodeStatus: 'ready',
           transcodeError: null,
         }
@@ -140,7 +180,8 @@ router.get(
     const videos = await Video.find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('creator', 'username profile.displayName profile.avatar');
+      .populate('creator', 'username profile.displayName profile.avatar')
+      .populate('sound', 'title artist audioUrl');
 
     res.json({
       videos,
@@ -248,6 +289,8 @@ router.post(
     body('isNSFW').optional().isIn(['true', 'false']).withMessage('Valor NSFW inválido'),
     body('newsSource').optional().isMongoId().withMessage('Fuente de noticia inválida'),
     body('sourceUrl').optional({ values: 'falsy' }).trim().isURL().withMessage('Enlace de la noticia inválido'),
+    // Música elegida del catálogo. Opcional: un vídeo sin música es válido.
+    body('sound').optional({ values: 'falsy' }).isMongoId().withMessage('Sonido inválido'),
   ],
   validate,
   asyncHandler(async (req, res) => {
@@ -284,15 +327,28 @@ router.post(
       isNSFW,
       newsSource: req.body.newsSource || null,
       sourceUrl: req.body.sourceUrl,
+      sound: req.body.sound || undefined,
       creator: req.user.userId,
       moderationStatus: 'approved',
       transcodeStatus: 'processing',
     });
 
+    // La pista suma un uso para que el catálogo ordene por popularidad, como el
+    // "sonido en tendencia" de TikTok.
+    if (req.body.sound) {
+      const Sound = require('../models/Sound');
+      await Sound.updateOne({ _id: req.body.sound }, { $inc: { usageCount: 1 } });
+    }
+
     await User.updateOne({ _id: req.user.userId }, { $set: { 'profile.isCreator': true } });
 
     // Fire and forget: the response must not wait for ffmpeg.
-    startTranscode(video, req.file.path, req.user.username);
+    //
+    // El @usuario de la marca sale de la base, no del token: el token es viejo y
+    // arrastra el nombre que el creador tenía al iniciar sesión, así que tras un
+    // cambio de nombre el vídeo quedaría sellado con el anterior.
+    const me = await User.findById(req.user.userId).select('username');
+    startTranscode(video, req.file.path, me?.username || req.user.username);
 
     res.status(201).json({ video });
   })
@@ -343,6 +399,40 @@ router.post(
   })
 );
 
+// Editar los datos de un vídeo ya publicado: título, descripción y etiquetas.
+// No se toca el archivo ni el HLS: reemplazar el vídeo de un post que ya tiene
+// vistas y comentarios cambiaría lo que la gente vio y comentó.
+router.patch(
+  '/:id',
+  auth,
+  [
+    param('id').isMongoId().withMessage('ID inválido'),
+    body('title').optional().trim().notEmpty().withMessage('El título no puede quedar vacío').isLength({ max: 100 }),
+    body('description').optional({ values: 'null' }).trim().isLength({ max: 500 }),
+    body('tags').optional().isArray({ max: 10 }).withMessage('Máximo 10 etiquetas'),
+    body('tags.*').optional().trim().isLength({ max: 30 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findById(req.params.id);
+    if (!video) throw new HttpError(404, 'Video no encontrado');
+    if (video.creator.toString() !== req.user.userId && req.user.role !== 'admin') {
+      throw new HttpError(403, 'No autorizado para editar este video');
+    }
+
+    const updates = {};
+    if (req.body.title !== undefined) updates.title = req.body.title;
+    if (req.body.description !== undefined) updates.description = req.body.description;
+    if (req.body.tags !== undefined) updates.tags = req.body.tags;
+
+    const updated = await Video.findByIdAndUpdate(req.params.id, updates, { new: true }).populate(
+      'creator',
+      'username profile.displayName profile.avatar'
+    );
+    res.json({ video: updated });
+  })
+);
+
 router.delete(
   '/:id',
   auth,
@@ -359,6 +449,13 @@ router.delete(
     // The thread goes with the video: leaving the comments behind would keep
     // their text readable through the comment endpoints after the video is gone.
     await commentService.removeForVideo(video._id);
+    // Y los ficheros del bucket, si el vídeo se publicó ahí: sin esto la
+    // escalera HLS y el original quedarían ocupando cuota para siempre.
+    if (storageService.isConfigured()) {
+      storageService.deletePrefix(video._id.toString()).catch((err) => {
+        console.error('[storage] no se pudo limpiar el vídeo del bucket:', err.message);
+      });
+    }
     res.json({ deleted: true });
   })
 );
@@ -385,6 +482,7 @@ router.get(
 
     res.json({
       downloadUrl: video.videoUrl,
+      fileUrl: `/api/videos/${video._id}/file`,
       filename: `${safeTitle || 'taktak'}-${video._id}.${ext}`,
       watermark: false,
       platformLogo: false,
@@ -429,11 +527,69 @@ router.get(
     // denegado. Es una señal de interés, como los "me gusta".
     await Video.updateOne({ _id: video._id }, { $inc: { downloads: 1 } });
 
+    // El fichero se sirve por nuestra propia API (`fileUrl`), no con la URL
+    // directa del bucket: el navegador lo pide al mismo origen y así la descarga
+    // no depende de que R2 devuelva cabeceras CORS. `downloadUrl` se mantiene
+    // por compatibilidad con los clientes que ya lo usan.
     res.json({
       downloadUrl: video.videoUrl,
+      fileUrl: `/api/videos/${video._id}/file`,
       filename: `${safeTitle || 'taktak'}-${video._id}.${ext}`,
       watermark: false,
       reencoded: false,
+    });
+  })
+);
+
+// Sirve el fichero original del vídeo, con su nombre legible, desde el mismo
+// origen. Existe para que la descarga no dependa de CORS: cuando el original
+// vive en un bucket externo (R2), un `fetch` del navegador contra la URL del
+// bucket fallaría si el bucket no manda `Access-Control-Allow-Origin`. Pedirlo
+// a nuestra API evita ese acoplamiento.
+router.get(
+  '/:id/file',
+  auth,
+  [param('id').isMongoId().withMessage('ID inválido')],
+  validate,
+  asyncHandler(async (req, res) => {
+    const video = await Video.findById(req.params.id).select(
+      'title videoUrl creator moderationStatus isNSFW'
+    );
+    if (!video || video.moderationStatus === 'rejected') {
+      throw new HttpError(404, 'Video no encontrado');
+    }
+
+    if (video.isNSFW && String(video.creator) !== String(req.user.userId)) {
+      if (!(await feedService.canViewAdultContent(req.user.userId))) {
+        throw new HttpError(404, 'Video no encontrado');
+      }
+    }
+
+    const ext = (video.videoUrl.split('.').pop() || 'mp4').split('?')[0];
+    const safeTitle = video.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 60);
+    const filename = `${safeTitle || 'taktak'}-${video._id}.${ext}`;
+
+    if (storageService.isConfigured()) {
+      const key = path.basename(video.videoUrl);
+      let object;
+      try {
+        object = await storageService.getObjectStream(key);
+      } catch {
+        throw new HttpError(404, 'El archivo ya no está disponible');
+      }
+      res.setHeader('Content-Type', storageService.contentTypeFor(key));
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      if (object.ContentLength) res.setHeader('Content-Length', String(object.ContentLength));
+      object.Body.pipe(res);
+      return;
+    }
+
+    // Modo local: el fichero está en disco. Se envía directo para no arrastrar
+    // la cabecera `Content-Disposition` con el nombre interno que pone
+    // `express.static` en `/uploads`, que es justo lo que rompía el nombre
+    // visible de la descarga.
+    res.download(path.join(env.uploadsDir, path.basename(video.videoUrl)), filename, (err) => {
+      if (err && !res.headersSent) throw new HttpError(404, 'El archivo ya no está disponible');
     });
   })
 );
@@ -489,11 +645,23 @@ router.post(
       );
     }
 
-    const inputPath = path.join(env.uploadsDir, path.basename(video.videoUrl));
+    // El original puede estar en el disco local (recién subido) o solo en el
+    // bucket (subido antes de un despliegue que borró el disco). Se intenta el
+    // disco primero, que es lo barato, y si no está se trae del bucket.
+    const originalName = path.basename(video.videoUrl);
+    let inputPath = path.join(env.uploadsDir, originalName);
     try {
       await fs.access(inputPath);
     } catch {
-      throw new HttpError(404, 'El archivo original ya no está disponible');
+      if (!storageService.isConfigured()) {
+        throw new HttpError(404, 'El archivo original ya no está disponible');
+      }
+      inputPath = path.join(env.uploadsDir, `reprocess-${video._id}${path.extname(originalName)}`);
+      try {
+        await storageService.getFileToTemp(originalName, inputPath);
+      } catch {
+        throw new HttpError(404, 'El archivo original ya no está disponible');
+      }
     }
 
     // En segundo plano, igual que en la subida: un vídeo largo tardaría más que
@@ -505,6 +673,59 @@ router.post(
     startTranscode(video, inputPath, owner?.username);
 
     res.status(202).json({ queued: true, transcodeStatus: 'processing' });
+  })
+);
+
+// Reencola la conversión de todos los vídeos que se quedaron sin HLS (subidos
+// antes de que la transcodificación estuviera activada). Sin esto, un original
+// HEVC o AV1 sigue sirviéndose tal cual y se ve en negro en la mayoría de los
+// móviles. Es idempotente y se puede llamar varias veces.
+//
+// Va antes de `/:id` en el archivo a propósito: una ruta POST con el mismo
+// patrón que `/:id/...` no colisiona, pero mantenerlo junto al retranscode deja
+// la lógica de reproceso en un solo sitio.
+router.post(
+  '/optimize-missing',
+  auth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!(await transcodeService.hasFfmpeg())) {
+      throw new HttpError(
+        503,
+        'La conversión de video no está disponible en este servidor (falta ffmpeg)'
+      );
+    }
+
+    const videos = await Video.find({
+      $or: [{ hlsUrl: null }, { hlsUrl: { $exists: false } }],
+      transcodeStatus: { $ne: 'processing' },
+    }).select('_id videoUrl creator');
+
+    let queued = 0;
+    for (const video of videos) {
+      const originalName = path.basename(video.videoUrl || '');
+      if (!originalName) continue;
+
+      let inputPath = path.join(env.uploadsDir, originalName);
+      try {
+        await fs.access(inputPath);
+      } catch {
+        if (!storageService.isConfigured()) continue;
+        inputPath = path.join(env.uploadsDir, `reprocess-${video._id}${path.extname(originalName)}`);
+        try {
+          await storageService.getFileToTemp(originalName, inputPath);
+        } catch {
+          continue;
+        }
+      }
+
+      await Video.updateOne({ _id: video._id }, { transcodeStatus: 'processing' });
+      const owner = await User.findById(video.creator).select('username');
+      startTranscode(video, inputPath, owner?.username);
+      queued += 1;
+    }
+
+    res.json({ queued, total: videos.length });
   })
 );
 

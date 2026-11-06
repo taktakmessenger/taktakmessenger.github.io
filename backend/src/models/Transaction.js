@@ -19,6 +19,21 @@ const transactionSchema = new mongoose.Schema(
         'platform',
         'platform_bonus',
         'bonus',
+        // Comisión de la casa en POKERTAK. La parte pagada es ingreso real; la
+        // de regalo se queda en el circuito de monedas promocionales.
+        'poker_rake',
+        'poker_rake_bonus',
+        // Torneos: entrada cobrada, premio pagado, devolución al cancelar y la
+        // tarifa que se queda la casa del bote entero.
+        'poker_event_entry',
+        'poker_event_prize',
+        'poker_event_refund',
+        'poker_event_rake',
+        'poker_event_rake_bonus',
+        // Premio del programa de referidos: un porcentaje de lo que compró el
+        // invitado, abonado a quien lo trajo. Siempre en monedas de regalo, así
+        // que no es ingreso canjeable y se apunta aparte de `bonus`.
+        'referral_bonus',
       ],
       required: true,
     },
@@ -39,20 +54,40 @@ const transactionSchema = new mongoose.Schema(
     // replaying the same webhook a no-op instead of a double credit.
     externalId: { type: String, index: { unique: true, sparse: true } },
 
+    // Clave de idempotencia del cliente. La manda la app al pedir un retiro
+    // (una por intento): si la petición se reintenta —red que falla, el usuario
+    // toca dos veces, el navegador reenvía— el segundo intento devuelve la
+    // solicitud ya creada en vez de descontar los Diamantes otra vez. `sparse`
+    // porque la mayoría de transacciones (regalos, compras, premios) no la
+    // llevan.
+    idempotencyKey: { type: String, index: { unique: true, sparse: true } },
+
     // Context / payout metadata.
     videoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Video' },
     method: String,
     details: String,
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed'],
+      enum: ['pending', 'completed', 'failed', 'rejected'],
       default: 'completed',
     },
+
+    // Solo para retiros: quién y cuándo resolvió la solicitud. Sin esto no hay
+    // forma de saber qué administrador pagó (o rechazó) un retiro, que es justo
+    // lo que hace falta para responder a una reclamación del usuario.
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedAt: { type: Date, default: null },
+    // Motivo del rechazo, visible para el usuario cuando se le devuelven los
+    // Diamantes.
+    reason: { type: String, trim: true, maxlength: 300, default: '' },
   },
   { timestamps: true }
 );
 
 transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ from: 1, createdAt: -1 });
+// La cola de retiros se lista por tipo y estado, del más antiguo al más nuevo:
+// es la consulta que hace el panel de administración.
+transactionSchema.index({ type: 1, status: 1, createdAt: 1 });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

@@ -21,6 +21,18 @@ export function guestColumns(count) {
   return 4;
 }
 
+// Columnas de la rejilla cuando TODOS comparten el mismo tamaño (diseño
+// "Rejilla", el de TikTok para multi-invitado): el anfitrión y los invitados van
+// en la misma cuadrícula. Se parece a `guestColumns` pero cuenta también al
+// anfitrión, así que con 16 personas (el anfitrión más 15) se usan 4 columnas.
+export function stageColumns(tiles) {
+  if (tiles <= 1) return 1;
+  if (tiles <= 2) return 2;
+  if (tiles <= 4) return 2;
+  if (tiles <= 9) return 3;
+  return 4;
+}
+
 // Cuántas filas necesita la rejilla para `count` invitados con `columns`
 // columnas. Se usa para decidir la altura de cada ventana.
 export function guestRows(count, columns = guestColumns(count)) {

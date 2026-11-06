@@ -26,6 +26,16 @@ function installDom() {
     body: { appendChild() {} },
   };
   global.URL = { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} };
+  // `downloadVideo` pide el token de la sesión antes de descargar, y en el
+  // navegador eso vive en `localStorage`. Sin este doble, el helper revienta con
+  // "localStorage is not defined" antes de llegar a la lógica que se quiere
+  // probar. Se devuelve un token cualquiera: lo que importa es que la petición
+  // lleve uno.
+  global.localStorage = {
+    getItem: () => 'token-de-prueba',
+    setItem: () => {},
+    removeItem: () => {},
+  };
   return clicks;
 }
 

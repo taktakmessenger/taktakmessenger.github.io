@@ -10,7 +10,7 @@ import { videoShareUrl, shareMessage, copyToClipboard, shareWithSystem } from '.
 //
 // Se mantiene como acción contextual: el vídeo sigue detrás y al cerrar se
 // vuelve exactamente donde estaba.
-export default function ShareSheet({ video, onClose, onDownload, onMessage, onHideCreator, onHideTag, onReport, onBlock, onShared }) {
+export default function ShareSheet({ video, onClose, onDownload, onMessage, onHideCreator, onHideTag, onReport, onBlock, onShared, onEdit, onDelete }) {
   const { user } = useAuth();
   const [friends, setFriends] = useState([]);
   const [notice, setNotice] = useState('');
@@ -191,6 +191,34 @@ export default function ShareSheet({ video, onClose, onDownload, onMessage, onHi
               ))}
             </div>
           </>
+        )}
+
+        {/* Solo en tus propios vídeos: aquí es donde se buscan estas acciones
+            cuando se está mirando el vídeo, en vez de en una lista aparte. */}
+        {isSelf && (
+          <div className="share-rows share-owner-rows">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onClose();
+                onEdit?.(video);
+              }}
+            >
+              ✏️ Editar vídeo
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="danger"
+              onClick={() => {
+                onClose();
+                onDelete?.(video);
+              }}
+            >
+              🗑️ Eliminar vídeo
+            </button>
+          </div>
         )}
 
         <div className="share-rows">

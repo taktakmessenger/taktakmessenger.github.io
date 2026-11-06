@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
+import { copyToClipboard } from '../lib/share';
 
 // Tienda de monedas.
 //
@@ -25,6 +26,8 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
   // Formulario de cobro manual abierto para un paquete concreto.
   const [manualFor, setManualFor] = useState('');
   const [manualForm, setManualForm] = useState({ method: '', reference: '', note: '' });
+  // Qué dato se acaba de copiar, para confirmarlo en el botón ("✅ Copiado").
+  const [copied, setCopied] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -122,6 +125,19 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
     } finally {
       setBusy('');
     }
+  }
+
+  /**
+   * Copia un dato del método de pago (el enlace o las instrucciones).
+   *
+   * Se copia al portapapeles porque el usuario tiene que llevárselo a otra app
+   * (PayPal, Zinli, su banco). `key` distingue en qué botón confirmar la copia.
+   */
+  async function copyValue(key, value) {
+    const ok = await copyToClipboard(value);
+    if (!ok) return;
+    setCopied(key);
+    setTimeout(() => setCopied((current) => (current === key ? '' : current)), 2000);
   }
 
   const anyProvider = providers.stripe || providers.paypal || providers.manual;
@@ -251,6 +267,53 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       ))}
                     </select>
                   )}
+                  {/* Enlace directo a la cuenta de cobro: sin esto el usuario
+                      tendría que adivinar a quién pagar. Se muestra también
+                      como texto y con botón de copiar, porque el usuario suele
+                      pagar en otra app (PayPal, Zinli, el banco) y necesita
+                      pegar el enlace o la referencia allí. */}
+                  {selectedManual?.link && (
+                    <div>
+                      <a
+                        className="manual-pay-link"
+                        href={selectedManual.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        👉 Ir a pagar con {selectedManual.label}
+                      </a>
+                      <div className="manual-pay-copy">
+                        <code className="manual-pay-value">{selectedManual.link}</code>
+                        <button
+                          type="button"
+                          className="btn-ghost manual-pay-copy-btn"
+                          onClick={() =>
+                            copyValue(`link:${selectedManual.id}`, selectedManual.link)
+                          }
+                        >
+                          {copied === `link:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Pago directo: el correo o la cuenta a la que enviar el
+                      dinero sin salir de la app. Se ofrece junto al enlace
+                      porque muchos usuarios pagan desde otra app y solo
+                      necesitan el dato para pegarlo. */}
+                  {selectedManual?.payTo && (
+                    <div className="manual-pay-copy">
+                      <code className="manual-pay-value">{selectedManual.payTo}</code>
+                      <button
+                        type="button"
+                        className="btn-ghost manual-pay-copy-btn"
+                        onClick={() =>
+                          copyValue(`payTo:${selectedManual.id}`, selectedManual.payTo)
+                        }
+                      >
+                        {copied === `payTo:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
+                      </button>
+                    </div>
+                  )}
                   <input
                     type="text"
                     placeholder="Número de referencia"
@@ -291,7 +354,7 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
 
       {anyProvider && (
         <button type="button" className="btn-link" onClick={onManageMethods}>
-          💳 Guardar una tarjeta o vincular PayPal
+          💳 {providers.paypal ? 'Guardar una tarjeta o vincular PayPal' : 'Guardar una tarjeta'}
         </button>
       )}
     </div>

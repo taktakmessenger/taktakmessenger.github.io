@@ -7,6 +7,8 @@ import { formatDuration } from '../lib/voiceNote';
 import { resolveViewerLanguage, normalizeLanguage, languageNativeName } from '../lib/translate';
 import TranslateButton from './TranslateButton';
 import TranslateIcon from './TranslateIcon';
+import { BackIcon, PhoneIcon, VideoIcon, AttachIcon, SendIcon, CameraIcon, EmojiIcon, LocationIcon, ContactIcon, PollIcon, EventIcon } from './ChatIcons';
+import AttachMenu from './AttachMenu';
 import { translateBatch } from '../lib/translateClient';
 import VoiceTranscript from './VoiceTranscript';
 import Dialer from './Dialer';
@@ -16,6 +18,11 @@ function initials(person) {
   const name = person?.displayName || person?.username || '?';
   return name.slice(0, 2).toUpperCase();
 }
+
+// Paleta corta de emojis para el botón del compositor. No es el teclado de
+// emojis del sistema (para eso está el propio teclado del móvil): es un atajo
+// con los más usados, que es lo que WhatsApp pone a mano.
+const EMOJIS = ['😀', '😂', '😍', '😊', '😉', '😎', '🤔', '😢', '😮', '😡', '👍', '👎', '🙏', '👏', '💪', '🔥', '❤️', '💜', '✨', '🎉', '😘', '🤗', '😅', '🙌'];
 
 // El mismo usuario llega con `_id` desde /users/me y con `id` desde el resto de
 // la API. La normalización vive en `lib/user` porque no es cosa solo de este
@@ -136,6 +143,8 @@ function Thread({ conversationId, onBack, onCall }) {
   // referencia que devolvió el servidor.
   const [attachment, setAttachment] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   // Traducción del hilo. El idioma del que lee sale de lo que eligió en Ajustes
@@ -231,6 +240,16 @@ function Thread({ conversationId, onBack, onCall }) {
       setPeerTyping(Boolean(payload.typing));
     });
 
+    // Voto de una encuesta: se reemplaza el mensaje por su versión nueva, que
+    // trae los totales actualizados, sin recargar el hilo.
+    const unsubPoll = subscribe('chat:poll', (payload) => {
+      if (String(payload?.conversationId) !== String(conversationId)) return;
+      if (!payload?.message) return;
+      setMessages((prev) =>
+        prev.map((m) => (String(m.id) === String(payload.message.id) ? payload.message : m))
+      );
+    });
+
     // Presencia del otro.
     const unsubPresence = subscribe('chat:presence', (payload) => {
       if (!peer || String(payload?.userId) !== String(peer.id)) return;
@@ -246,6 +265,7 @@ function Thread({ conversationId, onBack, onCall }) {
       unsubRead();
       unsubDelivered();
       unsubTyping();
+      unsubPoll();
       unsubPresence();
       emit('chat:leave', { conversationId });
     };
@@ -332,6 +352,81 @@ function Thread({ conversationId, onBack, onCall }) {
 
   function clearAttachment() {
     setAttachment(null);
+  }
+
+  // Envía un mensaje de contenido rico (ubicación, contacto, encuesta o evento).
+  // Se reutiliza el mismo camino que un mensaje con adjunto: copia optimista,
+  // POST y `mergeMessage`, para que los ticks y el eco del socket se comporten
+  // igual que en un mensaje normal.
+  async function sendRich(rich) {
+    setError('');
+    const optimistic = {
+      id: `local-${Date.now()}`,
+      conversation: conversationId,
+      sender: { id: userId(user), username: user.username },
+      kind: rich.type,
+      text: '',
+      rich,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    try {
+      const { data: sent } = await api.post(
+        `/messages/conversations/${conversationId}/messages`,
+        { rich }
+      );
+      setMessages((prev) => mergeMessage(prev, sent.message));
+    } catch (err) {
+      // La copia optimista se retira si el servidor la rechaza: dejarla puesta
+      // haría creer que el mensaje salió cuando no fue así.
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setError(err.message);
+    }
+  }
+
+  // Vota en una encuesta. Se actualiza el mensaje con la respuesta del servidor;
+  // el socket `chat:poll` trae además el voto del otro sin recargar.
+  async function votePoll(message, optionIndex) {
+    setError('');
+    try {
+      const { data } = await api.post(
+        `/messages/conversations/${conversationId}/messages/${message.id}/vote`,
+        { optionIndex }
+      );
+      setMessages((prev) => prev.map((m) => (String(m.id) === String(message.id) ? data.message : m)));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Abre el selector de archivos con el `accept`/`capture` que pide el menú de
+  // adjuntos: galería (imagen y vídeo), documento (todo) o cámara (captura).
+  function openPicker(kind) {
+    const input = fileInputRef.current;
+    if (!input) return;
+    if (kind === 'camera') {
+      input.setAttribute('accept', 'image/*');
+      input.setAttribute('capture', 'environment');
+    } else if (kind === 'gallery') {
+      input.setAttribute('accept', 'image/*,video/*');
+      input.removeAttribute('capture');
+    } else {
+      input.setAttribute('accept', '*/*');
+      input.removeAttribute('capture');
+    }
+    input.click();
+  }
+
+  // El menú de adjuntos llama aquí con el tipo elegido: los tres que abren el
+  // selector se resuelven con `openPicker`, y los cuatro ricos se envían tal cual.
+  function handleAttachPick(pick) {
+    if (pick.type === 'gallery' || pick.type === 'camera' || pick.type === 'document') {
+      openPicker(pick.type);
+      return;
+    }
+    sendRich(pick);
   }
 
   // Nota de voz recién grabada: se sube y se envía en un solo gesto, como al
@@ -443,7 +538,7 @@ function Thread({ conversationId, onBack, onCall }) {
     <div className="thread">
       <div className="thread-header">
         <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
-          ←
+          <BackIcon />
         </button>
         <div className="thread-peer">
           <span className="avatar">{peerMissing ? '?' : initials(peer)}</span>
@@ -485,7 +580,7 @@ function Thread({ conversationId, onBack, onCall }) {
             onClick={() => onCall?.(peer, 'audio')}
             aria-label="Llamada de voz"
           >
-            📞
+            <PhoneIcon />
           </button>
           <button
             type="button"
@@ -495,7 +590,7 @@ function Thread({ conversationId, onBack, onCall }) {
             onClick={() => onCall?.(peer, 'video')}
             aria-label="Videollamada"
           >
-            🎥
+            <VideoIcon />
           </button>
         </div>
       </div>
@@ -553,6 +648,7 @@ function Thread({ conversationId, onBack, onCall }) {
               {showDay && <div className="day-sep"><span>{dayLabel(m.createdAt)}</span></div>}
               <div className={`bubble-row ${mine ? 'mine' : 'theirs'}`}>
                 <div className={`bubble ${m.pending ? 'pending' : ''} ${m.attachment ? 'has-attachment' : ''}`}>
+                  {m.rich && <RichContent message={m} mine={userId(user)} onVote={(i) => votePoll(m, i)} />}
                   <Attachment
                     attachment={m.attachment}
                     pending={m.pending}
@@ -611,24 +707,36 @@ function Thread({ conversationId, onBack, onCall }) {
           accept="image/*,video/*,audio/*,.pdf,.txt,.csv,.md,.json,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
           aria-label="Adjuntar archivo"
         />
+
+        {/* Emoji a la izquierda del campo, como en WhatsApp. Abre una paleta
+            breve de los más usados; al tocar uno se inserta en el texto. */}
         <button
           type="button"
-          className="composer-attach"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          aria-label="Adjuntar archivo"
-          title="Adjuntar archivo"
+          className="composer-icon composer-emoji"
+          onClick={() => setEmojiOpen((v) => !v)}
+          aria-label="Emojis"
+          aria-expanded={emojiOpen}
+          title="Emojis"
         >
-          {uploading ? '⏳' : '📎'}
+          <EmojiIcon />
         </button>
-
-        {/* Nota de voz: mantener pulsado graba, soltar envía. Se desactiva
-            mientras hay texto escrito, porque en ese caso el gesto natural es
-            enviar el texto y no empezar una grabación. */}
-        <VoiceRecorder
-          onRecorded={sendVoiceNote}
-          disabled={uploading || Boolean(text.trim())}
-        />
+        {emojiOpen && (
+          <div className="emoji-palette" role="dialog" aria-label="Elegir emoji">
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => {
+                  setText((prev) => `${prev}${emoji}`);
+                  setEmojiOpen(false);
+                  notifyTyping();
+                }}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
 
         {attachment && (
           <div className="composer-preview">
@@ -662,16 +770,55 @@ function Thread({ conversationId, onBack, onCall }) {
           maxLength={2000}
           aria-label="Mensaje"
         />
+
+        {/* Clip: abre el menú de adjuntos (galería, cámara, ubicación, contacto,
+            documento, encuesta, evento). */}
         <button
-          type="submit"
-          className="btn-primary composer-send"
-          disabled={(!text.trim() && !attachment) || uploading}
-          aria-label="Enviar"
-          title="Enviar"
+          type="button"
+          className="composer-icon composer-attach"
+          onClick={() => setAttachOpen(true)}
+          disabled={uploading}
+          aria-label="Adjuntar archivo"
+          title="Adjuntar"
         >
-          <span aria-hidden="true">➤</span>
+          {uploading ? '⏳' : <AttachIcon />}
         </button>
+
+        {/* Cámara: atajo directo para hacer una foto, sin pasar por el menú. */}
+        <button
+          type="button"
+          className="composer-icon composer-camera"
+          onClick={() => openPicker('camera')}
+          disabled={uploading}
+          aria-label="Hacer una foto"
+          title="Cámara"
+        >
+          <CameraIcon />
+        </button>
+
+        {/* Al final, micro o enviar: se turnan como en WhatsApp. El micro solo
+            cuando no hay nada escrito; en cuanto hay texto, aparece el avión. */}
+        {!text.trim() && !attachment ? (
+          <VoiceRecorder onRecorded={sendVoiceNote} disabled={uploading} />
+        ) : (
+          <button
+            type="submit"
+            className="btn-primary composer-send"
+            disabled={uploading}
+            aria-label="Enviar"
+            title="Enviar"
+          >
+            <SendIcon />
+          </button>
+        )}
       </form>
+
+      <AttachMenu
+        open={attachOpen}
+        onClose={() => setAttachOpen(false)}
+        onPick={handleAttachPick}
+        disabled={uploading}
+      />
     </div>
   );
 }
@@ -831,8 +978,127 @@ function Attachment({ attachment, pending, translateTarget, translateHint, canTr
   );
 }
 
-// Tamaño legible. Se redondea a una cifra: "1,2 MB" es lo que se quiere leer,
-// no "1,1876 MB".
+// --- Tarjetas de contenido rico ---
+//
+// Cada tipo (ubicación, contacto, encuesta, evento) se pinta en su propia
+// tarjeta dentro de la burbuja. Comparten la estructura `.rich-card` para que el
+// hilo se lea uniforme; lo que cambia es el contenido.
+
+function LocationCard({ rich }) {
+  // El enlace abre la app de mapas del sistema. Se usa `geo:` (que en móvil
+  // abre la app nativa) con respaldo en Google Maps para el navegador.
+  const label = rich.placeName || 'Ubicación compartida';
+  const href = `https://www.google.com/maps?q=${rich.lat},${rich.lng}`;
+  return (
+    <a className="rich-card rich-location" href={href} target="_blank" rel="noopener noreferrer">
+      <span className="rich-card-icon" aria-hidden="true">
+        <LocationIcon size={26} />
+      </span>
+      <span className="rich-card-body">
+        <strong>{label}</strong>
+        <small>{rich.lat?.toFixed?.(5)}, {rich.lng?.toFixed?.(5)}</small>
+      </span>
+    </a>
+  );
+}
+
+function ContactCard({ rich }) {
+  return (
+    <div className="rich-card rich-contact">
+      <span className="rich-card-icon" aria-hidden="true">
+        <ContactIcon size={26} />
+      </span>
+      <span className="rich-card-body">
+        <strong>{rich.name || 'Contacto'}</strong>
+        {rich.phone && <small>{rich.phone}</small>}
+      </span>
+      {rich.phone && (
+        <a className="rich-card-action" href={`tel:${rich.phone}`} aria-label="Llamar al contacto">
+          Llamar
+        </a>
+      )}
+    </div>
+  );
+}
+
+function PollCard({ rich, onVote, mine, disabled }) {
+  const total = (rich.totals || []).reduce((sum, n) => sum + n, 0);
+  return (
+    <div className="rich-card rich-poll">
+      <span className="rich-poll-question">
+        <PollIcon size={18} />
+        <strong>{rich.question}</strong>
+      </span>
+      <ul className="rich-poll-options">
+        {(rich.options || []).map((option, index) => {
+          const count = rich.totals?.[index] || 0;
+          const percent = total ? Math.round((count / total) * 100) : 0;
+          const chosen = (rich.votes?.[index] || []).some((id) => String(id) === String(mine));
+          return (
+            <li key={index}>
+              <button
+                type="button"
+                className={`rich-poll-option ${chosen ? 'chosen' : ''}`}
+                onClick={() => onVote?.(index)}
+                disabled={disabled}
+                aria-pressed={chosen}
+              >
+                <span className="rich-poll-bar" style={{ width: `${percent}%` }} aria-hidden="true" />
+                <span className="rich-poll-label">
+                  {chosen && <span aria-hidden="true">✓ </span>}
+                  {option}
+                </span>
+                <span className="rich-poll-count">{percent}%</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <small className="rich-poll-total">
+        {total === 1 ? '1 voto' : `${total} votos`}
+        {rich.allowMultiple ? ' · varias respuestas' : ''}
+      </small>
+    </div>
+  );
+}
+
+function EventCard({ rich }) {
+  const start = rich.startsAt ? new Date(rich.startsAt) : null;
+  const end = rich.endsAt ? new Date(rich.endsAt) : null;
+  const fmt = (d) =>
+    d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return (
+    <div className="rich-card rich-event">
+      <span className="rich-card-icon" aria-hidden="true">
+        <EventIcon size={26} />
+      </span>
+      <span className="rich-card-body">
+        <strong>{rich.title}</strong>
+        {start && (
+          <small>
+            {fmt(start)}
+            {end ? ` – ${fmt(end)}` : ''}
+          </small>
+        )}
+        {rich.location && <small>📍 {rich.location}</small>}
+        {rich.notes && <small className="rich-event-notes">{rich.notes}</small>}
+      </span>
+    </div>
+  );
+}
+
+// Enruta un mensaje rico a su tarjeta. Se centraliza aquí para que el hilo tenga
+// un solo `if` en vez de uno por tipo.
+function RichContent({ message, mine, onVote }) {
+  const rich = message.rich;
+  if (!rich) return null;
+  if (rich.type === 'location') return <LocationCard rich={rich} />;
+  if (rich.type === 'contact') return <ContactCard rich={rich} />;
+  if (rich.type === 'poll') return <PollCard rich={rich} onVote={onVote} mine={mine} />;
+  if (rich.type === 'event') return <EventCard rich={rich} />;
+  return null;
+}
+
 function formatSize(bytes) {
   if (!bytes || bytes < 1024) return bytes ? `${bytes} B` : '';
   const kb = bytes / 1024;

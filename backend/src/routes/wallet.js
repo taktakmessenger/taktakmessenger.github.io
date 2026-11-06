@@ -3,12 +3,21 @@ const rateLimit = require('express-rate-limit');
 const { body, query } = require('express-validator');
 const walletService = require('../services/walletService');
 const notificationService = require('../services/notificationService');
+const referralService = require('../services/referralService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
-const { asyncHandler } = require('../utils/http');
+const { asyncHandler, HttpError } = require('../utils/http');
 const env = require('../config/env');
+const paypalService = require('../services/paypalService');
 
 const router = express.Router();
+
+// Métodos de retiro que la app ofrece en el formulario. PayPal se filtra aparte
+// porque además de estar soportado tiene un interruptor operativo: con PayPal
+// apagado no debe aparecer como opción ni aceptarse una solicitud.
+const WITHDRAW_METHODS = ['paypal', 'zelle', 'crypto'];
+const withdrawMethodAllowed = (method) =>
+  method !== 'paypal' || paypalService.isEnabled();
 
 // Money-moving endpoints get a tighter limit than general reads.
 const moneyLimiter = rateLimit({
@@ -127,24 +136,82 @@ router.get(
   })
 );
 
+router.get(
+  '/referral',
+  auth,
+  asyncHandler(async (req, res) => {
+    // El código se crea aquí, en la primera visita a la pantalla: así solo se
+    // gasta un código en las cuentas que de verdad invitan a alguien.
+    await referralService.ensureCode(req.user.userId);
+    res.json(await referralService.stats(req.user.userId));
+  })
+);
+
 router.post(
   '/withdraw',
   auth,
   moneyLimiter,
   [
-    body('amount').isFloat({ gt: 0 }).withMessage('Monto inválido').toFloat(),
-    body('method').trim().notEmpty().withMessage('Método de retiro requerido'),
-    body('details').optional().trim().isLength({ max: 200 }),
+    // El importe se normaliza a cadena decimal y se valida con BigInt en el
+    // servicio, no con `Number`, para que no lo decida el redondeo en coma
+    // flotante. Se acepta un número de un cliente antiguo (se redondea al
+    // céntimo) y una cadena del cliente nuevo (se valida tal cual).
+    body('amount')
+      .exists()
+      .withMessage('Monto inválido')
+      .bail()
+      .customSanitizer((v) => (typeof v === 'number' ? v.toFixed(2) : v))
+      .isString()
+      .withMessage('Monto inválido')
+      .bail()
+      .matches(/^\d+(?:\.\d{1,2})?$/)
+      .withMessage('Monto inválido: usa como máximo 2 decimales'),
+    body('method').trim().isIn(WITHDRAW_METHODS).withMessage('Método no admitido'),
+    body('details')
+      .trim()
+      .notEmpty()
+      .withMessage('Indica la cuenta o los datos de cobro')
+      .isLength({ max: 200 }),
+    // Clave de idempotencia del cliente: opcional, pero si viene se acota.
+    body('idempotencyKey')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ min: 8, max: 100 })
+      .matches(/^[a-zA-Z0-9_-]+$/)
+      .withMessage('Clave de idempotencia inválida'),
   ],
   validate,
   asyncHandler(async (req, res) => {
+    if (!withdrawMethodAllowed(req.body.method)) {
+      throw new HttpError(400, 'Método de retiro no admitido');
+    }
     const result = await walletService.requestWithdrawal({
       userId: req.user.userId,
       amount: req.body.amount,
       method: req.body.method,
       details: req.body.details,
+      idempotencyKey: req.body.idempotencyKey,
     });
     res.json({ message: 'Solicitud de retiro procesada', ...result });
+  })
+);
+
+// Parámetros que la pantalla de retiro necesita para validar antes de enviar:
+// mínimo, tope diario y tasa de conversión a dólares. Van aquí y no en el
+// cliente para que un cambio de configuración no deje la UI mintiendo.
+router.get(
+  '/withdraw/config',
+  auth,
+  asyncHandler(async (_req, res) => {
+    res.json({
+      min: env.withdrawals.min,
+      dailyCap: env.withdrawals.dailyCap,
+      usdRate: env.withdrawals.usdRate,
+      // Solo los métodos que hoy se pueden usar: con PayPal apagado no se
+      // ofrece como opción, así que la UI no lo pinta.
+      methods: WITHDRAW_METHODS.filter(withdrawMethodAllowed),
+    });
   })
 );
 

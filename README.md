@@ -241,6 +241,10 @@ doble gasto con peticiones concurrentes) y squads.
 | POST | `/api/payments/methods/:id/default` | ✅ | Marcar método predeterminado |
 | DELETE | `/api/payments/methods/:id` | ✅ | Borrar método guardado |
 | POST | `/api/payments/methods/:id/pay` | ✅ | Cobrar paquete con método guardado |
+| GET | `/api/verification/age` | ✅ | Estado de verificación de edad |
+| POST | `/api/verification/age/start` | ✅ | Abrir sesión con Didit (devuelve la URL) |
+| POST | `/api/verification/age/refresh` | ✅ | Releer el veredicto de Didit |
+| POST | `/api/verification/didit/webhook` | 🔑 | Webhook de Didit (firma HMAC) |
 | GET | `/api/wallet` | ✅ | Saldos |
 | GET | `/api/wallet/transactions` | ✅ | Historial |
 | GET | `/api/wallet/monetization` | ✅ | Monetización abierta |

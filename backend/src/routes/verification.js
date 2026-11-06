@@ -1,13 +1,65 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 const User = require('../models/User');
 const ageService = require('../services/ageService');
+const diditService = require('../services/diditService');
 const newsService = require('../services/newsService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
 
 const router = express.Router();
+
+// El webhook lo llama Didit, no el navegador, así que va antes del `auth` (que
+// exigiría sesión) y se protege con su propia firma. El límite evita que un
+// tercero lo use para martillear el endpoint.
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones' },
+});
+
+/**
+ * Webhook de Didit.
+ *
+ * No lleva sesión: lo llama Didit. Se autentica con la firma HMAC de la
+ * cabecera, verificada contra el cuerpo. Un cuerpo sin firma válida se rechaza
+ * sin tocar la base de datos: si no, cualquiera podría aprobarse.
+ */
+router.post(
+  '/didit/webhook',
+  webhookLimiter,
+  asyncHandler(async (req, res) => {
+    const valid = diditService.verifyWebhook({
+      rawBody: req.rawBody,
+      parsedBody: req.body,
+      signatureV2: req.get('X-Signature-V2'),
+      signature: req.get('X-Signature'),
+      timestamp: req.get('X-Timestamp'),
+    });
+    if (!valid) throw new HttpError(401, 'Firma de webhook inválida');
+
+    const sessionId = req.body?.session_id;
+    const vendorData = req.body?.vendor_data;
+    const status = diditService.mapStatus(req.body?.status);
+
+    // Sin usuario no hay nada que aplicar. Se responde 200 igualmente: un 4xx
+    // haría que Didit reintentase un evento que nunca va a poder procesar.
+    if (!vendorData || !sessionId) {
+      return res.json({ received: true, applied: false });
+    }
+
+    const result = await ageService.applyProviderVerdict({
+      userId: vendorData,
+      status,
+      ref: sessionId,
+    });
+    res.json({ received: true, ...result });
+  })
+);
 
 // Age verification, from the account's own side.
 router.use(auth);

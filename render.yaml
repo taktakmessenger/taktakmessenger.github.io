@@ -63,9 +63,44 @@ services:
           name: taktak
           type: web
           envVarKey: RENDER_EXTERNAL_URL
-      # La imagen no incluye ffmpeg, así que la transcodificación queda apagada.
+      # ffmpeg sí está en la imagen. La transcodificación se deja ACTIVADA
+      # porque sin ella el vídeo se sirve tal cual y un original de iPhone
+      # (H.265/HEVC) o de Android reciente (AV1) se ve en negro en la mayoría de
+      # los navegadores: no hay H.264 que decodificar ni miniatura que enseñar.
+      # El coste es ffmpeg en runtime dentro del plan gratuito, que es asumible
+      # frente a tener los vídeos ilegibles.
       - key: TRANSCODE_ENABLED
-        value: false
+        value: "true"
+      # Tamaño máximo por vídeo. El valor por defecto (50 MB) se queda corto: un
+      # vídeo normal de móvil pesa más y la subida fallaba con 413. El plan free
+      # tiene 512 MB de RAM, pero multer escribe a disco en streaming, así que el
+      # tope real lo pone el proxy de Render, no la memoria. 200 MB da margen sin
+      # acercarse a ese tope.
+      - key: MAX_VIDEO_BYTES
+        value: 209715200
+      # Almacenamiento externo compatible con S3 (Cloudflare R2). Sin esto los
+      # vídeos viven en el disco del contenedor, que Render borra en cada
+      # despliegue: se pierden y sus enlaces quedan rotos. Con el bucket
+      # configurado, original y HLS se publican ahí y sobreviven a los reinicios.
+      # Mientras estas variables falten, la app sigue en modo local sin fallar.
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      # URL pública del bucket (https://pub-xxxx.r2.dev), sin barra final.
+      - key: R2_PUBLIC_BASE_URL
+        sync: false
+      # Región del proveedor. `auto` para Cloudflare R2; para Backblaze B2 hay
+      # que copiarla del endpoint del panel (p. ej. us-west-004).
+      - key: R2_REGION
+        value: auto
+      # B2 sirve los objetos en /bucket/clave y lo necesita activado.
+      - key: R2_FORCE_PATH_STYLE
+        value: "false"
       # Render no ofrece puertos UDP: el SFU de mediasoup no puede funcionar y
       # el modo malla es el único disponible.
       - key: SFU_ENABLED
@@ -80,17 +115,25 @@ services:
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
-      # Cobro manual (Zinli, pago móvil…). Va con valor y no como secreto porque
+      # Cobro manual (PayPal, Zinli…). Va con valor y no como secreto porque
       # son los datos de pago que se le muestran al usuario, no credenciales.
-      # Edítalo con tus cuentas reales antes de cobrar.
+      # `link` es la página de pago a la que el usuario va directo y `payTo` el
+      # dato de pago directo (el correo de Zinli) que se muestra junto al enlace.
       - key: MANUAL_PAYMENT_METHODS
-        value: '[{"id":"zinli","label":"Zinli","details":"Envía el importe a tu cuenta Zinli y pega el número de referencia."}]'
+        value: '[{"id":"paypal","label":"PayPal","link":"","payTo":"taktak.messenger@gmail.com","details":"Paga el importe exacto en PayPal y pega aquí el número de operación."},{"id":"zinli","label":"Zinli","link":"https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt","details":"Recarga con Zinli usando el enlace o el pago directo, y pega aquí el número de referencia."}]'
       # Asistente de revisión (opcional). Sin clave queda apagado y el panel
-      # manual funciona igual.
+      # manual funciona igual. La base y el modelo deben ir juntos: el modelo es
+      # el que entiende esa base (gpt-oss-120b es de Groq, gpt-4o-mini de OpenAI).
       - key: ASSISTANT_API_KEY
         sync: false
+      # Claves de respaldo separadas por comas. Si la principal falla, se prueba
+      # la siguiente antes de rendirse.
+      - key: ASSISTANT_API_KEY_FALLBACK
+        sync: false
+      - key: ASSISTANT_API_BASE
+        value: https://api.groq.com/openai/v1
       - key: ASSISTANT_MODEL
-        value: gpt-4o-mini
+        value: openai/gpt-oss-120b
       # Aprobación automática: déjalo en false hasta que confíes en el asistente.
       - key: MANUAL_AUTO_APPROVE
         value: false

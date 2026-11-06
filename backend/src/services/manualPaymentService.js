@@ -15,6 +15,10 @@ const { HttpError } = require('../utils/http');
 // de regalar saldo.
 
 function listMethods() {
+  // Los métodos manuales los declara el operador en `MANUAL_PAYMENT_METHODS`:
+  // si aparecen en la lista es porque se aceptan. No dependen del interruptor de
+  // la pasarela de PayPal, que solo gobierna el cobro automático (Stripe/PayPal
+  // al instante). El cobro manual se aprueba a mano, así que se ofrece siempre.
   return env.manualPaymentMethods;
 }
 
@@ -54,10 +58,92 @@ async function listUserOrders({ userId }) {
   return ManualOrder.find({ user: userId }).sort({ createdAt: -1 }).limit(50);
 }
 
-// Cola del administrador: pendientes primero, la más reciente arriba.
-async function listOrders({ status } = {}) {
-  const filter = status ? { status } : {};
-  return ManualOrder.find(filter).sort({ createdAt: -1 }).limit(100).populate('user', 'username email');
+// Cola del administrador. Con filtros, porque el panel y el asistente necesitan
+// recortar por estado, método, usuario o fecha en vez de tragarse todo: una vez
+// hay ventas reales, "dame todas las órdenes" deja de ser una consulta útil.
+//
+// `from`/`to` son fechas ISO y se aplican sobre `createdAt`, que es lo que el
+// administrador tiene en la cabeza cuando dice "las compras de ayer".
+async function listOrders({ status, method, userId, from, to, limit = 100 } = {}) {
+  const filter = {};
+  if (status) filter.status = status;
+  if (method) filter.method = method;
+  if (userId) filter.user = userId;
+
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) filter.createdAt.$lte = new Date(to);
+  }
+
+  return ManualOrder.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(Math.min(Number(limit) || 100, 500))
+    .populate('user', 'username email');
+}
+
+/**
+ * Resumen de compras para el asistente: cuánto se vendió, cuántas órdenes y
+ * quiénes compraron, con el mismo filtro de fechas que `listOrders`.
+ *
+ * Va por agregación y no sumando en JS porque el asistente debe poder responder
+ * "cuánto se vendió este mes" sin traerse todas las órdenes a memoria.
+ */
+async function purchaseSummary({ status, from, to } = {}) {
+  const match = {};
+  if (status) match.status = status;
+  if (from || to) {
+    match.createdAt = {};
+    if (from) match.createdAt.$gte = new Date(from);
+    if (to) match.createdAt.$lte = new Date(to);
+  }
+
+  const [totals] = await ManualOrder.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: null,
+        ordenes: { $sum: 1 },
+        monedas: { $sum: '$coins' },
+        usd: { $sum: '$priceUsd' },
+      },
+    },
+  ]);
+
+  const buyers = await ManualOrder.aggregate([
+    { $match: { ...match, status: 'approved' } },
+    {
+      $group: {
+        _id: '$user',
+        ordenes: { $sum: 1 },
+        monedas: { $sum: '$coins' },
+        usd: { $sum: '$priceUsd' },
+      },
+    },
+    { $sort: { usd: -1 } },
+    { $limit: 20 },
+    {
+      $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'u' },
+    },
+    { $unwind: { path: '$u', preserveNullAndEmptyArrays: true } },
+  ]);
+
+  return {
+    ordenes: totals?.ordenes || 0,
+    monedas: totals?.monedas || 0,
+    usd: round2(totals?.usd || 0),
+    compradores: buyers.map((b) => ({
+      usuario: b.u?.username || 'desconocido',
+      email: b.u?.email || null,
+      ordenes: b.ordenes,
+      monedas: b.monedas,
+      usd: round2(b.usd),
+    })),
+  };
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
 }
 
 // Cuántas órdenes comparten una misma referencia. Una referencia repetida es la
@@ -159,7 +245,7 @@ async function autoApprovePending({ limit = 20 } = {}) {
  * aprobada: si el proceso se corta entre las dos cosas, la orden sigue
  * pendiente y volver a aprobarla no paga dos veces, porque el abono ya está.
  */
-async function approveOrder({ orderId, adminId, auto = false }) {
+async function approveOrder({ orderId, adminId, auto = false, note }) {
   const order = await ManualOrder.findById(orderId);
   if (!order) throw new HttpError(404, 'Orden no encontrada');
   if (order.status !== 'pending') {
@@ -184,12 +270,17 @@ async function approveOrder({ orderId, adminId, auto = false }) {
       reviewedBy: adminId,
       reviewedAt: new Date(),
       // Queda registrado si aprobó una persona o el asistente, para poder
-      // auditar después por qué se acreditó cada orden.
-      reviewNote: auto ? 'Aprobada automáticamente por el asistente' : undefined,
+      // auditar después por qué se acreditó cada orden. La nota del
+      // administrador manda sobre la etiqueta automática.
+      reviewNote: note
+        ? String(note).slice(0, 300)
+        : auto
+          ? 'Aprobada automáticamente por el asistente'
+          : undefined,
       transaction,
     },
     { new: true }
-  );
+  ).populate('user', 'username email');
 
   return { order: updated, credited: result.credited, coins: result.coins };
 }
@@ -219,6 +310,7 @@ module.exports = {
   createOrder,
   listUserOrders,
   listOrders,
+  purchaseSummary,
   reviewPending,
   autoApprovePending,
   approveOrder,

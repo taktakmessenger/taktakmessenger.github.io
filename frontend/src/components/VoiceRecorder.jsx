@@ -6,6 +6,7 @@ import {
   secondsFromMs,
   formatDuration,
 } from '../lib/voiceNote';
+import { MicIcon } from './ChatIcons';
 
 // Grabadora de notas de voz, al estilo WhatsApp: se mantiene pulsado para
 // grabar, se suelta para enviar y se desliza fuera para cancelar.
@@ -187,7 +188,7 @@ export default function VoiceRecorder({ onRecorded, disabled }) {
         aria-label="Mantén pulsado para grabar una nota de voz"
         title="Mantén pulsado para grabar"
       >
-        🎤
+        <MicIcon />
       </button>
       {error && (
         <p className="error voice-error" role="alert">

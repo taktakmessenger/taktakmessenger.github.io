@@ -178,11 +178,15 @@ function assertPackagesCoverPayout(packages) {
  * El operador declara, en `MANUAL_PAYMENT_METHODS`, dónde cobra y con qué
  * etiqueta. Es JSON para poder añadir un método sin tocar código:
  *
- *   [{"id":"zinli","label":"Zinli","details":"Zinli: +58 412 000 0000 (a nombre de TAK TAK)"}]
+ *   [{"id":"paypal","label":"PayPal","link":"https://paypal.me/ejemplo",
+ *     "details":"Paga con PayPal y pega el número de operación."}]
  *
  * `id` es lo que se guarda en la orden; `label` es lo que ve el usuario; `details`
- * son las instrucciones de pago que se le muestran. Sin lista, la tienda no
- * ofrece cobro manual y la única vía son las pasarelas.
+ * son las instrucciones de pago que se le muestran y `link` es un enlace directo
+ * a la página de pago (opcional) para que el usuario no tenga que buscar a quién
+ * pagar. `payTo` es un dato de pago directo (correo, cuenta) que se muestra
+ * además del enlace. Sin lista, la tienda no ofrece cobro manual y la única vía
+ * son las pasarelas.
  */
 function resolveManualPaymentMethods() {
   if (!process.env.MANUAL_PAYMENT_METHODS) return [];
@@ -210,9 +214,67 @@ function resolveManualPaymentMethods() {
       id: String(method.id).slice(0, 40),
       label: String(method.label).slice(0, 60),
       details: method.details ? String(method.details).slice(0, 500) : '',
+      link: resolvePaymentLink(method.link),
+      // Dato de pago directo (un correo de Zinli, una cuenta…). Se muestra
+      // junto al enlace para quien prefiere pagar sin abrir otra página.
+      payTo: method.payTo ? String(method.payTo).trim().slice(0, 120) : '',
     };
   });
 }
+
+// Solo se aceptan enlaces http(s): un valor como `javascript:` acabaría siendo
+// un botón ejecutable en la tienda, así que se descarta en el servidor y no se
+// confía en que el front lo filtre.
+function resolvePaymentLink(link) {
+  if (!link) return '';
+  const value = String(link).trim();
+  if (!/^https?:\/\//i.test(value)) return '';
+  return value.slice(0, 300);
+}
+
+// Porcentaje del programa de referidos. Fuera de [0,1) es un error de
+// configuración, no una decisión: un 1 o más pagaría al invitador tanto o más de
+// lo que el invitado compró, y el programa perdería dinero en cada venta.
+function resolveReferralPercent() {
+  const raw = process.env.REFERRAL_PERCENT ?? 0.1;
+  const percent = Number(raw);
+  if (!Number.isFinite(percent) || percent < 0 || percent >= 1) {
+    throw new Error('REFERRAL_PERCENT must be a fraction between 0 and 1');
+  }
+  return percent;
+}
+
+const referralPercent = resolveReferralPercent();
+
+/**
+ * Retiros de Diamantes: los topes que protegen al usuario y a la casa.
+ *
+ * `min` es en Diamantes (1 Diamante = 1 TTC). Un mínimo de 100 Diamantes son
+ * $1,00 con la tasa por defecto: por debajo, la comisión de la pasarela se come
+ * el importe y el retiro no tiene sentido. `dailyCap` es el máximo de Diamantes
+ * que una cuenta puede pedir en 24 h; frena tanto un error del usuario como el
+ * vaciado de una cuenta robada, que es el riesgo real de dejar retiros sin tope.
+ * `holdHours` es el tiempo que un retiro queda retenido antes de poder pagarse,
+ * para dar margen a revertir un fraude detectado tarde.
+ */
+function resolveWithdrawals() {
+  const min = Number(process.env.WITHDRAWAL_MIN ?? 100);
+  const dailyCap = Number(process.env.WITHDRAWAL_DAILY_CAP ?? 10000);
+  const holdHours = Number(process.env.WITHDRAWAL_HOLD_HOURS ?? 0);
+
+  if (!Number.isFinite(min) || min <= 0) {
+    throw new Error('WITHDRAWAL_MIN must be a positive number');
+  }
+  if (!Number.isFinite(dailyCap) || dailyCap < min) {
+    throw new Error('WITHDRAWAL_DAILY_CAP must be a number >= WITHDRAWAL_MIN');
+  }
+  if (!Number.isFinite(holdHours) || holdHours < 0) {
+    throw new Error('WITHDRAWAL_HOLD_HOURS must be zero or a positive number');
+  }
+  return { min, dailyCap, holdHours };
+}
+
+const withdrawals = resolveWithdrawals();
 
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -268,11 +330,103 @@ const env = {
   // dinero: por muchas cuentas que se creen, el regalo solo recircula monedas de
   // regalo.
   welcomeBonusCoins: Number(process.env.WELCOME_BONUS_COINS ?? 100),
+
+  // Cuántos Diamantes da cada Moneda pagada al convertir. Solo el administrador
+  // puede convertir (ver `convertCoinsToDiamonds` y la ruta admin), así que la
+  // tasa por defecto es 1 a 1. Se deja configurable por si el dueño quiere
+  // aplicar un descuento al canje.
+  coinToDiamondRate: Number(process.env.COIN_TO_DIAMOND_RATE ?? 1),
+
+  // Programa de referidos: quien invita cobra un porcentaje de lo que su
+  // invitado compre, en monedas de regalo.
+  //
+  // El 10% del importe comprado es el porcentaje pedido. Se paga sobre lo que el
+  // invitado pagó, no sobre las monedas que recibió: un 10% de lo comprado es
+  // dinero que la plataforma ya ingresó, así que es un descuento sobre margen y
+  // no una promesa pagada con dinero que no existe.
+  //
+  // Se abona SIEMPRE en monedas de regalo (`bonusC`): se gastan en la app
+  // (regalos, torneos) pero nunca se convierten en Diamantes retirables. Así el
+  // programa crece por dentro sin abrir una vía de extracción: si se pagara en
+  // monedas pagadas, invitar a cuentas que compren sería una forma de fabricar
+  // dinero canjeable.
+  referral: {
+    // 0 lo desactiva por completo (no se paga ningún premio).
+    percent: referralPercent,
+    // Longitud del código de invitación. 8 caracteres del alfabeto sin letras
+    // ambiguas bastan de sobra: el código no es un secreto (se comparte), solo
+    // tiene que ser único y fácil de leer por teléfono.
+    codeLength: Number(process.env.REFERRAL_CODE_LENGTH ?? 8),
+  },
+
+  withdrawals: {
+    // Mínimo por solicitud, en Diamantes. Por debajo, la comisión del proveedor
+    // de pago se come el importe.
+    min: withdrawals.min,
+    // Tope por cuenta en 24 h, en Diamantes. Frena el vaciado de una cuenta
+    // comprometida y los errores de dedo.
+    dailyCap: withdrawals.dailyCap,
+    // Horas que un retiro queda retenido antes de poder marcarse como pagado.
+    holdHours: withdrawals.holdHours,
+    // 1 Diamante = `ttcUsdRate` dólares. Se expone para que la UI pueda enseñar
+    // el equivalente en dinero sin duplicar la tasa.
+    usdRate: ttcUsdRate,
+  },
+
   maxVideoBytes: Number(process.env.MAX_VIDEO_BYTES ?? 50 * 1024 * 1024),
+
+  // POKERTAK: sala privada de póker de cada usuario, dentro del directo.
+  //
+  // Es un juego con monedas de la app, no dinero real. La casa (el
+  // administrador) se queda `pokerRake` de cada bote jugado, en el tipo de
+  // moneda con que se pagó: la parte de monedas pagadas es ingreso real y la de
+  // monedas de regalo vuelve al circuito de regalo, igual que en los regalos.
+  poker: {
+    // Comisión de la casa: 1% de cada bote, igual en todas las manos, hasta que
+    // se cierre el directo o la sala de juegos.
+    rake: Number(process.env.POKER_RAKE ?? 0.01),
+    // Asientos de la mesa. Nueve, como la mesa en vivo: caben todos los que
+    // suelen entrar a un directo y la mesa sigue leyéndose en un móvil.
+    maxSeats: Number(process.env.POKER_MAX_SEATS ?? 9),
+    smallBlind: Number(process.env.POKER_SMALL_BLIND ?? 5),
+    bigBlind: Number(process.env.POKER_BIG_BLIND ?? 10),
+    // Entrada mínima y máxima, en monedas de la app. La mínima (10) es accesible
+    // para cualquiera, incluso con el bono de bienvenida (100): nadie se queda
+    // fuera de la mesa por no poder pagar. Dentro de ese rango, cada jugador
+    // elige cuánto pone.
+    minBuyIn: Number(process.env.POKER_MIN_BUYIN ?? 10),
+    maxBuyIn: Number(process.env.POKER_MAX_BUYIN ?? 20000),
+    // Tarifa de la casa en un torneo: se cobra una vez sobre todo lo recaudado,
+    // no por mano. El reparto por defecto (40/30/20) y esta tarifa (10%) suman
+    // el 100%: lo que no va a un puesto es lo que se queda la casa.
+    eventRake: Number(process.env.POKER_EVENT_RAKE ?? 0.1),
+  },
 
   // Where uploaded originals and their HLS renditions are written. Served
   // read-only at /uploads.
   uploadsDir: process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads'),
+  // Almacenamiento externo compatible con S3 (Cloudflare R2). Con esto activo,
+  // los ficheros subidos se copian a un bucket y se sirven desde su URL pública,
+  // en vez de quedarse en el disco efímero del contenedor. Render borra ese disco
+  // en cada despliegue o reinicio, así que sin esto los vídeos desaparecen.
+  //
+  // Vacío = modo local (desarrollo y tests), exactamente como antes.
+  r2: {
+    endpoint: process.env.R2_ENDPOINT || null,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || null,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || null,
+    bucket: process.env.R2_BUCKET || null,
+    // Base pública del bucket (https://pub-xxxx.r2.dev o el dominio propio). Sin
+    // barra final. Es lo que se antepone a la clave para formar la URL servible.
+    publicBaseUrl: (process.env.R2_PUBLIC_BASE_URL || '').replace(/\/+$/, '') || null,
+    // Región del proveedor S3. Cloudflare R2 no usa regiones reales y exige
+    // `auto`; Backblaze B2 sí (p. ej. `us-west-004`) y hay que copiarla del
+    // endpoint que da su panel.
+    region: process.env.R2_REGION || 'auto',
+    // Algunos proveedores (B2 entre ellos) necesitan que el bucket vaya en la
+    // ruta (`/bucket/clave`) y no en el subdominio.
+    forcePathStyle: process.env.R2_FORCE_PATH_STYLE === 'true',
+  },
   // Built frontend to serve from the same process. Empty means "API only", so
   // the development setup and the test suite are unaffected.
   publicDir: process.env.PUBLIC_DIR || null,
@@ -315,6 +469,11 @@ const env = {
   // Identificador del webhook en PayPal. Sin él no se puede verificar la firma,
   // así que el webhook se cierra.
   paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || null,
+  // Interruptor operativo. Con `PAYPAL_ENABLED=false` PayPal queda bloqueado en
+  // toda la app —pasarela, alta de cuenta y retiros— sin borrar ninguna clave:
+  // al volver a `true` se reactiva tal cual. Sirve para apagar PayPal por una
+  // incidencia sin desplegar código. Por defecto activo.
+  paypalEnabled: process.env.PAYPAL_ENABLED !== 'false',
   paypalApiBase:
     process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com',
   paypalCurrency: (process.env.PAYPAL_CURRENCY || 'USD').toUpperCase(),
@@ -337,6 +496,13 @@ const env = {
   // La API es compatible con OpenAI (sirve OpenAI, Groq, OpenRouter…): solo
   // cambia `ASSISTANT_API_BASE` y `ASSISTANT_MODEL`.
   assistantApiKey: process.env.ASSISTANT_API_KEY || null,
+  // Claves de respaldo, separadas por comas. Si la principal falla (caducada,
+  // límite agotado, proveedor caído), el asistente prueba estas en orden antes
+  // de rendirse. Se listan de la más a la menos preferida.
+  assistantFallbackApiKeys: (process.env.ASSISTANT_API_KEY_FALLBACK || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean),
   assistantApiBase: (process.env.ASSISTANT_API_BASE || 'https://api.openai.com/v1').replace(/\/+$/, ''),
   assistantModel: process.env.ASSISTANT_MODEL || 'gpt-4o-mini',
   // Aprobación automática. Apagada por defecto y a propósito: aprobar es
@@ -346,6 +512,21 @@ const env = {
   manualAutoApprove: process.env.MANUAL_AUTO_APPROVE === 'true',
   manualAutoApproveMinConfidence: Number(process.env.MANUAL_AUTO_APPROVE_MIN_CONFIDENCE ?? 0.9),
   manualAutoApproveMaxUsd: Number(process.env.MANUAL_AUTO_APPROVE_MAX_USD ?? 15),
+
+  // Asistak: moderación de directos y de la sala de juegos.
+  //
+  // Vigila los comentarios del directo y de POKERTAK. Avisa en el propio hilo y,
+  // si el usuario reincide, le pone una suspensión temporal sin acceso a
+  // directos ni a la mesa. Va encendido por defecto porque es la defensa que se
+  // pidió; se puede apagar con ASISTAK_ENABLED=false.
+  asistak: {
+    enabled: process.env.ASISTAK_ENABLED !== 'false',
+    // Días que dura la suspensión.
+    suspensionDays: Number(process.env.ASISTAK_SUSPENSION_DAYS ?? 3),
+    // Avisos antes de suspender. Con 2, el primer comentario solo avisa y el
+    // segundo ya suspende: un desliz no expulsa, insistir sí.
+    warnBeforeSuspend: Number(process.env.ASISTAK_WARN_BEFORE_SUSPEND ?? 2),
+  },
 
   // CORS origin used for the Socket.IO handshake, which does not go through
   // the Express CORS middleware.
@@ -428,6 +609,24 @@ const env = {
   // Minimum age for adult content, configurable per market.
   adultAge: Number(process.env.ADULT_AGE ?? 18),
 
+  // Didit (proveedor de verificación de identidad). El documento y la selfie
+  // los trata Didit: aquí solo se guarda el id de sesión y el veredicto.
+  //
+  //  - `diditApiKey` autentica las llamadas salientes (cabecera `x-api-key`).
+  //  - `diditWorkflowId` es el flujo configurado en la consola de Didit (define
+  //    qué comprobaciones se hacen).
+  //  - `diditWebhookSecret` verifica que el webhook viene de Didit de verdad.
+  //  - `diditApiBase` es configurable para poder apuntar los tests a un
+  //    servidor falso, igual que Stripe y PayPal.
+  diditApiKey: process.env.DIDIT_API_KEY || null,
+  diditWorkflowId: process.env.DIDIT_WORKFLOW_ID || null,
+  diditWebhookSecret: process.env.DIDIT_WEBHOOK_SECRET || null,
+  diditApiBase: process.env.DIDIT_API_BASE || 'https://verification.didit.me',
+  // Solo para la app de sandbox de Didit: fuerza el desenlace de cada sesión
+  // (`approve`, `decline_...`, `review_...`) sin escribir un documento real.
+  // Vacío en producción. Ver https://docs.didit.me/integration/sandbox-testing
+  diditSandboxScenario: process.env.DIDIT_SANDBOX_SCENARIO || null,
+
   // Refresh tokens are separate from access tokens so a stolen access token
   // cannot be used to mint new ones. The secret is derived from the JWT secret
   // unless one is supplied.
@@ -479,10 +678,12 @@ const env = {
   // pueda agotar los puertos del rango de arriba.
   sfuMaxParticipants: Number(process.env.SFU_MAX_PARTICIPANTS ?? 0),
   // Aforo del directo de un TAK Creator, sin contar al anfitrión. Es lo que pide
-  // la idea: el creador más hasta veinte invitados. Se aplica en cualquier modo
-  // (SFU o malla), porque es un límite de producto y no de infraestructura: una
-  // rejilla de más de veintiuna ventanas no se ve en un móvil.
-  liveGuestLimit: Number(process.env.LIVE_GUEST_LIMIT ?? 20),
+  // la idea: el creador más hasta quince invitados publicando cámara (los
+  // espectadores no ocupan plaza: entran a mirar y comentar sin tope). Se aplica
+  // en cualquier modo (SFU o malla), porque es un límite de producto y no de
+  // infraestructura: una rejilla de más de dieciséis ventanas no se ve en un
+  // móvil.
+  liveGuestLimit: Number(process.env.LIVE_GUEST_LIMIT ?? 15),
 
   // ------------------------------------------------------------------
   // Traducción de WhaTaka

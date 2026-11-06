@@ -580,3 +580,39 @@ test('el providerRef nunca se expone en la API', async () => {
     assert.ok(!serialized.includes('providerRef'));
   });
 });
+
+test('con PayPal apagado /methods no ofrece PayPal pero lo marca como bloqueado', async () => {
+  await withProviders({}, async () => {
+    const agent = app();
+    const user = await registerUser(agent);
+    const original = env.paypalEnabled;
+    env.paypalEnabled = false;
+    try {
+      const res = await agent
+        .get('/api/payments/methods')
+        .set('Authorization', `Bearer ${user.token}`);
+      assert.equal(res.status, 200);
+      assert.equal(res.body.providers.paypal, false, 'no se ofrece');
+      assert.equal(res.body.paypalBlocked, true, 'se marca como bloqueado');
+    } finally {
+      env.paypalEnabled = original;
+    }
+  });
+});
+
+test('con PayPal apagado no se puede iniciar el alta de PayPal', async () => {
+  await withProviders({}, async () => {
+    const agent = app();
+    const user = await registerUser(agent);
+    const original = env.paypalEnabled;
+    env.paypalEnabled = false;
+    try {
+      const res = await agent
+        .post('/api/payments/methods/paypal/link')
+        .set('Authorization', `Bearer ${user.token}`);
+      assert.equal(res.status, 503);
+    } finally {
+      env.paypalEnabled = original;
+    }
+  });
+});

@@ -69,6 +69,38 @@ test('a viewer receives a message another viewer posted', async () => {
   });
 });
 
+// El token es viejo: lleva el nombre que el usuario tenía al iniciar sesión. Si
+// después se cambia el nombre, el chat del directo debe mostrar el nuevo (el de
+// la base de datos), no el que quedó dentro del token.
+test('el chat del directo muestra el nombre actual, no el del token', async () => {
+  const agent = app();
+  const sender = await registerUser(agent);
+  const listener = await registerUser(agent);
+
+  const User = require('../src/models/User');
+  await User.updateOne({ username: sender.username }, { $set: { username: 'nombre_nuevo' } });
+
+  await withServer(async (url) => {
+    const a = await connect(url, sender.token);
+    const b = await connect(url, listener.token);
+    try {
+      a.emit('live:join', { room: 'sala-rename' });
+      b.emit('live:join', { room: 'sala-rename' });
+      await nextEvent(a, 'live:joined');
+      await nextEvent(b, 'live:joined');
+
+      const received = nextEvent(b, 'live:message');
+      a.emit('live:message', { room: 'sala-rename', text: 'hola' });
+
+      const msg = await received;
+      assert.equal(msg.user, 'nombre_nuevo', 'debe usar el nombre de la base, no el del token');
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
+});
+
 test('an anonymous socket cannot post messages', async () => {
   const agent = app();
   await registerUser(agent);
@@ -147,6 +179,134 @@ test('a long message is truncated instead of relayed whole', async () => {
     } finally {
       a.close();
       b.close();
+    }
+  });
+});
+
+// --- Acceso al directo y modo espectador ---------------------------------
+// El nombre de la sala de un creator es público (aparece en su ficha), así que
+// el chat no puede fiarse de él: `live:join` comprueba la membresía contra la
+// base de datos, igual que el endpoint REST del feed.
+
+const Squad = require('../src/models/Squad');
+
+async function makeSquad(owner, overrides = {}) {
+  const id = owner.user.id ?? owner.user._id;
+  return Squad.create({
+    name: 'Sala de prueba',
+    slug: `sala-${Math.random().toString(36).slice(2, 8)}`,
+    owner: id,
+    visibility: 'private',
+    members: [{ user: id, role: 'owner' }],
+    voiceRoom: `squad-${Math.random().toString(36).slice(2, 8)}`,
+    ...overrides,
+  });
+}
+
+test('un extraño no puede entrar al chat de un creator privado', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const outsider = await registerUser(agent);
+  const squad = await makeSquad(owner);
+
+  await withServer(async (url) => {
+    const socket = await connect(url, outsider.token);
+    try {
+      let joined = null;
+      socket.on('live:joined', (payload) => {
+        joined = payload;
+      });
+
+      const denied = nextEvent(socket, 'live:error');
+      socket.emit('live:join', { room: squad.voiceRoom });
+      const payload = await denied;
+      assert.match(payload.error, /acceso/i);
+
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(joined, null, 'no debe recibir el acuse de entrada');
+    } finally {
+      socket.close();
+    }
+  });
+});
+
+test('un miembro sí entra al chat de un creator privado', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const member = await registerUser(agent);
+  const squad = await makeSquad(owner, { members: [
+    { user: owner.user.id ?? owner.user._id, role: 'owner' },
+    { user: member.user.id ?? member.user._id, role: 'member' },
+  ] });
+
+  await withServer(async (url) => {
+    const socket = await connect(url, member.token);
+    try {
+      socket.emit('live:join', { room: squad.voiceRoom });
+      const joined = await nextEvent(socket, 'live:joined');
+      assert.equal(joined.room, squad.voiceRoom);
+    } finally {
+      socket.close();
+    }
+  });
+});
+
+test('solo se publica en una sala a la que se entró', async () => {
+  const agent = app();
+  const sender = await registerUser(agent);
+  const listener = await registerUser(agent);
+
+  await withServer(async (url) => {
+    const a = await connect(url, sender.token);
+    const b = await connect(url, listener.token);
+    try {
+      // `b` entra a la sala; `a` nunca se unió.
+      b.emit('live:join', { room: 'sala-x' });
+      await nextEvent(b, 'live:joined');
+
+      let received = null;
+      b.on('live:message', (msg) => {
+        received = msg;
+      });
+      a.emit('live:message', { room: 'sala-x', text: 'colado' });
+
+      await new Promise((r) => setTimeout(r, 300));
+      assert.equal(received, null, 'quien no entró no puede publicar');
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
+});
+
+test('un espectador ve al anfitrión pero no se anuncia como par', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const viewer = await registerUser(agent);
+  const squad = await makeSquad(owner, { visibility: 'public' });
+
+  await withServer(async (url) => {
+    const host = await connect(url, owner.token);
+    const spectator = await connect(url, viewer.token);
+    try {
+      let announced = 0;
+      host.on('voice:peer-joined', () => {
+        announced += 1;
+      });
+
+      host.emit('voice:join', { slug: squad.slug, mesh: true });
+      await nextEvent(host, 'voice:joined');
+
+      const joined = nextEvent(spectator, 'voice:joined');
+      spectator.emit('voice:join', { slug: squad.slug, mesh: true, spectate: true });
+      const payload = await joined;
+      assert.equal(payload.peers.length, 1, 'el espectador ve al que ya estaba');
+
+      await new Promise((r) => setTimeout(r, 300));
+      assert.equal(announced, 0, 'el espectador no debe anunciarse como par');
+    } finally {
+      host.close();
+      spectator.close();
     }
   });
 });

@@ -4,6 +4,8 @@ import api from '../api/client';
 import PhoneLink from './PhoneLink';
 import { LANGUAGES, normalizeLanguage, languageNativeName } from '../lib/translate';
 import { normalizeUser } from '../lib/user';
+import { RINGTONES, isKnownRingtone, DEFAULT_RINGTONE_ID } from '../lib/ringtones';
+import { startRingtone, stopRingtone } from '../lib/ringtone';
 import {
   isIos,
   isStandalone,
@@ -32,7 +34,18 @@ export default function Settings({ onBack, onNavigate }) {
   // El timbre de llamada. Va en el perfil y no en el dispositivo: quien apaga el
   // sonido lo espera apagado también en el otro teléfono. Por defecto suena.
   const [callRingtone, setCallRingtone] = useState(user?.callRingtone !== false);
+  const [ringtoneId, setRingtoneId] = useState(
+    isKnownRingtone(user?.callRingtoneId) ? user.callRingtoneId : DEFAULT_RINGTONE_ID
+  );
   const [savingLanguage, setSavingLanguage] = useState(false);
+
+  // Previsualiza el repique elegido sin esperar a una llamada real. Suena el
+  // patrón entrante durante unos segundos y se para solo, para no dejar el
+  // teléfono sonando si la persona no vuelve a tocar.
+  function previewRingtone(id) {
+    startRingtone('incoming', id);
+    setTimeout(() => stopRingtone(), 2600);
+  }
 
   // Guarda una preferencia de llamada suelta sin tocar el resto. Se separa de
   // `saveLanguage` para que el botón del timbre no reenvíe el idioma ni los
@@ -288,6 +301,37 @@ export default function Settings({ onBack, onNavigate }) {
           El repique hace sonar y vibrar el teléfono cuando entra una llamada. Al
           desactivarlo, la pantalla de llamada sigue apareciendo, pero en silencio.
         </p>
+        {callRingtone && (
+          <>
+            <div className="settings-row">
+              <span>Repique</span>
+              <select
+                className="settings-select"
+                value={ringtoneId}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setRingtoneId(nextId);
+                  saveCallPrefs({ callRingtoneId: nextId });
+                }}
+                disabled={savingLanguage || !user}
+                aria-label="Elegir repique"
+              >
+                {RINGTONES.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              className="settings-link"
+              onClick={() => previewRingtone(ringtoneId)}
+            >
+              ▶️ Escuchar repique
+            </button>
+          </>
+        )}
         {pushPermission === 'granted' ? (
           <div className="settings-row">
             <span>Notificaciones</span>

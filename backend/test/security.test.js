@@ -520,6 +520,26 @@ test('la CSP permite los scripts de Stripe y Google', async () => {
   assert.match(script, /accounts\.google\.com/);
 });
 
+// Con el almacenamiento externo (R2) activo, los vídeos y las imágenes se
+// sirven desde otro host. Si ese host no está en la CSP, el navegador rechaza
+// el vídeo con "Media load rejected by URL safety check" y el feed queda mudo
+// aunque el backend responda bien. Este test fija que el origen del bucket se
+// añade a media-src, img-src y connect-src.
+test('la CSP permite el host del bucket de medios cuando está configurado', () => {
+  const createApp = require('../src/app');
+  const origins = createApp.storageOriginList('https://pub-xxxx.r2.dev/');
+  assert.deepEqual(origins, ['https://pub-xxxx.r2.dev']);
+  const directives = createApp.cspDirectives(origins);
+  for (const key of ['mediaSrc', 'imgSrc', 'connectSrc']) {
+    assert.ok(directives[key].includes('https://pub-xxxx.r2.dev'), `${key} debe permitir el bucket`);
+  }
+  // Sin bucket configurado no se cuela ningún origen de más.
+  assert.deepEqual(createApp.storageOriginList(''), []);
+  assert.deepEqual(createApp.storageOriginList(null), []);
+  // Una base pública mal formada se ignora en vez de tumbar el arranque.
+  assert.deepEqual(createApp.storageOriginList('no-es-una-url'), []);
+});
+
 test('la CSP no afloja unsafe-eval ni object-src', async () => {
   const res = await app().get('/health');
   const csp = res.headers['content-security-policy'];

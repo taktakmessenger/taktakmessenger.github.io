@@ -2,8 +2,6 @@ const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
-const User = require('../models/User');
-const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('../services/paymentService');
 const paymentMethodService = require('../services/paymentMethodService');
@@ -24,12 +22,14 @@ const webhookLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones' },
 });
 
-const checkoutLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const checkoutLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Constant-time comparison so a wrong secret cannot be recovered by timing.
@@ -49,6 +49,9 @@ router.get(
   asyncHandler(async (_req, res) => {
     res.json({
       providers: paymentService.availableProviders(),
+      // Ver `paypalBlocked` en `/methods`: la tienda lo usa para mostrar el
+      // método manual de PayPal tapado en vez de ofrecerlo.
+      paypalBlocked: !paypalService.isEnabled(),
       // Clave publicable de Stripe. No es un secreto: es la que usa el navegador
       // para tokenizar la tarjeta. Se sirve desde aquí para que la tienda no
       // dependa de una variable de compilación del frontend.
@@ -179,47 +182,23 @@ router.post(
       throw new HttpError(400, 'Falta el identificador del evento');
     }
 
-    // Idempotency: a duplicate event id means the provider retried a delivery
-    // we already processed.
-    const existing = await Transaction.findOne({ externalId });
-    if (existing) {
-      return res.json({ received: true, duplicate: true });
-    }
+    // Un solo camino para acreditar: el mismo que usan Stripe y PayPal. Antes
+    // esta ruta duplicaba el abono y se dejaba fuera el premio de referidos, con
+    // lo que una compra confirmada por aquí pagaba monedas pero no el premio.
+    const amountPaidMinor = Number.isFinite(Number(amountPaid))
+      ? Math.round(Number(amountPaid) * 100)
+      : undefined;
 
-    const pkg = env.coinPackages.find((p) => p.id === packageId);
-    if (!pkg) throw new HttpError(400, 'Paquete de monedas desconocido');
-
-    const user = await User.findByIdAndUpdate(
+    const result = await paymentService.creditPurchase({
+      externalId,
       userId,
-      { $inc: { 'wallet.ttcC': pkg.coins } },
-      { new: true }
-    );
-    if (!user) throw new HttpError(404, 'Usuario no encontrado');
+      packageId,
+      amountPaidMinor,
+      currency,
+      provider: 'webhook',
+    });
 
-    try {
-      await Transaction.create({
-        from: user._id,
-        amount: pkg.coins,
-        type: 'purchase',
-        ttcType: 'ttcC',
-        packageId: pkg.id,
-        externalId,
-        amountPaid: amountPaid ?? pkg.priceUsd,
-        currency: currency || 'USD',
-        status: 'completed',
-        details: `Compra de ${pkg.coins} TTC-C (paquete ${pkg.id})`,
-      });
-    } catch (err) {
-      // A concurrent delivery of the same event lost the unique-index race.
-      // Undo this credit so the buyer is not paid twice.
-      if (err.code === 11000) {
-        await User.updateOne({ _id: user._id }, { $inc: { 'wallet.ttcC': -pkg.coins } });
-        return res.json({ received: true, duplicate: true });
-      }
-      throw err;
-    }
-
-    res.json({ received: true, coins: pkg.coins, balance: user.wallet.ttcC });
+    res.json({ received: true, ...result });
   })
 );
 
@@ -237,12 +216,14 @@ router.get(
 // El usuario paga por fuera de la app, envía la referencia y un administrador
 // aprueba. La orden no acredita nada por sí sola: el abono lo hace la revisión.
 
-const manualLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const manualLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Crea una orden pendiente. El paquete se manda por id: el precio y las monedas
@@ -289,12 +270,14 @@ router.get(
 // filtran siempre por `userId`, así que conocer el id de una tarjeta ajena no
 // sirve de nada.
 
-const methodLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const methodLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Lista los métodos guardados del usuario.
@@ -306,6 +289,10 @@ router.get(
     res.json({
       methods,
       providers: paymentService.availableProviders(),
+      // PayPal puede estar configurado pero apagado por el operador. Se expone
+      // aparte para que la pantalla lo muestre tapado con una nube en vez de
+      // hacerlo desaparecer (el usuario ve que existe, pero no puede usarlo).
+      paypalBlocked: !paypalService.isEnabled(),
     });
   })
 );

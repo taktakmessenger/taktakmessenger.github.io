@@ -3,6 +3,7 @@ const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const stripeService = require('./stripeService');
 const paypalService = require('./paypalService');
+const referralService = require('./referralService');
 const { HttpError } = require('../utils/http');
 
 // Cobro de monedas y abono de saldo.
@@ -21,7 +22,9 @@ const { HttpError } = require('../utils/http');
 function availableProviders() {
   return {
     stripe: stripeService.isConfigured(),
-    paypal: paypalService.isConfigured(),
+    // PayPal solo se ofrece si está configurado *y* el interruptor operativo
+    // está encendido. Apagado, la tienda no pinta su botón aunque haya claves.
+    paypal: paypalService.isConfigured() && paypalService.isEnabled(),
     manual: env.manualPaymentMethods.length > 0,
   };
 }
@@ -161,6 +164,21 @@ async function creditPurchase({ externalId, userId, packageId, amountPaidMinor, 
     { $inc: { 'wallet.ttcC': pkg.coins } },
     { new: true }
   );
+
+  // Premio del programa de referidos: si esta cuenta llegó invitada, quien la
+  // invitó cobra un porcentaje de lo comprado, en monedas de regalo. Va después
+  // de acreditar la compra y nunca puede deshacerla: si el premio falla, el
+  // comprador ya tiene sus monedas. Es idempotente por el mismo `externalId`, así
+  // que un webhook reenviado no paga dos veces.
+  await referralService
+    .payForPurchase({
+      buyerId: user._id,
+      externalId,
+      amountPaidMinor: amountPaidMinor != null ? amountPaidMinor : stripeService.toMinorUnits(pkg.priceUsd),
+      currency: currency || 'USD',
+      packageId: pkg.id,
+    })
+    .catch(() => null);
 
   return {
     credited: true,

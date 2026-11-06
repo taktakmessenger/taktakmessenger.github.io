@@ -174,8 +174,53 @@ function cleanMetadata(inputPath) {
   });
 }
 
+// Descarga una pista remota a un archivo temporal para poder mezclarla.
+//
+// ffmpeg sabe leer URLs, pero descargar antes es más robusto: el filtro recorre
+// el audio varias veces (una por rendición) y con la URL haría una petición por
+// cada pasada. Además, la pista del catálogo vive en Wikimedia y no queremos
+// castigar ese servidor con descargas repetidas. Si falla, se devuelve null y
+// el vídeo se transcodifica sin música en vez de fallar entero.
+async function fetchRemoteAudio(url, destDir) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) return null;
+    await fs.mkdir(destDir, { recursive: true });
+    const ext = path.extname(new URL(url).pathname) || '.mp3';
+    const target = path.join(destDir, `music${ext}`);
+    await fs.writeFile(target, buffer);
+    return target;
+  } catch (err) {
+    console.warn('[transcode] no se pudo descargar la música:', err.message);
+    return null;
+  }
+}
+
 function variantDir(baseDir, name) {
   return path.join(baseDir, name);
+}
+
+/**
+ * Devuelve la URL del audio de la pista elegida para un vídeo, o null.
+ *
+ * Se resuelve aquí y no en el llamador para que `startTranscode` no tenga que
+ * saber del modelo `Sound`. Acepta el vídeo con `sound` como id o ya poblado:
+ * el reproceso lo tiene como id y la subida también, pero poblado evita otra
+ * consulta si algún día se pasa así.
+ */
+async function resolveMusicUrl(video) {
+  const sound = video?.sound;
+  if (!sound) return null;
+  if (typeof sound === 'object' && sound.audioUrl) return sound.audioUrl;
+  try {
+    const Sound = require('../models/Sound');
+    const found = await Sound.findById(sound).select('audioUrl');
+    return found?.audioUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -186,7 +231,7 @@ function variantDir(baseDir, name) {
  * `username` es el @usuario que se imprime en la marca de TAK TAK. Sin él, el
  * vídeo se limpia igual pero la marca solo dice "TAK TAK".
  */
-async function processVideoToHLS(inputPath, outputDir, videoId, username) {
+async function processVideoToHLS(inputPath, outputDir, videoId, username, musicUrl) {
   if (!(await hasFfmpeg())) return null;
 
   // El archivo original es el que se sirve tal cual mientras no hay HLS, y es
@@ -198,6 +243,10 @@ async function processVideoToHLS(inputPath, outputDir, videoId, username) {
   const targetDir = path.join(outputDir, videoId);
   await fs.mkdir(targetDir, { recursive: true });
 
+  // La pista elegida se descarga una vez y se reutiliza en cada rendición. Un
+  // fallo de red deja el vídeo sin música, nunca sin publicar.
+  const musicPath = musicUrl ? await fetchRemoteAudio(musicUrl, targetDir) : null;
+
   const fontFile = await resolveBrandFont();
   const lines = brandLines(username);
   const brandFile = fontFile ? await writeBrandText(targetDir, username) : null;
@@ -208,7 +257,15 @@ async function processVideoToHLS(inputPath, outputDir, videoId, username) {
 
   await Promise.all(
     RENDITIONS.map((rendition) =>
-      transcodeVariant(inputPath, variantDir(targetDir, rendition.name), rendition, fontFile, brandFile, lines)
+      transcodeVariant(
+        inputPath,
+        variantDir(targetDir, rendition.name),
+        rendition,
+        fontFile,
+        brandFile,
+        lines,
+        musicPath
+      )
     )
   );
 
@@ -259,7 +316,25 @@ function generateThumbnail(inputPath, targetDir, fontFile, brandFile, lines) {
   );
 }
 
-function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile, lines) {
+/**
+ * Cadena de `filter_complex` que mezcla la música con el audio original.
+ *
+ * El volumen de la música baja a la mitad para no tapar la voz; el del vídeo se
+ * deja igual. `normalize=0` es importante: sin él `amix` divide cada fuente
+ * entre el número de entradas y la mezcla sale más floja que cada pista por
+ * separado. `duration=first` corta la música a la duración del vídeo.
+ *
+ * Es una función pura a propósito: así el filtro se prueba sin ffmpeg.
+ */
+function musicMixFilter() {
+  return (
+    '[0:a]volume=1.0[orig];' +
+    '[1:a]volume=0.5[mus];' +
+    '[orig][mus]amix=inputs=2:duration=first:normalize=0[aout]'
+  );
+}
+
+function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile, lines, musicPath) {
   const filters = [scalePadFilter(rendition.width, rendition.height)];
   if (fontFile && brandFile) {
     filters.push(watermarkFilter(fontFile, brandFile, lines, rendition.width, rendition.height));
@@ -268,36 +343,64 @@ function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile, lin
   return fs.mkdir(outDir, { recursive: true }).then(
     () =>
       new Promise((resolve, reject) => {
-        ffmpeg(inputPath)
-          .setFfmpegPath(env.ffmpegPath)
-          .outputOptions([
-            '-preset fast',
-            // A fixed GOP with scene-cut detection off keeps every segment
-            // independently seekable, which is what makes scrubbing work.
-            '-g 48',
-            '-sc_threshold 0',
-            '-map 0:v:0',
-            '-map 0:a:0?',
-            // Sin subtítulos ni pistas de datos: algunos contenedores de móvil
-            // traen pistas que rompen el muxing a MPEG-TS del HLS.
-            '-sn',
-            '-dn',
-            `-vf ${filters.join(',')}`,
-            '-c:v:0 libx264',
-            `-b:v:0 ${rendition.bitrate}`,
-            // Nivel y perfil compatibles con móviles antiguos y con el
-            // decodificador por hardware de la mayoría de navegadores.
-            '-profile:v high',
-            '-pix_fmt yuv420p',
-            '-c:a aac',
-            '-b:a 128k',
-            '-ac 2',
-            ...CLEAN_METADATA_OPTIONS,
-            '-f hls',
-            '-hls_time 4',
-            '-hls_playlist_type vod',
-            `-hls_segment_filename ${path.join(outDir, 'segment_%03d.ts')}`,
-          ])
+        const command = ffmpeg(inputPath).setFfmpegPath(env.ffmpegPath);
+
+        // Con música, la salida lleva dos entradas y el vídeo se arma con
+        // `filter_complex`: la pista se mezcla con el audio original y se corta
+        // a la duración del vídeo (`-shortest`), para que un tema largo no deje
+        // un vídeo de 15 s con 3 minutos de audio. Sin música, la ruta de
+        // siempre (un solo `-vf`) y nada cambia.
+        if (musicPath) {
+          command.input(musicPath);
+        }
+
+        const outputOptions = [
+          '-preset fast',
+          // A fixed GOP with scene-cut detection off keeps every segment
+          // independently seekable, which is what makes scrubbing work.
+          '-g 48',
+          '-sc_threshold 0',
+          '-map 0:v:0',
+        ];
+
+        if (musicPath) {
+          outputOptions.push(
+            // La mezcla baja la música a la mitad y corta a la duración del
+            // vídeo con `-shortest`, para que un tema largo no deje un vídeo de
+            // 15 s con 3 minutos de audio.
+            '-filter_complex',
+            musicMixFilter(),
+            '-map [aout]',
+            '-shortest'
+          );
+        } else {
+          outputOptions.push('-map 0:a:0?');
+        }
+
+        outputOptions.push(
+          // Sin subtítulos ni pistas de datos: algunos contenedores de móvil
+          // traen pistas que rompen el muxing a MPEG-TS del HLS.
+          '-sn',
+          '-dn',
+          `-vf ${filters.join(',')}`,
+          '-c:v:0 libx264',
+          `-b:v:0 ${rendition.bitrate}`,
+          // Nivel y perfil compatibles con móviles antiguos y con el
+          // decodificador por hardware de la mayoría de navegadores.
+          '-profile:v high',
+          '-pix_fmt yuv420p',
+          '-c:a aac',
+          '-b:a 128k',
+          '-ac 2',
+          ...CLEAN_METADATA_OPTIONS,
+          '-f hls',
+          '-hls_time 4',
+          '-hls_playlist_type vod',
+          `-hls_segment_filename ${path.join(outDir, 'segment_%03d.ts')}`
+        );
+
+        command
+          .outputOptions(outputOptions)
           .output(path.join(outDir, 'index.m3u8'))
           .on('end', resolve)
           .on('error', reject)
@@ -332,6 +435,9 @@ module.exports = {
   processVideoToHLS,
   probeDuration,
   hasFfmpeg,
+  fetchRemoteAudio,
+  resolveMusicUrl,
+  musicMixFilter,
   RENDITIONS,
   brandText,
   watermarkFilter,
