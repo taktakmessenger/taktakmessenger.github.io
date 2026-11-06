@@ -5273,40 +5273,6 @@
   white-space: nowrap;
 }
 
-/* Nube para tapar algo que el operador ha bloqueado (p. ej. el botón de
-   vincular PayPal, que solo sirve para el cobro automático). Se deja ver que
-   ahí hay algo, pero borroso y sin poder leerlo, copiarlo ni pulsarlo. El cobro
-   manual NO se tapa: el correo de pago se muestra siempre. */
-.cloud-block {
-  position: relative;
-  pointer-events: none;
-}
-
-/* Lo que se difumina es el contenido, no la nube que lo tapa. */
-.cloud-blur {
-  filter: blur(5px);
-  opacity: 0.55;
-  user-select: none;
-}
-
-/* La nube, sin difuminar, encima del contenido borroso. */
-.cloud-fog {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8rem;
-  border-radius: 0.6rem;
-  backdrop-filter: blur(6px);
-  background: radial-gradient(
-    circle at center,
-    rgba(255, 255, 255, 0.3) 0%,
-    rgba(255, 255, 255, 0.14) 45%,
-    rgba(255, 255, 255, 0) 78%
-  );
-}
-
 /* Sugerencia del asistente en la cola de pagos manuales. Se colorea según lo
    que propone para que el ojo distinga de un vistazo aprobar de rechazar. */
 .assistant-hint {

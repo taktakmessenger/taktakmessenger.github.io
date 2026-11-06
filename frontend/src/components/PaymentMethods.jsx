@@ -305,18 +305,12 @@ export default function PaymentMethods({ onBack, paypalOrderId, onPaypalConfirme
             🅿️ {busy === 'paypal' ? 'Abriendo PayPal…' : 'Vincular PayPal'}
           </button>
         )}
-        {/* PayPal apagado por el operador: se deja ver que existe, pero tapado
-            con una nube. No se puede pulsar, así que no abre la pestaña de
-            PayPal ni permite vincular la cuenta. */}
+        {/* PayPal apagado por el operador: el botón sigue visible, pero
+            deshabilitado. No abre la pestaña de PayPal ni vincula la cuenta. */}
         {paypalBlocked && (
-          <div className="cloud-block">
-            <div className="cloud-blur">
-              <button type="button" className="btn-secondary" disabled>
-                🅿️ Vincular PayPal
-              </button>
-            </div>
-            <span className="cloud-fog" aria-hidden="true">☁️</span>
-          </div>
+          <button type="button" className="btn-secondary" disabled>
+            🅿️ Vincular PayPal
+          </button>
         )}
       </div>
 
