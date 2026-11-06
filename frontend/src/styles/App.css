@@ -5273,9 +5273,10 @@
   white-space: nowrap;
 }
 
-/* Nube para tapar algo que el operador ha bloqueado (p. ej. PayPal apagado). Se
-   deja ver que ahí hay algo, pero borroso y sin poder leerlo, copiarlo ni
-   pulsarlo. Se reutiliza en la tienda y en la pantalla de métodos de pago. */
+/* Nube para tapar algo que el operador ha bloqueado (p. ej. el botón de
+   vincular PayPal, que solo sirve para el cobro automático). Se deja ver que
+   ahí hay algo, pero borroso y sin poder leerlo, copiarlo ni pulsarlo. El cobro
+   manual NO se tapa: el correo de pago se muestra siempre. */
 .cloud-block {
   position: relative;
   pointer-events: none;
@@ -5304,19 +5305,6 @@
     rgba(255, 255, 255, 0.14) 45%,
     rgba(255, 255, 255, 0) 78%
   );
-}
-
-/* El bloque del enlace (enlace + texto copiable) se apila igual que el normal,
-   aunque esté difuminado. */
-.cloud-block > .cloud-blur:not(.manual-pay-copy) {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-/* Botón de copiar apagado dentro de algo bloqueado. */
-.cloud-block .manual-pay-copy-btn {
-  opacity: 0.4;
 }
 
 /* Sugerencia del asistente en la cola de pagos manuales. Se colorea según lo

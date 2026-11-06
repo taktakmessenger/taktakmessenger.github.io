@@ -273,33 +273,27 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       pagar en otra app (PayPal, Zinli, el banco) y necesita
                       pegar el enlace o la referencia allí. */}
                   {selectedManual?.link && (
-                    <div className={selectedManual.blocked ? 'cloud-block' : undefined}>
-                      <div className={selectedManual.blocked ? 'cloud-blur' : undefined}>
-                        <a
-                          className="manual-pay-link"
-                          href={selectedManual.blocked ? undefined : selectedManual.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-disabled={selectedManual.blocked || undefined}
-                          onClick={(e) => selectedManual.blocked && e.preventDefault()}
+                    <div>
+                      <a
+                        className="manual-pay-link"
+                        href={selectedManual.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        👉 Ir a pagar con {selectedManual.label}
+                      </a>
+                      <div className="manual-pay-copy">
+                        <code className="manual-pay-value">{selectedManual.link}</code>
+                        <button
+                          type="button"
+                          className="btn-ghost manual-pay-copy-btn"
+                          onClick={() =>
+                            copyValue(`link:${selectedManual.id}`, selectedManual.link)
+                          }
                         >
-                          👉 Ir a pagar con {selectedManual.label}
-                        </a>
-                        <div className="manual-pay-copy">
-                          <code className="manual-pay-value">{selectedManual.link}</code>
-                          <button
-                            type="button"
-                            className="btn-ghost manual-pay-copy-btn"
-                            disabled={selectedManual.blocked}
-                            onClick={() =>
-                              copyValue(`link:${selectedManual.id}`, selectedManual.link)
-                            }
-                          >
-                            {copied === `link:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
-                          </button>
-                        </div>
+                          {copied === `link:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
+                        </button>
                       </div>
-                      {selectedManual.blocked && <span className="cloud-fog" aria-hidden="true">☁️</span>}
                     </div>
                   )}
                   {/* Pago directo: el correo o la cuenta a la que enviar el
@@ -307,21 +301,17 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       porque muchos usuarios pagan desde otra app y solo
                       necesitan el dato para pegarlo. */}
                   {selectedManual?.payTo && (
-                    <div className={selectedManual.blocked ? 'cloud-block' : undefined}>
-                      <div className={`manual-pay-copy${selectedManual.blocked ? ' cloud-blur' : ''}`}>
-                        <code className="manual-pay-value">{selectedManual.payTo}</code>
-                        <button
-                          type="button"
-                          className="btn-ghost manual-pay-copy-btn"
-                          disabled={selectedManual.blocked}
-                          onClick={() =>
-                            copyValue(`payTo:${selectedManual.id}`, selectedManual.payTo)
-                          }
-                        >
-                          {copied === `payTo:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
-                        </button>
-                      </div>
-                      {selectedManual.blocked && <span className="cloud-fog" aria-hidden="true">☁️</span>}
+                    <div className="manual-pay-copy">
+                      <code className="manual-pay-value">{selectedManual.payTo}</code>
+                      <button
+                        type="button"
+                        className="btn-ghost manual-pay-copy-btn"
+                        onClick={() =>
+                          copyValue(`payTo:${selectedManual.id}`, selectedManual.payTo)
+                        }
+                      >
+                        {copied === `payTo:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
+                      </button>
                     </div>
                   )}
                   <input

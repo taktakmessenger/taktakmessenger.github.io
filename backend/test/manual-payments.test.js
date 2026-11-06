@@ -379,7 +379,7 @@ test('solo un admin ve el resumen de compras', async () => {
   }
 });
 
-test('con PayPal apagado el método sigue visible pero marcado como bloqueado', async () => {
+test('el cobro manual por PayPal se ofrece aunque la pasarela esté apagada', async () => {
   const restore = withManualMethods([
     { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
     { id: 'zinli', label: 'Zinli', details: 'Zinli: +58 412 000 0000' },
@@ -393,15 +393,17 @@ test('con PayPal apagado el método sigue visible pero marcado como bloqueado', 
     const paypal = res.body.manualMethods.find((m) => m.id === 'paypal');
     const zinli = res.body.manualMethods.find((m) => m.id === 'zinli');
     assert.ok(paypal, 'PayPal sigue en la lista');
-    assert.equal(paypal.blocked, true);
-    assert.equal(zinli.blocked, false);
+    // El cobro manual no depende del interruptor de la pasarela: el usuario paga
+    // por fuera y un admin aprueba, así que se ofrece siempre y sin nube.
+    assert.notEqual(paypal.blocked, true);
+    assert.notEqual(zinli.blocked, true);
   } finally {
     env.paypalEnabled = original;
     restore();
   }
 });
 
-test('con PayPal apagado no se puede crear una orden manual por PayPal', async () => {
+test('con la pasarela PayPal apagada sí se puede crear una orden manual por PayPal', async () => {
   const restore = withManualMethods([
     { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
   ]);
@@ -412,7 +414,7 @@ test('con PayPal apagado no se puede crear una orden manual por PayPal', async (
     const agent = app();
     const user = await registerUser(agent);
     const res = await createOrder(agent, user.token, { method: 'paypal' });
-    assert.equal(res.status, 400);
+    assert.equal(res.status, 201);
   } finally {
     env.paypalEnabled = original;
     restore();
