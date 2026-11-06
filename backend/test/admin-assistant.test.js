@@ -891,7 +891,7 @@ test('listar_retiros muestra las solicitudes pendientes con datos de cobro', asy
     userId: user._id,
     amount: 200,
     method: 'paypal',
-    details: 'eliecerdepablos@gmail.com',
+    details: 'cobro@example.com',
   });
 
   const result = await assistant.runTool('listar_retiros', { adminId: admin._id });
@@ -899,7 +899,7 @@ test('listar_retiros muestra las solicitudes pendientes con datos de cobro', asy
   assert.equal(result.retiros.length, 1);
   assert.equal(result.retiros[0].usuario, 'retiradora');
   assert.equal(result.retiros[0].diamantes, 200);
-  assert.equal(result.retiros[0].datosCobro, 'eliecerdepablos@gmail.com');
+  assert.equal(result.retiros[0].datosCobro, 'cobro@example.com');
 });
 
 test('pagar_retiro marca pagado y rechazar_retiro devuelve los Diamantes', async () => {

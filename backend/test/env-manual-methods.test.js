@@ -18,10 +18,10 @@ function loadEnv(rawValue) {
 
 test('un enlace http(s) se conserva', () => {
   const env = loadEnv(JSON.stringify([
-    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/eliecerdepablos', details: 'Paga y pega la operación.' },
+    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
   ]));
 
-  assert.equal(env.manualPaymentMethods[0].link, 'https://paypal.me/eliecerdepablos');
+  assert.equal(env.manualPaymentMethods[0].link, 'https://paypal.me/ejemplo');
   assert.equal(env.manualPaymentMethods[0].details, 'Paga y pega la operación.');
 });
 
@@ -43,10 +43,10 @@ test('sin enlace queda vacío', () => {
 
 test('payTo se conserva y se recorta', () => {
   const env = loadEnv(JSON.stringify([
-    { id: 'zinli', label: 'Zinli', link: 'https://recargas.zinli.com/x', payTo: '  eliecerdepablos@gmail.com  ' },
+    { id: 'zinli', label: 'Zinli', link: 'https://recargas.zinli.com/x', payTo: '  cobro@example.com  ' },
   ]));
 
-  assert.equal(env.manualPaymentMethods[0].payTo, 'eliecerdepablos@gmail.com');
+  assert.equal(env.manualPaymentMethods[0].payTo, 'cobro@example.com');
 });
 
 test('sin payTo queda vacío', () => {
