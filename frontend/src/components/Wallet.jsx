@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 
+// Etiquetas de los métodos de retiro. El servidor decide *cuáles* están
+// disponibles (p. ej. PayPal puede estar apagado); aquí solo se pone el nombre.
+const WITHDRAW_LABELS = { paypal: 'PayPal', zelle: 'Zelle', crypto: 'Cripto' };
+
+// Clave de idempotencia para una solicitud de retiro: una por intento. Si el
+// envío se reintenta (red, doble toque), el servidor devuelve la misma
+// solicitud en vez de descontar los Diamantes dos veces.
+function newIdempotencyKey() {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `wd-${Date.now().toString(36)}-${rand}`;
+}
+
 export default function Wallet({ onBack, onNavigate }) {
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -10,7 +22,7 @@ export default function Wallet({ onBack, onNavigate }) {
   const [showGift, setShowGift] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [gift, setGift] = useState({ recipient: '', amount: '', giftName: '' });
-  const [withdraw, setWithdraw] = useState({ amount: '', method: 'paypal', details: '' });
+  const [withdraw, setWithdraw] = useState({ amount: '', method: '', details: '' });
   const [withdrawConfig, setWithdrawConfig] = useState(null);
   const [referral, setReferral] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -44,11 +56,20 @@ export default function Wallet({ onBack, onNavigate }) {
   }, []);
 
   // Los límites de retiro los fija el servidor. Se piden al montar para poder
-  // validar en el formulario con las mismas cifras que aplica el backend.
+  // validar en el formulario con las mismas cifras que aplica el backend. La
+  // lista de métodos también viene del servidor, así que PayPal desaparece si
+  // el operador lo apaga.
   useEffect(() => {
     api
       .get('/wallet/withdraw/config')
-      .then(({ data }) => setWithdrawConfig(data))
+      .then(({ data }) => {
+        setWithdrawConfig(data);
+        const methods = data.methods || [];
+        setWithdraw((w) => ({
+          ...w,
+          method: methods.includes(w.method) ? w.method : methods[0] || '',
+        }));
+      })
       .catch(() => {});
   }, []);
 
@@ -107,12 +128,14 @@ export default function Wallet({ onBack, onNavigate }) {
     setNotice('');
     try {
       await api.post('/wallet/withdraw', {
-        amount: Number(withdraw.amount),
+        // Cadena, no Number: el importe se valida exacto en el servidor.
+        amount: String(withdraw.amount),
         method: withdraw.method,
         details: withdraw.details,
+        idempotencyKey: newIdempotencyKey(),
       });
       setShowWithdraw(false);
-      setWithdraw({ amount: '', method: 'paypal', details: '' });
+      setWithdraw({ amount: '', method: withdraw.method, details: '' });
       setNotice('Solicitud de retiro enviada');
       await loadWallet();
     } catch (err) {
@@ -290,9 +313,9 @@ export default function Wallet({ onBack, onNavigate }) {
                 value={withdraw.method}
                 onChange={(e) => setWithdraw({ ...withdraw, method: e.target.value })}
               >
-                <option value="paypal">PayPal</option>
-                <option value="zelle">Zelle</option>
-                <option value="crypto">Cripto</option>
+                {(withdrawConfig?.methods || []).map((m) => (
+                  <option key={m} value={m}>{WITHDRAW_LABELS[m] || m}</option>
+                ))}
               </select>
               <input
                 type="text"

@@ -214,3 +214,125 @@ test('el administrador puede filtrar la cola por estado', async () => {
     .set('Authorization', `Bearer ${signToken(admin)}`);
   assert.equal(pending.body.withdrawals.length, 0);
 });
+
+// --- Idempotencia y exactitud del importe -------------------------------
+
+test('la misma clave de idempotencia no descuenta los Diamantes dos veces', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 500 });
+
+  const key = 'wd-retry-0001';
+  const first = await requestWithdrawal(agent, user.token, '150', { idempotencyKey: key });
+  const second = await requestWithdrawal(agent, user.token, '150', { idempotencyKey: key });
+
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(second.status, 200, JSON.stringify(second.body));
+  // El reintento devuelve la misma solicitud, no una nueva.
+  assert.equal(String(second.body.transactionId), String(first.body.transactionId));
+
+  const wallet = await agent
+    .get('/api/wallet')
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(wallet.body.ttcR, 350, 'solo se descontó una vez');
+});
+
+test('claves de idempotencia distintas sí crean retiros distintos', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 500 });
+
+  const first = await requestWithdrawal(agent, user.token, '150', { idempotencyKey: 'wd-a-000001' });
+  const second = await requestWithdrawal(agent, user.token, '150', { idempotencyKey: 'wd-b-000002' });
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.notEqual(String(second.body.transactionId), String(first.body.transactionId));
+
+  const wallet = await agent
+    .get('/api/wallet')
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(wallet.body.ttcR, 200);
+});
+
+test('el importe se valida de forma exacta y rechaza más de 2 decimales', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 500 });
+
+  const tooPrecise = await requestWithdrawal(agent, user.token, '150.005');
+  assert.equal(tooPrecise.status, 400);
+
+  const zero = await requestWithdrawal(agent, user.token, '0');
+  assert.equal(zero.status, 400);
+
+  const negative = await requestWithdrawal(agent, user.token, '-5');
+  assert.equal(negative.status, 400);
+
+  const ok = await requestWithdrawal(agent, user.token, '150.50');
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+
+  const wallet = await agent
+    .get('/api/wallet')
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(wallet.body.ttcR, 349.5);
+});
+
+test('dos reintentos simultáneos con la misma clave no duplican el retiro', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 500 });
+
+  const key = 'wd-race-0001';
+  const [a, b] = await Promise.all([
+    requestWithdrawal(agent, user.token, '150', { idempotencyKey: key }),
+    requestWithdrawal(agent, user.token, '150', { idempotencyKey: key }),
+  ]);
+
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(b.status, 200, JSON.stringify(b.body));
+  assert.equal(String(a.body.transactionId), String(b.body.transactionId));
+
+  const wallet = await agent
+    .get('/api/wallet')
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(wallet.body.ttcR, 350);
+});
+
+// --- PayPal bloqueado por el operador -----------------------------------
+
+test('con PayPal apagado no se puede solicitar un retiro por PayPal', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 500 });
+
+  const env = require('../src/config/env');
+  const original = env.paypalEnabled;
+  env.paypalEnabled = false;
+  try {
+    const res = await requestWithdrawal(agent, user.token, '150');
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /método/i);
+  } finally {
+    env.paypalEnabled = original;
+  }
+});
+
+test('con PayPal apagado desaparece de la lista de métodos de retiro', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+
+  const env = require('../src/config/env');
+  const original = env.paypalEnabled;
+  env.paypalEnabled = false;
+  try {
+    const res = await agent
+      .get('/api/wallet/withdraw/config')
+      .set('Authorization', `Bearer ${user.token}`);
+    assert.equal(res.status, 200);
+    assert.ok(!res.body.methods.includes('paypal'));
+    assert.ok(res.body.methods.includes('zelle'));
+  } finally {
+    env.paypalEnabled = original;
+  }
+});

@@ -13,6 +13,13 @@ function isConfigured() {
   return Boolean(env.paypalClientId && env.paypalClientSecret);
 }
 
+// Interruptor operativo del operador. Distinto de `isConfigured`: con PayPal
+// apagado la app se comporta como si no estuviera configurado (no ofrece el
+// botón ni el alta), pero las claves siguen guardadas para reactivarlo.
+function isEnabled() {
+  return env.paypalEnabled !== false;
+}
+
 // El webhook necesita además su propio id para poder verificar. Sin él, el
 // endpoint se cierra aunque el cobro esté configurado.
 function canVerifyWebhooks() {
@@ -328,6 +335,7 @@ function _resetTokenCache() {
 
 module.exports = {
   isConfigured,
+  isEnabled,
   canVerifyWebhooks,
   createOrder,
   captureOrder,

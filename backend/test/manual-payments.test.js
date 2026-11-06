@@ -378,3 +378,43 @@ test('solo un admin ve el resumen de compras', async () => {
     restore();
   }
 });
+
+test('con PayPal apagado el método sigue visible pero marcado como bloqueado', async () => {
+  const restore = withManualMethods([
+    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
+    { id: 'zinli', label: 'Zinli', details: 'Zinli: +58 412 000 0000' },
+  ]);
+  const env = require('../src/config/env');
+  const original = env.paypalEnabled;
+  env.paypalEnabled = false;
+  try {
+    const agent = app();
+    const res = await agent.get('/api/payments/config');
+    const paypal = res.body.manualMethods.find((m) => m.id === 'paypal');
+    const zinli = res.body.manualMethods.find((m) => m.id === 'zinli');
+    assert.ok(paypal, 'PayPal sigue en la lista');
+    assert.equal(paypal.blocked, true);
+    assert.equal(zinli.blocked, false);
+  } finally {
+    env.paypalEnabled = original;
+    restore();
+  }
+});
+
+test('con PayPal apagado no se puede crear una orden manual por PayPal', async () => {
+  const restore = withManualMethods([
+    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
+  ]);
+  const env = require('../src/config/env');
+  const original = env.paypalEnabled;
+  env.paypalEnabled = false;
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    const res = await createOrder(agent, user.token, { method: 'paypal' });
+    assert.equal(res.status, 400);
+  } finally {
+    env.paypalEnabled = original;
+    restore();
+  }
+});

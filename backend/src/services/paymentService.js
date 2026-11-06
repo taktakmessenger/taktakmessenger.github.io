@@ -22,7 +22,9 @@ const { HttpError } = require('../utils/http');
 function availableProviders() {
   return {
     stripe: stripeService.isConfigured(),
-    paypal: paypalService.isConfigured(),
+    // PayPal solo se ofrece si está configurado *y* el interruptor operativo
+    // está encendido. Apagado, la tienda no pinta su botón aunque haya claves.
+    paypal: paypalService.isConfigured() && paypalService.isEnabled(),
     manual: env.manualPaymentMethods.length > 0,
   };
 }

@@ -2,6 +2,7 @@ const ManualOrder = require('../models/ManualOrder');
 const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('./paymentService');
+const paypalService = require('./paypalService');
 const assistant = require('./manualPaymentAssistant');
 const { HttpError } = require('../utils/http');
 
@@ -15,12 +16,30 @@ const { HttpError } = require('../utils/http');
 // de regalar saldo.
 
 function listMethods() {
-  return env.manualPaymentMethods;
+  // El método de PayPal sigue en la lista aunque el interruptor esté apagado,
+  // pero marcado como `blocked`: la tienda lo pinta tapado con una nube borrosa
+  // en vez de hacerlo desaparecer. Zinli y los demás van siempre disponibles.
+  return env.manualPaymentMethods.map((m) => ({
+    ...m,
+    blocked: isPaypalMethod(m) && !paypalService.isEnabled(),
+  }));
+}
+
+// Un método manual se considera PayPal si su id o su etiqueta lo dicen. Se mira
+// la etiqueta además del id para que un operador que lo llame "PayPal (personal)"
+// no se salte el interruptor.
+function isPaypalMethod(method) {
+  return /paypal/i.test(method.id || '') || /paypal/i.test(method.label || '');
 }
 
 function findMethod(methodId) {
   const method = env.manualPaymentMethods.find((m) => m.id === methodId);
   if (!method) throw new HttpError(400, 'Método de pago no disponible');
+  // Se rechaza crear órdenes nuevas por PayPal mientras está apagado, aunque el
+  // id siga en la configuración.
+  if (isPaypalMethod(method) && !paypalService.isEnabled()) {
+    throw new HttpError(400, 'Método de pago no disponible');
+  }
   return method;
 }
 

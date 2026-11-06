@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const db = require('../config/db');
 const { HttpError } = require('../utils/http');
+const { parseMoney, numberToUnits, formatMoney, INPUT_DECIMALS } = require('../utils/money');
 
 /**
  * Debit `amount` from a user's spendable coins, only if the total covers it.
@@ -264,12 +265,31 @@ const PAYOUT_METHODS = ['paypal', 'zelle', 'crypto'];
  * pagarlos, el usuario podría gastarlos o pedir otro retiro con los mismos y la
  * suma de solicitudes superaría lo que tiene. El dinero "en vuelo" queda
  * registrado en la transacción `pending`.
+ *
+ * Dos garantías que no se pueden perder en una frontera de dinero:
+ *
+ * 1. **Importe exacto.** El importe entra como cadena y se valida con BigInt
+ *    (`parseMoney`), no con `Number`. Así `0.1 + 0.2` del navegador no decide
+ *    si el saldo alcanza; se compara el mismo valor entero contra el saldo.
+ *
+ * 2. **Idempotencia.** Cada intento lleva una `idempotencyKey`. Si la petición
+ *    se reintenta (red, doble toque, reenvío del navegador), la clave única
+ *    impide descontar los Diamantes dos veces y se devuelve la solicitud ya
+ *    creada. La comprobación de duplicado va **dentro** de la misma transacción
+ *    que el débito cuando la base lo permite, de modo que no hay ventana entre
+ *    "¿ya existe?" y "cobro".
  */
-async function requestWithdrawal({ userId, amount, method, details }) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new HttpError(400, 'Monto inválido');
+async function requestWithdrawal({ userId, amount, method, details, idempotencyKey }) {
+  // El importe puede llegar como cadena (nuevo, exacto) o como número (clientes
+  // antiguos). En ambos casos se normaliza a cadena decimal antes de validar.
+  const raw = typeof amount === 'string' ? amount : String(amount);
+  const units = parseMoney(raw, INPUT_DECIMALS);
+  if (units === null) {
+    throw new HttpError(400, `Monto inválido: usa como máximo ${INPUT_DECIMALS} decimales`);
   }
-  if (amount < env.withdrawals.min) {
+
+  const minUnits = numberToUnits(env.withdrawals.min);
+  if (minUnits === null || units < minUnits) {
     throw new HttpError(400, `El mínimo para retirar es ${env.withdrawals.min} Diamantes`);
   }
   if (!PAYOUT_METHODS.includes(method)) {
@@ -281,10 +301,106 @@ async function requestWithdrawal({ userId, amount, method, details }) {
     throw new HttpError(400, 'Indica la cuenta o los datos de cobro');
   }
 
-  // Tope diario: se cuentan las solicitudes vivas de las últimas 24 h. Las
-  // rechazadas no cuentan porque sus Diamantes ya volvieron al usuario.
+  const value = Number(formatMoney(units));
+  const key = normalizeIdempotencyKey(idempotencyKey);
+
+  // Sin clave, o con una base sin transacciones, se mantiene el camino de
+  // siempre: no se inventa una idempotencia que la base no puede sostener.
+  if (!key) {
+    return createWithdrawalOnce({ userId, amount: value, method, details });
+  }
+
+  if (await db.supportsTransactions()) {
+    return runWithdrawalTransaction({ userId, value, method, details, key });
+  }
+
+  return createWithdrawalOnce({ userId, amount: value, method, details, key });
+}
+
+// La clave la genera el cliente; se acota y se rechaza cualquier cosa rara para
+// que no pueda colisionar con la de otro usuario ni inyectar nada.
+function normalizeIdempotencyKey(value) {
+  if (typeof value !== 'string') return '';
+  const key = value.trim();
+  return /^[a-zA-Z0-9_-]{8,100}$/.test(key) ? key : '';
+}
+
+// Ejecuta la comprobación de duplicado y el débito dentro de una transacción
+// Mongo. Si dos peticiones con la misma clave entran a la vez, la segunda no
+// encuentra documento que descontar (el saldo ya bajó) o choca con el índice
+// único al crear la transacción, y se resuelve devolviendo la ya creada.
+async function runWithdrawalTransaction({ userId, value, method, details, key }) {
+  const session = await mongoose.startSession();
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      const existing = await findWithdrawalByKey(key, session);
+      if (existing) {
+        result = { ...withdrawalResult(existing), replayed: true };
+        return;
+      }
+
+      const user = await User.findOneAndUpdate(
+        { _id: userId, 'wallet.ttcR': { $gte: value } },
+        { $inc: { 'wallet.ttcR': -value } },
+        { new: true, session }
+      );
+      if (!user) throw new HttpError(400, 'TTC-R insuficientes');
+
+      await assertDailyCap(userId, value, session);
+
+      const [transaction] = await Transaction.create(
+        [
+          {
+            from: userId,
+            amount: value,
+            type: 'withdraw',
+            ttcType: 'ttcR',
+            method,
+            details: String(details).trim().slice(0, 200),
+            status: 'pending',
+            idempotencyKey: key,
+          },
+        ],
+        { session }
+      );
+
+      result = withdrawalResult(transaction);
+    });
+    return result;
+  } catch (error) {
+    // Carrera perdida contra el índice único: la otra petición ya creó la
+    // solicitud, así que se devuelve esa en vez de fallar.
+    if (error && error.code === 11000) {
+      const existing = await findWithdrawalByKey(key);
+      if (existing) return { ...withdrawalResult(existing), replayed: true };
+    }
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+}
+
+async function findWithdrawalByKey(key, session) {
+  const query = Transaction.findOne({ idempotencyKey: key, type: 'withdraw' });
+  return session ? query.session(session) : query;
+}
+
+function withdrawalResult(transaction) {
+  return {
+    amount: transaction.amount,
+    method: transaction.method,
+    transactionId: transaction._id,
+  };
+}
+
+/**
+ * Tope diario: se cuentan las solicitudes vivas de las últimas 24 h. Las
+ * rechazadas no cuentan porque sus Diamantes ya volvieron al usuario.
+ */
+async function assertDailyCap(userId, amount, session) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [recent] = await Transaction.aggregate([
+  const pipeline = [
     {
       $match: {
         from: new mongoose.Types.ObjectId(String(userId)),
@@ -294,7 +410,11 @@ async function requestWithdrawal({ userId, amount, method, details }) {
       },
     },
     { $group: { _id: null, total: { $sum: '$amount' } } },
-  ]);
+  ];
+  const [recent] = session
+    ? await Transaction.aggregate(pipeline).session(session)
+    : await Transaction.aggregate(pipeline);
+
   const used = recent?.total || 0;
   if (used + amount > env.withdrawals.dailyCap) {
     throw new HttpError(
@@ -302,7 +422,11 @@ async function requestWithdrawal({ userId, amount, method, details }) {
       `Superas el tope diario de ${env.withdrawals.dailyCap} Diamantes. Ya pediste ${round2(used)} en las últimas 24 h.`
     );
   }
+}
 
+// Camino sin transacciones: mismo comportamiento de siempre, con la clave
+// aplicada al crear la transacción para que un reintento no duplique.
+async function createWithdrawalOnce({ userId, amount, method, details, key }) {
   const user = await User.findOneAndUpdate(
     { _id: userId, 'wallet.ttcR': { $gte: amount } },
     { $inc: { 'wallet.ttcR': -amount } },
@@ -310,17 +434,31 @@ async function requestWithdrawal({ userId, amount, method, details }) {
   );
   if (!user) throw new HttpError(400, 'TTC-R insuficientes');
 
-  const transaction = await Transaction.create({
-    from: userId,
-    amount,
-    type: 'withdraw',
-    ttcType: 'ttcR',
-    method,
-    details: String(details).trim().slice(0, 200),
-    status: 'pending',
-  });
+  await assertDailyCap(userId, amount);
 
-  return { amount, method, transactionId: transaction._id };
+  let transaction;
+  try {
+    transaction = await Transaction.create({
+      from: userId,
+      amount,
+      type: 'withdraw',
+      ttcType: 'ttcR',
+      method,
+      details: String(details).trim().slice(0, 200),
+      status: 'pending',
+      ...(key ? { idempotencyKey: key } : {}),
+    });
+  } catch (error) {
+    // Si la clave ya existía, se devuelven los Diamantes y la solicitud previa.
+    if (error && error.code === 11000 && key) {
+      await User.updateOne({ _id: userId }, { $inc: { 'wallet.ttcR': amount } });
+      const existing = await findWithdrawalByKey(key);
+      if (existing) return { ...withdrawalResult(existing), replayed: true };
+    }
+    throw error;
+  }
+
+  return withdrawalResult(transaction);
 }
 
 /**

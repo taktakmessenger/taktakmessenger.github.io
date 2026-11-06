@@ -54,6 +54,14 @@ const transactionSchema = new mongoose.Schema(
     // replaying the same webhook a no-op instead of a double credit.
     externalId: { type: String, index: { unique: true, sparse: true } },
 
+    // Clave de idempotencia del cliente. La manda la app al pedir un retiro
+    // (una por intento): si la petición se reintenta —red que falla, el usuario
+    // toca dos veces, el navegador reenvía— el segundo intento devuelve la
+    // solicitud ya creada en vez de descontar los Diamantes otra vez. `sparse`
+    // porque la mayoría de transacciones (regalos, compras, premios) no la
+    // llevan.
+    idempotencyKey: { type: String, index: { unique: true, sparse: true } },
+
     // Context / payout metadata.
     videoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Video' },
     method: String,

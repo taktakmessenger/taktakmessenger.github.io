@@ -5273,6 +5273,52 @@
   white-space: nowrap;
 }
 
+/* Método bloqueado por el operador (p. ej. PayPal apagado). Se deja ver que ahí
+   hay un dato, pero tapado con una nube: borroso, sin poder copiarlo ni pulsarlo,
+   y sin que se lea el enlace ni el correo. */
+.manual-pay-blocked {
+  position: relative;
+  pointer-events: none;
+}
+
+/* Lo que se difumina es el contenido, no la nube que lo tapa. */
+.manual-pay-blur {
+  filter: blur(5px);
+  opacity: 0.55;
+  user-select: none;
+}
+
+/* El bloque del enlace (enlace + texto copiable) se apila igual que el normal,
+   aunque esté difuminado. */
+.manual-pay-blocked > .manual-pay-blur:not(.manual-pay-copy) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* La nube que tapa. Va sin difuminar, encima del contenido borroso. */
+.manual-pay-fog {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  border-radius: 0.6rem;
+  backdrop-filter: blur(6px);
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.14) 45%,
+    rgba(255, 255, 255, 0) 78%
+  );
+}
+
+/* Botón de copiar apagado dentro de un método bloqueado. */
+.manual-pay-blocked .manual-pay-copy-btn {
+  opacity: 0.4;
+}
+
 /* Sugerencia del asistente en la cola de pagos manuales. Se colorea según lo
    que propone para que el ojo distinga de un vistazo aprobar de rechazar. */
 .assistant-hint {

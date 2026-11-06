@@ -127,7 +127,7 @@ async function saveCard({ userId, paymentMethodId, label }) {
  * mandar al navegador.
  */
 async function startPaypalLink({ userId }) {
-  if (!paypalService.isConfigured()) {
+  if (!paypalService.isConfigured() || !paypalService.isEnabled()) {
     throw new HttpError(503, 'El pago con PayPal no está disponible');
   }
 
@@ -145,7 +145,7 @@ async function startPaypalLink({ userId }) {
  * método no mueve dinero.
  */
 async function confirmPaypalLink({ userId, orderId }) {
-  if (!paypalService.isConfigured()) {
+  if (!paypalService.isConfigured() || !paypalService.isEnabled()) {
     throw new HttpError(503, 'El pago con PayPal no está disponible');
   }
   if (!orderId) throw new HttpError(400, 'Falta la orden de PayPal');
@@ -336,7 +336,7 @@ async function chargeWithSavedMethod({ userId, methodId, packageId }) {
   }
 
   if (method.provider === 'paypal') {
-    if (!paypalService.isConfigured()) {
+    if (!paypalService.isConfigured() || !paypalService.isEnabled()) {
       throw new HttpError(503, 'El pago con PayPal no está disponible');
     }
     const result = await paypalService.chargeStoredVault({

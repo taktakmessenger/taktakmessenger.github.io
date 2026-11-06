@@ -469,6 +469,11 @@ const env = {
   // Identificador del webhook en PayPal. Sin él no se puede verificar la firma,
   // así que el webhook se cierra.
   paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || null,
+  // Interruptor operativo. Con `PAYPAL_ENABLED=false` PayPal queda bloqueado en
+  // toda la app —pasarela, alta de cuenta y retiros— sin borrar ninguna clave:
+  // al volver a `true` se reactiva tal cual. Sirve para apagar PayPal por una
+  // incidencia sin desplegar código. Por defecto activo.
+  paypalEnabled: process.env.PAYPAL_ENABLED !== 'false',
   paypalApiBase:
     process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com',
   paypalCurrency: (process.env.PAYPAL_CURRENCY || 'USD').toUpperCase(),
