@@ -31,6 +31,7 @@ function brandLabel(brand) {
 export default function PaymentMethods({ onBack, paypalOrderId, onPaypalConfirmed }) {
   const [methods, setMethods] = useState([]);
   const [providers, setProviders] = useState({ stripe: false, paypal: false });
+  const [paypalBlocked, setPaypalBlocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -51,6 +52,7 @@ export default function PaymentMethods({ onBack, paypalOrderId, onPaypalConfirme
       const { data } = await api.get('/payments/methods');
       setMethods(data.methods);
       setProviders(data.providers);
+      setPaypalBlocked(Boolean(data.paypalBlocked));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -209,7 +211,9 @@ export default function PaymentMethods({ onBack, paypalOrderId, onPaypalConfirme
     }
   }
 
-  const anyProvider = providers.stripe || providers.paypal;
+  // PayPal apagado sigue contando como "hay algo que enseñar": se muestra
+  // tapado con una nube en vez de decir que el cobro no está configurado.
+  const anyProvider = providers.stripe || providers.paypal || paypalBlocked;
 
   return (
     <div className="payment-methods">
@@ -226,9 +230,11 @@ export default function PaymentMethods({ onBack, paypalOrderId, onPaypalConfirme
       {notice && <p className="notice" role="status">{notice}</p>}
 
       <p className="store-hint">
-        Guarda tu tarjeta o tu cuenta de PayPal una vez y paga sin volver a
-        escribirla. El número de tu tarjeta nunca se guarda en TAK TAK: lo
-        custodia la pasarela de pago.
+        {providers.paypal
+          ? 'Guarda tu tarjeta o tu cuenta de PayPal una vez y paga sin volver a escribirla.'
+          : 'Guarda tu tarjeta una vez y paga sin volver a escribirla.'}{' '}
+        El número de tu tarjeta nunca se guarda en TAK TAK: lo custodia la
+        pasarela de pago.
       </p>
 
       {!anyProvider && !loading && (
@@ -298,6 +304,19 @@ export default function PaymentMethods({ onBack, paypalOrderId, onPaypalConfirme
           >
             🅿️ {busy === 'paypal' ? 'Abriendo PayPal…' : 'Vincular PayPal'}
           </button>
+        )}
+        {/* PayPal apagado por el operador: se deja ver que existe, pero tapado
+            con una nube. No se puede pulsar, así que no abre la pestaña de
+            PayPal ni permite vincular la cuenta. */}
+        {paypalBlocked && (
+          <div className="cloud-block">
+            <div className="cloud-blur">
+              <button type="button" className="btn-secondary" disabled>
+                🅿️ Vincular PayPal
+              </button>
+            </div>
+            <span className="cloud-fog" aria-hidden="true">☁️</span>
+          </div>
         )}
       </div>
 

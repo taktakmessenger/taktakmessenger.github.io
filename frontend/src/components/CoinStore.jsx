@@ -273,8 +273,8 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       pagar en otra app (PayPal, Zinli, el banco) y necesita
                       pegar el enlace o la referencia allí. */}
                   {selectedManual?.link && (
-                    <div className={selectedManual.blocked ? 'manual-pay-blocked' : undefined}>
-                      <div className={selectedManual.blocked ? 'manual-pay-blur' : undefined}>
+                    <div className={selectedManual.blocked ? 'cloud-block' : undefined}>
+                      <div className={selectedManual.blocked ? 'cloud-blur' : undefined}>
                         <a
                           className="manual-pay-link"
                           href={selectedManual.blocked ? undefined : selectedManual.link}
@@ -299,7 +299,7 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                           </button>
                         </div>
                       </div>
-                      {selectedManual.blocked && <span className="manual-pay-fog" aria-hidden="true">☁️</span>}
+                      {selectedManual.blocked && <span className="cloud-fog" aria-hidden="true">☁️</span>}
                     </div>
                   )}
                   {/* Pago directo: el correo o la cuenta a la que enviar el
@@ -307,8 +307,8 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                       porque muchos usuarios pagan desde otra app y solo
                       necesitan el dato para pegarlo. */}
                   {selectedManual?.payTo && (
-                    <div className={selectedManual.blocked ? 'manual-pay-blocked' : undefined}>
-                      <div className={`manual-pay-copy${selectedManual.blocked ? ' manual-pay-blur' : ''}`}>
+                    <div className={selectedManual.blocked ? 'cloud-block' : undefined}>
+                      <div className={`manual-pay-copy${selectedManual.blocked ? ' cloud-blur' : ''}`}>
                         <code className="manual-pay-value">{selectedManual.payTo}</code>
                         <button
                           type="button"
@@ -321,7 +321,7 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
                           {copied === `payTo:${selectedManual.id}` ? '✅ Copiado' : '📋 Copiar'}
                         </button>
                       </div>
-                      {selectedManual.blocked && <span className="manual-pay-fog" aria-hidden="true">☁️</span>}
+                      {selectedManual.blocked && <span className="cloud-fog" aria-hidden="true">☁️</span>}
                     </div>
                   )}
                   <input
@@ -364,7 +364,7 @@ export default function CoinStore({ onBack, onPurchased, onManageMethods }) {
 
       {anyProvider && (
         <button type="button" className="btn-link" onClick={onManageMethods}>
-          💳 Guardar una tarjeta o vincular PayPal
+          💳 {providers.paypal ? 'Guardar una tarjeta o vincular PayPal' : 'Guardar una tarjeta'}
         </button>
       )}
     </div>

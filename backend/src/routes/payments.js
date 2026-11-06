@@ -22,12 +22,14 @@ const webhookLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones' },
 });
 
-const checkoutLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const checkoutLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Constant-time comparison so a wrong secret cannot be recovered by timing.
@@ -47,6 +49,9 @@ router.get(
   asyncHandler(async (_req, res) => {
     res.json({
       providers: paymentService.availableProviders(),
+      // Ver `paypalBlocked` en `/methods`: la tienda lo usa para mostrar el
+      // método manual de PayPal tapado en vez de ofrecerlo.
+      paypalBlocked: !paypalService.isEnabled(),
       // Clave publicable de Stripe. No es un secreto: es la que usa el navegador
       // para tokenizar la tarjeta. Se sirve desde aquí para que la tienda no
       // dependa de una variable de compilación del frontend.
@@ -211,12 +216,14 @@ router.get(
 // El usuario paga por fuera de la app, envía la referencia y un administrador
 // aprueba. La orden no acredita nada por sí sola: el abono lo hace la revisión.
 
-const manualLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const manualLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Crea una orden pendiente. El paquete se manda por id: el precio y las monedas
@@ -263,12 +270,14 @@ router.get(
 // filtran siempre por `userId`, así que conocer el id de una tarjeta ajena no
 // sirve de nada.
 
-const methodLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const methodLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Lista los métodos guardados del usuario.
@@ -280,6 +289,10 @@ router.get(
     res.json({
       methods,
       providers: paymentService.availableProviders(),
+      // PayPal puede estar configurado pero apagado por el operador. Se expone
+      // aparte para que la pantalla lo muestre tapado con una nube en vez de
+      // hacerlo desaparecer (el usuario ve que existe, pero no puede usarlo).
+      paypalBlocked: !paypalService.isEnabled(),
     });
   })
 );
