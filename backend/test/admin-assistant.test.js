@@ -751,7 +751,7 @@ const walletService = require('../src/services/walletService');
 // Crea una orden manual aprobada con su asiento, para que el resumen tenga algo
 // que agregar. Va por el modelo y no por el endpoint porque aquí se prueba la
 // lectura, no el cobro.
-async function seedPurchase({ user, coins, priceUsd, status = 'approved', method = 'zinli' }) {
+async function seedPurchase({ user, coins, priceUsd, status = 'approved', method = 'usdt-bep20' }) {
   return ManualOrder.create({
     user: user._id,
     packageId: 'starter',
@@ -890,8 +890,8 @@ test('listar_retiros muestra las solicitudes pendientes con datos de cobro', asy
   await walletService.requestWithdrawal({
     userId: user._id,
     amount: 200,
-    method: 'paypal',
-    details: 'cobro@example.com',
+    method: 'crypto',
+    details: '0x1111111111111111111111111111111111111111',
   });
 
   const result = await assistant.runTool('listar_retiros', { adminId: admin._id });
@@ -899,7 +899,7 @@ test('listar_retiros muestra las solicitudes pendientes con datos de cobro', asy
   assert.equal(result.retiros.length, 1);
   assert.equal(result.retiros[0].usuario, 'retiradora');
   assert.equal(result.retiros[0].diamantes, 200);
-  assert.equal(result.retiros[0].datosCobro, 'cobro@example.com');
+  assert.equal(result.retiros[0].datosCobro, '0x1111111111111111111111111111111111111111');
 });
 
 test('pagar_retiro marca pagado y rechazar_retiro devuelve los Diamantes', async () => {
@@ -913,8 +913,8 @@ test('pagar_retiro marca pagado y rechazar_retiro devuelve los Diamantes', async
   const first = await walletService.requestWithdrawal({
     userId: user._id,
     amount: 200,
-    method: 'paypal',
-    details: 'x@y.com',
+    method: 'crypto',
+    details: '0x2222222222222222222222222222222222222222',
   });
   const paid = await assistant.runTool('pagar_retiro', {
     id: first.transactionId.toString(),
@@ -925,8 +925,8 @@ test('pagar_retiro marca pagado y rechazar_retiro devuelve los Diamantes', async
   const second = await walletService.requestWithdrawal({
     userId: user._id,
     amount: 100,
-    method: 'paypal',
-    details: 'x@y.com',
+    method: 'crypto',
+    details: '0x3333333333333333333333333333333333333333',
   });
   const rejected = await assistant.runTool('rechazar_retiro', {
     id: second.transactionId.toString(),

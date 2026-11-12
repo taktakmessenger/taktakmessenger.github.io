@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-// Una orden de cobro manual: el usuario paga por fuera de la app (Zinli, pago
-// móvil, transferencia…) y envía la referencia; un administrador la aprueba.
+// Una orden de cobro manual: el usuario paga por fuera de la app (billetera
+// cripto, transferencia…) y envía la referencia; un administrador la aprueba.
 //
 // Es el único camino de cobro que no depende de ninguna pasarela, así que
 // funciona sin cuenta de empresa y sin webhooks: nada que mantener encendido ni

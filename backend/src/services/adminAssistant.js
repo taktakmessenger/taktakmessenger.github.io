@@ -125,7 +125,7 @@ const COLLECTIONS = {
     model: () => ManualOrder,
     campos: 'user coins priceUsd method reference status createdAt',
     buscar: ['reference', 'method'],
-    descripcion: 'Órdenes de compra de monedas con pago manual (Zinli, etc.).',
+    descripcion: 'Órdenes de compra de monedas con pago manual (billetera cripto, etc.).',
   },
   gifts: {
     model: () => Gift,
@@ -412,6 +412,33 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'pasar_monedas_a_app_madre',
+      description:
+        'Mueve la ganancia acumulada del administrador (el 40% de las ventas) a la APP madre. NUNCA toca el dinero de los usuarios, que se queda en la bóveda respaldando sus retiros. Es la orden de emergencia: el administrador dice "pasa las monedas a la APP madre".',
+      parameters: {
+        type: 'object',
+        properties: {
+          direccion: {
+            type: ['string', 'null'],
+            description: 'Dirección destino. Si no se indica, se usa la billetera del administrador.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'estado_boveda',
+      description:
+        'Muestra el estado de la bóveda: cuánto se ha vendido, cuánto es ganancia del administrador (40%) y cuánto se debe a los usuarios (60%).',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'pagos_pendientes',
       description: 'Lista las órdenes de pago manual pendientes de revisión.',
       parameters: { type: 'object', properties: {} },
@@ -439,7 +466,7 @@ const TOOLS = [
             enum: ['pending', 'approved', 'rejected'],
             description: 'Filtra por estado de la orden. Opcional.',
           },
-          metodo: { type: 'string', description: 'Filtra por método de pago (p. ej. zinli). Opcional.' },
+          metodo: { type: 'string', description: 'Filtra por método de pago (p. ej. usdt-bep20). Opcional.' },
           desde: { type: 'string', description: 'Fecha ISO; solo órdenes desde ese momento. Opcional.' },
           hasta: { type: 'string', description: 'Fecha ISO; solo órdenes hasta ese momento. Opcional.' },
           limite: { type: 'number', description: 'Máximo de órdenes a devolver (por defecto 20, tope 100).' },
@@ -522,7 +549,7 @@ const TOOLS = [
     function: {
       name: 'pagar_retiro',
       description:
-        'Marca una solicitud de retiro como pagada, después de enviar el dinero por fuera (PayPal, Zelle…). No mueve saldo: los Diamantes ya se descontaron al solicitarla. Requiere el id.',
+        'Marca una solicitud de retiro como pagada, después de enviar el dinero por fuera (billetera cripto). No mueve saldo: los Diamantes ya se descontaron al solicitarla. Requiere el id.',
       parameters: {
         type: 'object',
         properties: { id: { type: 'string', description: 'id de la solicitud de retiro' } },
@@ -1188,6 +1215,33 @@ async function runTool(name, args) {
           diamantes: result.diamonds,
           saldo: result.wallet,
         };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'pasar_monedas_a_app_madre': {
+      try {
+        const result = await vaultService.emergencyTransferToMotherApp({
+          adminId: args.adminId,
+          confirm: true,
+          destination: args.direccion || undefined,
+        });
+        return {
+          ok: true,
+          movidoUsd: result.movedUsd,
+          destino: result.destination,
+          saldoUsuariosBoveda: result.vaultOwedUsd,
+          nota: result.note,
+        };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+
+    case 'estado_boveda': {
+      try {
+        return { ok: true, ...(await vaultService.getVaultStatus()) };
       } catch (err) {
         return { error: err.message };
       }

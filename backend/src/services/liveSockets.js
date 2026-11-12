@@ -305,6 +305,90 @@ function stopAllRinging() {
   ringingTimers.clear();
 }
 
+// ------------------------------------------------------------------
+// Llamadas grupales ad-hoc (hasta `MAX_GROUP_CALL` personas)
+// ------------------------------------------------------------------
+//
+// Una llamada grupal es una sala de voz efímera que NO cuelga de un TAK Creator,
+// así que no puede reutilizar `voice:*`: la membresía de esas salas se comprueba
+// contra la base de datos y aquí no hay ninguna a la que pertenecer. En su
+// lugar, cada invitado recibe una invitación y solo al aceptarla entra; el
+// servidor mantiene quién está dentro y reenvía la señalización (oferta,
+// respuesta, ICE) entre pares, igual que la malla del directo. El audio y el
+// vídeo nunca pasan por aquí.
+//
+// El tope es de producto: en malla cada persona sube su audio y su vídeo a CADA
+// uno de los demás, así que el coste de subida crece con la sala. Cuatro es lo
+// que sostiene bien una conexión móvil normal; para más habría que encender el
+// SFU (mediasoup), que hoy está apagado.
+const MAX_GROUP_CALL = 4;
+
+// callId -> { id, hostId, kind, origin, members: Map(userId -> member) }
+const groupCalls = new Map();
+// userId -> Set<socketId> de los sockets de ese usuario dentro de una llamada
+// grupal. Se lleva aparte del mapa de la llamada para poder contar por persona
+// (dos pestañas no deben ocupar dos plazas) y para expulsar los sockets muertos.
+const groupCallSockets = new Map();
+
+function groupRoom(callId) {
+  return `groupcall:${callId}`;
+}
+
+function groupMembers(callId) {
+  const call = groupCalls.get(callId);
+  return call ? [...call.members.values()] : [];
+}
+
+function announceGroupMembers(io, callId) {
+  io.to(groupRoom(callId)).emit('call:group-members', {
+    callId,
+    members: groupMembers(callId),
+  });
+}
+
+// Saca al socket de su llamada grupal y avisa a los que quedan. Devuelve el
+// `callId` si realmente estaba dentro. Se llama al salir a propósito y al
+// desconectar, para que nadie quede como participante fantasma.
+function leaveGroupCall(io, socket, notify = true) {
+  const callId = socket.data.groupCall;
+  if (!callId) return null;
+  socket.data.groupCall = null;
+  socket.leave(groupRoom(callId));
+
+  const call = groupCalls.get(callId);
+  const userId = String(socket.data.user?.id || '');
+  if (call) {
+    const sockets = groupCallSockets.get(userId);
+    if (sockets) {
+      sockets.delete(socket.id);
+      // Solo se quita del mapa si este socket era el último del usuario: con dos
+      // pestañas abiertas, cerrar una no debe sacarle de la llamada.
+      if (sockets.size === 0) {
+        groupCallSockets.delete(userId);
+        call.members.delete(userId);
+        if (notify) {
+          socket.to(groupRoom(callId)).emit('call:group-left', { callId, userId });
+          announceGroupMembers(io, callId);
+        }
+      }
+    }
+    // La llamada se cierra cuando se queda sin nadie. El anfitrión que se va
+    // tampoco la mantiene viva: no hay directo detrás que conservar.
+    if (call.members.size === 0) {
+      groupCalls.delete(callId);
+      // La llamada se quedó vacía. Hay que avisar a quien todavía estuviera
+      // timbrando: los invitados que no llegaron a aceptar nunca entraron a la
+      // sala, así que no se enterarían por `call:group-left` y su pantalla
+      // seguiría sonando para una llamada que ya no existe.
+      for (const invitee of call.invitees || []) {
+        io.to(userRoom(invitee)).emit('call:group-ended', { callId });
+      }
+    }
+  }
+  if (notify) socket.emit('call:group-ended', { callId });
+  return callId;
+}
+
 // Avisa del cambio de presencia a las personas que comparten un chat con él.
 // Solo a esas: la presencia es un dato de contactos, no un directorio abierto.
 async function announcePresence(io, userId, online) {
@@ -832,6 +916,175 @@ function initLiveSockets(server) {
     });
 
     // ------------------------------------------------------------------
+    // Llamada grupal ad-hoc (malla WebRTC, hasta `MAX_GROUP_CALL`)
+    // ------------------------------------------------------------------
+    //
+    // Cuatro eventos, con la misma idea que los de la llamada 1 a 1: el servidor
+    // reparte invitaciones, lleva la lista de quién está y reenvía la
+    // señalización entre pares. No decide medios ni los toca.
+
+    // Quien llama: crea la llamada y avisa a los invitados. El que llama no
+    // entra a la sala hasta que el primero acepta (ver `call:group-join`), así
+    // que la llamada no se queda abierta si nadie contesta.
+    socket.on('call:group-invite', async ({ to, kind, origin } = {}) => {
+      if (!me || !Array.isArray(to)) return;
+      const callKind = kind === 'video' ? 'video' : 'audio';
+
+      // Invitados válidos: sin repetidos, sin uno mismo y sin cadenas vacías.
+      const hostId = String(me.id);
+      const invitees = [
+        ...new Set(to.map((id) => String(id)).filter((id) => id && id !== hostId)),
+      ].slice(0, MAX_GROUP_CALL - 1);
+      if (invitees.length === 0) return;
+
+      // Una sola llamada grupal por socket: si ya estaba en otra, sale antes de
+      // crear esta, para no quedar en dos sitios con el micrófono abierto.
+      if (socket.data.groupCall) leaveGroupCall(io, socket);
+
+      const callId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      groupCalls.set(callId, {
+        id: callId,
+        hostId,
+        kind: callKind,
+        origin: origin === 'whataka' ? 'whataka' : 'app',
+        invitees,
+        members: new Map([[hostId, { id: hostId, username: me.username, host: true }]]),
+      });
+      groupCallSockets.set(hostId, new Set([socket.id]));
+      socket.data.groupCall = callId;
+      // El anfitrión entra ya a la sala: es quien va a ofrecer a cada invitado
+      // que acepte, así que tiene que estar dentro para recibir sus respuestas.
+      // Si al final no acepta nadie, la llamada se cierra sola al vaciarse.
+      socket.join(groupRoom(callId));
+
+      // El idioma de quien llama viaja con la invitación, para que el receptor
+      // pueda ofrecer traducir sin tener que preguntarlo.
+      const caller = await User.findById(hostId)
+        .select('preferredLanguage')
+        .lean()
+        .catch(() => null);
+
+      const payload = {
+        callId,
+        from: {
+          id: hostId,
+          username: me.username,
+          language: caller?.preferredLanguage || null,
+        },
+        kind: callKind,
+        origin: origin === 'whataka' ? 'whataka' : 'app',
+        at: Date.now(),
+      };
+
+      // Solo se invita a quien puede sonar: un socket oculto no repica. Si nadie
+      // tiene socket, la llamada no tiene a quién llegar y el cliente la cierra
+      // en vez de quedarse timbrando al vacío. (El push de una llamada grupal
+      // queda fuera de esta primera versión: encenderlo es añadir el timbre por
+      // push, igual que en la 1 a 1, sobre cada invitado.)
+      const reachable = (
+        await Promise.all(
+          invitees.map(async (invitee) => {
+            try {
+              const sockets = await io.in(userRoom(invitee)).fetchSockets();
+              if (!sockets.some((s) => s.data?.visible !== false)) return false;
+              io.to(userRoom(invitee)).emit('call:group-incoming', payload);
+              return true;
+            } catch {
+              return false;
+            }
+          })
+        )
+      ).filter(Boolean).length;
+
+      socket.emit('call:group-ringing', { callId, invitees, reachable, at: Date.now() });
+    });
+
+    // El invitado acepta. Aquí es cuando de verdad entra a la sala: hasta este
+    // momento la llamada solo existía como invitación.
+    socket.on('call:group-accept', ({ callId } = {}) => {
+      if (!me || typeof callId !== 'string') return;
+      const call = groupCalls.get(callId);
+      if (!call) return socket.emit('call:group-error', { error: 'La llamada ya no existe' });
+
+      const userId = String(me.id);
+      // Solo entra quien fue invitado (o el anfitrión). Sin esto, cualquiera que
+      // averiguara el `callId` podría meterse en la llamada: el identificador
+      // viaja por salas privadas, pero la puerta se cierra aquí igualmente.
+      if (userId !== call.hostId && !call.invitees.includes(userId)) {
+        return socket.emit('call:group-error', { error: 'No estás invitado a esta llamada' });
+      }
+      // El aforo cuenta personas, no sockets: quien ya está dentro puede
+      // reconectar sin gastar una plaza nueva.
+      if (!call.members.has(userId) && call.members.size >= MAX_GROUP_CALL) {
+        return socket.emit('call:group-error', { error: 'La llamada está llena' });
+      }
+
+      // Los que ya estaban: se le entregan al que entra para que sea él quien
+      // llame (oferta) a cada uno. Un único sentido de negociación evita cruzar
+      // dos ofertas a la vez.
+      const existing = groupMembers(callId).filter((m) => String(m.id) !== userId);
+
+      socket.data.groupCall = callId;
+      socket.join(groupRoom(callId));
+      if (!groupCallSockets.has(userId)) groupCallSockets.set(userId, new Set());
+      groupCallSockets.get(userId).add(socket.id);
+      if (!call.members.has(userId)) {
+        call.members.set(userId, { id: userId, username: me.username, host: userId === call.hostId });
+      }
+
+      socket.emit('call:group-joined', {
+        callId,
+        kind: call.kind,
+        origin: call.origin,
+        hostId: call.hostId,
+        peers: existing,
+        members: groupMembers(callId),
+      });
+
+      // A los que ya estaban se les avisa del nuevo; ellos no llaman, esperan la
+      // oferta del que entra.
+      socket.to(groupRoom(callId)).emit('call:group-peer-joined', {
+        callId,
+        id: userId,
+        username: me.username,
+      });
+      announceGroupMembers(io, callId);
+    });
+
+    // Rechazar una invitación. No hay nada que limpiar en el servidor: el que
+    // rechaza nunca entró a la sala.
+    socket.on('call:group-reject', ({ callId } = {}) => {
+      if (!me || typeof callId !== 'string') return;
+      const call = groupCalls.get(callId);
+      if (!call) return;
+      io.to(userRoom(call.hostId)).emit('call:group-rejected', {
+        callId,
+        from: String(me.id),
+      });
+    });
+
+    // Salir (colgar) de una llamada grupal. Cualquiera puede irse; la llamada
+    // sigue mientras quede alguien y se cierra sola cuando se vacía.
+    socket.on('call:group-leave', ({ callId } = {}) => {
+      if (!me) return;
+      if (typeof callId === 'string' && socket.data.groupCall !== callId) return;
+      leaveGroupCall(io, socket);
+    });
+
+    // Señalización de la malla. Igual que en la llamada 1 a 1, es opaca para el
+    // servidor: se reenvía tal cual al par indicado, y solo si los dos están en
+    // la MISMA llamada (si no, cualquiera podría inyectar SDP a un desconocido).
+    for (const event of ['call:group-offer', 'call:group-answer', 'call:group-ice']) {
+      socket.on(event, ({ callId, to, ...rest } = {}) => {
+        if (!me || typeof to !== 'string' || typeof callId !== 'string') return;
+        if (socket.data.groupCall !== callId) return;
+        const call = groupCalls.get(callId);
+        if (!call || !call.members.has(String(to))) return;
+        io.to(userRoom(to)).emit(event, { callId, from: String(me.id), ...rest });
+      });
+    }
+
+    // ------------------------------------------------------------------
     // Sala de voz de un TAK Creator (audio en grupo, malla WebRTC)
     // ------------------------------------------------------------------
     //
@@ -1284,6 +1537,10 @@ function initLiveSockets(server) {
     // monedas quedarían dentro de una mesa en memoria a la que ya no puede volver.
     socket.on('disconnect', () => {
       if (me && socket.data.voiceRoom) leaveVoiceRoom(io, socket);
+      // Fuera de una llamada grupal al desconectar: si no, los demás seguirían
+      // intentando negociar con un socket muerto y el usuario aparecería dentro
+      // para siempre.
+      if (me && socket.data.groupCall) leaveGroupCall(io, socket, true);
       if (me && socket.data.pokerHost) {
         const hostId = socket.data.pokerHost;
         const room = socket.data.pokerRoom;

@@ -7,7 +7,7 @@ const env = require('../src/config/env');
 const User = require('../src/models/User');
 
 // Un servidor Didit falso. Se levanta HTTP de verdad y se apunta
-// `env.diditApiBase` a él, igual que con Stripe y PayPal: así se ejercita el
+// `env.diditApiBase` a él, igual que con Stripe: así se ejercita el
 // mismo código (cabeceras, parseo, mapeo de estados) en vez de sustituir
 // funciones por dobles, que es donde se cuelan los fallos de integración.
 function startFakeDidit() {

@@ -2,23 +2,24 @@ const ManualOrder = require('../models/ManualOrder');
 const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('./paymentService');
+const vaultService = require('./vaultService');
 const assistant = require('./manualPaymentAssistant');
 const { HttpError } = require('../utils/http');
 
 // Cobro manual: el usuario paga por fuera de la app y un administrador aprueba.
 //
 // La parte delicada no es cobrar, es abonar. El abono NO se hace aquí a mano:
-// pasa por `paymentService.creditPurchase`, la misma puerta que usan Stripe y
-// PayPal. Así el precio sale del catálogo del servidor y el `externalId` único
+// pasa por `paymentService.creditPurchase`, la misma puerta que usa Stripe.
+// Así el precio sale del catálogo del servidor y el `externalId` único
 // hace que aprobar dos veces la misma orden (o un reintento tras un corte) no
 // acredite monedas dos veces. Duplicar esa lógica aquí sería la forma más fácil
 // de regalar saldo.
 
 function listMethods() {
   // Los métodos manuales los declara el operador en `MANUAL_PAYMENT_METHODS`:
-  // si aparecen en la lista es porque se aceptan. No dependen del interruptor de
-  // la pasarela de PayPal, que solo gobierna el cobro automático (Stripe/PayPal
-  // al instante). El cobro manual se aprueba a mano, así que se ofrece siempre.
+  // si aparecen en la lista es porque se aceptan. No dependen de ninguna
+  // pasarela automática: el cobro manual se aprueba a mano, así que se ofrece
+  // siempre que esté declarado.
   return env.manualPaymentMethods;
 }
 
@@ -110,6 +111,30 @@ async function purchaseSummary({ status, from, to } = {}) {
     },
   ]);
 
+  // Desglose por estado. Sin esto, el panel sumaba en "Total cobrado" las
+  // órdenes pendientes y las rechazadas, que no son dinero que haya entrado.
+  const byStatus = await ManualOrder.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: '$status',
+        ordenes: { $sum: 1 },
+        monedas: { $sum: '$coins' },
+        usd: { $sum: '$priceUsd' },
+      },
+    },
+  ]);
+
+  const statusTotals = { approved: 0, pending: 0, rejected: 0 };
+  const statusCounts = { approved: 0, pending: 0, rejected: 0 };
+  const statusCoins = { approved: 0, pending: 0, rejected: 0 };
+  for (const row of byStatus) {
+    if (statusTotals[row._id] === undefined) continue;
+    statusTotals[row._id] = round2(row.usd || 0);
+    statusCounts[row._id] = row.ordenes || 0;
+    statusCoins[row._id] = row.monedas || 0;
+  }
+
   const buyers = await ManualOrder.aggregate([
     { $match: { ...match, status: 'approved' } },
     {
@@ -132,6 +157,15 @@ async function purchaseSummary({ status, from, to } = {}) {
     ordenes: totals?.ordenes || 0,
     monedas: totals?.monedas || 0,
     usd: round2(totals?.usd || 0),
+    // Lo que de verdad entró: solo lo aprobado. Es el número que el panel debe
+    // enseñar como "cobrado".
+    usdCobrado: statusTotals.approved,
+    ordenesCobradas: statusCounts.approved,
+    monedasCobradas: statusCoins.approved,
+    usdPendiente: statusTotals.pending,
+    ordenesPendientes: statusCounts.pending,
+    usdRechazado: statusTotals.rejected,
+    ordenesRechazadas: statusCounts.rejected,
     compradores: buyers.map((b) => ({
       usuario: b.u?.username || 'desconocido',
       email: b.u?.email || null,
@@ -258,6 +292,21 @@ async function approveOrder({ orderId, adminId, auto = false, note }) {
     packageId: order.packageId,
     provider: 'manual',
   });
+
+  // Reparto del dinero (40% admin / 60% bóveda). Va aparte del abono y es
+  // idempotente por su propio `externalId`, así que un reintento de aprobación
+  // no vuelve a repartir. Se hace después de acreditar para que, si el reparto
+  // falla, el comprador ya tenga sus monedas.
+  await vaultService
+    .settlePurchase({
+      externalId: `manual_${order._id}`,
+      priceUsd: order.priceUsd,
+      method: 'manual',
+      userId: order.user,
+    })
+    .catch((err) => {
+      console.warn(`[BÓVEDA] No se pudo registrar la venta ${order._id}: ${err.message}`);
+    });
 
   const transaction =
     result.transactionId ||

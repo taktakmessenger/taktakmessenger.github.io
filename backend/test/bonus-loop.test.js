@@ -203,6 +203,6 @@ test('a cash-out from a pure bonus loop yields nothing', async () => {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${farmer.token}`)
-    .send({ amount: 10, method: 'paypal', details: 'x@example.com' });
+    .send({ amount: 10, method: 'crypto', details: '0x4444444444444444444444444444444444444444' });
   assert.equal(res.status, 400);
 });

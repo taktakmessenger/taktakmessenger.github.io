@@ -11,6 +11,7 @@ const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
 const manualPaymentService = require('../services/manualPaymentService');
+const vaultService = require('../services/vaultService');
 const asistakService = require('../services/asistakService');
 const pokerEventService = require('../services/pokerEventService');
 const adminAssistant = require('../services/adminAssistant');
@@ -158,6 +159,39 @@ router.post(
       message: `Convertiste ${result.coins} Monedas en ${result.diamonds} Diamantes`,
       ...result,
     });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Bóveda cripto                                                       */
+/* ------------------------------------------------------------------ */
+//
+// La bóveda guarda el 60% de cada compra (el dinero de los usuarios) y la
+// ganancia del 40% va a la billetera del administrador. Aquí se consulta el
+// estado y está el botón de emergencia que mueve la ganancia a la APP madre.
+
+// Estado de la bóveda: cuánto entró, cuánto es ganancia y cuánto se debe a los
+// usuarios. Es la vista que responde "¿cuánto dinero hay y de quién es?".
+router.get(
+  '/vault',
+  asyncHandler(async (_req, res) => {
+    res.json(await vaultService.getVaultStatus());
+  })
+);
+
+// Botón de emergencia: mueve la ganancia del administrador a la APP madre.
+// Exige `confirm: true` y NUNCA toca el dinero de los usuarios.
+router.post(
+  '/vault/emergency-transfer',
+  [body('confirm').optional().isBoolean().toBoolean()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await vaultService.emergencyTransferToMotherApp({
+      adminId: req.user.userId,
+      confirm: req.body.confirm === true,
+      destination: req.body.destination,
+    });
+    res.json(result);
   })
 );
 

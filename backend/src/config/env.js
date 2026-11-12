@@ -178,8 +178,8 @@ function assertPackagesCoverPayout(packages) {
  * El operador declara, en `MANUAL_PAYMENT_METHODS`, dónde cobra y con qué
  * etiqueta. Es JSON para poder añadir un método sin tocar código:
  *
- *   [{"id":"paypal","label":"PayPal","link":"https://paypal.me/ejemplo",
- *     "details":"Paga con PayPal y pega el número de operación."}]
+ *   [{"id":"usdt-bep20","label":"USDT (BNB Smart Chain)","asset":"USDT",
+ *     "network":"BEP20","payTo":"0x...","details":"Envía USDT por BEP20 y pega el hash."}]
  *
  * `id` es lo que se guarda en la orden; `label` es lo que ve el usuario; `details`
  * son las instrucciones de pago que se le muestran y `link` es un enlace directo
@@ -187,6 +187,12 @@ function assertPackagesCoverPayout(packages) {
  * pagar. `payTo` es un dato de pago directo (correo, cuenta) que se muestra
  * además del enlace. Sin lista, la tienda no ofrece cobro manual y la única vía
  * son las pasarelas.
+ *
+ * Un método puede además ser una **billetera cripto** declarando `asset` (p. ej.
+ * "USDT") y `network` (p. ej. "TRC20"). En ese caso `payTo` es la dirección de
+ * la wallet y la tienda la ofrece con su código QR y la red bien visible, porque
+ * enviar USDT por la red equivocada pierde el dinero. El cobro sigue siendo
+ * manual: el usuario paga desde su wallet y pega el hash de la transacción.
  */
 function resolveManualPaymentMethods() {
   if (!process.env.MANUAL_PAYMENT_METHODS) return [];
@@ -210,14 +216,20 @@ function resolveManualPaymentMethods() {
       throw new Error(`Duplicate manual payment method id: ${method.id}`);
     }
     seen.add(method.id);
+    const asset = method.asset ? String(method.asset).trim().slice(0, 20) : '';
     return {
       id: String(method.id).slice(0, 40),
       label: String(method.label).slice(0, 60),
       details: method.details ? String(method.details).slice(0, 500) : '',
       link: resolvePaymentLink(method.link),
-      // Dato de pago directo (un correo de Zinli, una cuenta…). Se muestra
+      // Dato de pago directo (una dirección, una cuenta…). Se muestra
       // junto al enlace para quien prefiere pagar sin abrir otra página.
       payTo: method.payTo ? String(method.payTo).trim().slice(0, 120) : '',
+      // Moneda y red solo tienen sentido juntas: una dirección sin red es
+      // peligrosa (el usuario no sabe por dónde enviar) y una red sin moneda no
+      // dice nada. Si falta una, se trata como método normal y no como wallet.
+      asset,
+      network: asset && method.network ? String(method.network).trim().slice(0, 20) : '',
     };
   });
 }
@@ -230,6 +242,71 @@ function resolvePaymentLink(link) {
   const value = String(link).trim();
   if (!/^https?:\/\//i.test(value)) return '';
   return value.slice(0, 300);
+}
+
+/**
+ * Billeteras cripto del sistema (por defecto USDT en BNB Smart Chain / BEP20).
+ *
+ * Hay dos direcciones, y la separación no es cosmética:
+ *
+ *  - `adminAddress` recibe el 40% de cada compra: es la ganancia de la
+ *    plataforma, dinero que ya es del dueño.
+ *  - `vaultAddress` es la bóveda: guarda el 60% restante, que es dinero de los
+ *    usuarios y del que salen los retiros. Si se mezclara con la del admin no
+ *    habría forma de saber cuánto se le debe a los usuarios.
+ *
+ * El pago automático de retiros va detrás de `vaultPayoutEnabled` porque exige
+ * tener la clave privada de la bóveda en el servidor: quien la lea puede vaciar
+ * la bóveda. Con la bandera apagada los retiros se pagan a mano (el admin
+ * aprueba y envía), que es la opción segura por defecto.
+ */
+function resolveCrypto() {
+  const network = (process.env.CRYPTO_NETWORK || 'BEP20').toUpperCase();
+  const isBep20 = network === 'BEP20' || network === 'BSC';
+
+  // Direcciones públicas por defecto para BEP20 (se pueden cambiar por entorno).
+  const defaults = isBep20
+    ? {
+        adminAddress: '0xb8ae095350e8b141204b4bd61894be08efed54fc',
+        vaultAddress: '0xa5104da3580c390ce8d0e76c6aaafb0d66f3fa04',
+        usdtContract: '0x55d398326f99059fF775485246999027B3197955',
+        usdtDecimals: 18,
+        rpcUrl: 'https://bsc-dataseed.binance.org',
+        chainId: 56,
+        explorer: 'https://bscscan.com',
+      }
+    : {};
+
+  const adminAddress = (process.env.CRYPTO_ADMIN_ADDRESS || defaults.adminAddress || '').trim();
+  const vaultAddress = (process.env.CRYPTO_VAULT_ADDRESS || defaults.vaultAddress || '').trim();
+  const usdtContract = (process.env.CRYPTO_USDT_CONTRACT || defaults.usdtContract || '').trim();
+  const usdtDecimals = Number(process.env.CRYPTO_USDT_DECIMALS ?? defaults.usdtDecimals ?? 18);
+  const rpcUrl = (process.env.CRYPTO_RPC_URL || defaults.rpcUrl || '').trim();
+
+  if (!Number.isInteger(usdtDecimals) || usdtDecimals < 0 || usdtDecimals > 36) {
+    throw new Error('CRYPTO_USDT_DECIMALS must be an integer between 0 and 36');
+  }
+
+  return {
+    network,
+    adminAddress,
+    vaultAddress,
+    usdtContract,
+    usdtDecimals,
+    rpcUrl,
+    chainId: Number(process.env.CRYPTO_CHAIN_ID ?? defaults.chainId ?? 0),
+    explorer: (process.env.CRYPTO_EXPLORER || defaults.explorer || '').trim(),
+    vaultPayoutEnabled: process.env.CRYPTO_VAULT_PAYOUT_ENABLED === 'true',
+    // Clave privada de la bóveda. Solo se usa con el pago automático encendido;
+    // nunca se registra ni se envía al cliente.
+    vaultPrivateKey: process.env.CRYPTO_VAULT_PRIVATE_KEY || null,
+    // Confirmaciones mínimas para dar por bueno un depósito.
+    confirmations: Number(process.env.CRYPTO_CONFIRMATIONS ?? 3),
+    // Bóveda declarada: las dos direcciones son lo mínimo para repartir.
+    get configured() {
+      return Boolean(this.adminAddress && this.vaultAddress);
+    },
+  };
 }
 
 // Porcentaje del programa de referidos. Fuera de [0,1) es un error de
@@ -462,30 +539,17 @@ const env = {
   // invente un "pago completado" y se regale monedas.
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
 
-  // PayPal. `paypalApiBase` cambia entre sandbox y producción, que es la
-  // diferencia entre cobrar de verdad y no cobrar nada.
-  paypalClientId: process.env.PAYPAL_CLIENT_ID || null,
-  paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET || null,
-  // Identificador del webhook en PayPal. Sin él no se puede verificar la firma,
-  // así que el webhook se cierra.
-  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || null,
-  // Interruptor operativo. Con `PAYPAL_ENABLED=false` PayPal queda bloqueado en
-  // toda la app —pasarela, alta de cuenta y retiros— sin borrar ninguna clave:
-  // al volver a `true` se reactiva tal cual. Sirve para apagar PayPal por una
-  // incidencia sin desplegar código. Por defecto activo.
-  paypalEnabled: process.env.PAYPAL_ENABLED !== 'false',
-  paypalApiBase:
-    process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com',
-  paypalCurrency: (process.env.PAYPAL_CURRENCY || 'USD').toUpperCase(),
-
   // Cobro manual. No depende de ninguna pasarela ni de webhooks: el usuario
-  // paga por fuera (Zinli, pago móvil, transferencia…) y un administrador
+  // paga por fuera (billetera cripto) y un administrador
   // aprueba la orden, que entonces acredita las monedas. Es la vía que funciona
   // sin cuenta de empresa y sin mantener nada encendido.
   //
   // Va apagado por defecto: sin métodos configurados la tienda no ofrece nada
   // manual, para no prometer un cobro que nadie va a revisar.
   manualPaymentMethods: resolveManualPaymentMethods(),
+
+  // Billeteras cripto (USDT/BEP20): la del admin (40%) y la bóveda (60%).
+  crypto: resolveCrypto(),
 
   // Asistente de revisión de pagos manuales.
   //
@@ -617,7 +681,7 @@ const env = {
   //    qué comprobaciones se hacen).
   //  - `diditWebhookSecret` verifica que el webhook viene de Didit de verdad.
   //  - `diditApiBase` es configurable para poder apuntar los tests a un
-  //    servidor falso, igual que Stripe y PayPal.
+  //    servidor falso, igual que Stripe.
   diditApiKey: process.env.DIDIT_API_KEY || null,
   diditWorkflowId: process.env.DIDIT_WORKFLOW_ID || null,
   diditWebhookSecret: process.env.DIDIT_WEBHOOK_SECRET || null,
@@ -691,7 +755,7 @@ const env = {
   //
   // Es lo que permite que dos personas que no comparten idioma hablen por el
   // chat, por nota de voz y por llamada, cada una en el suyo. El proveedor es
-  // conmutable y opcional, igual que Stripe o PayPal:
+  // conmutable y opcional, igual que Stripe:
   //
   //   TRANSLATE_PROVIDER=deepl|google|libretranslate|mymemory|local|auto
   //

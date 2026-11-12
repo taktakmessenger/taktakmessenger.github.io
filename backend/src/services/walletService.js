@@ -251,7 +251,7 @@ async function compensate({ userId, bonusC = 0, ttcC = 0 }) {
  * valor libre permitiría etiquetas arbitrarias ("banco-que-no-existe") que luego
  * nadie sabe interpretar al pagar.
  */
-const PAYOUT_METHODS = ['paypal', 'zelle', 'crypto'];
+const PAYOUT_METHODS = ['crypto'];
 
 /**
  * Solicita un retiro de Diamantes (TTC-R).

@@ -56,7 +56,7 @@ function withAssistant(base, extra = {}) {
   env.assistantApiKey = 'test-key';
   env.assistantApiBase = base;
   Object.assign(env, extra);
-  env.manualPaymentMethods = [{ id: 'zinli', label: 'Zinli', details: 'Zinli' }];
+  env.manualPaymentMethods = [{ id: 'usdt-bep20', label: 'USDT', details: 'USDT BEP20' }];
   return () => Object.assign(env, {
     assistantApiKey: original.key,
     assistantApiBase: original.base,
@@ -126,7 +126,7 @@ test('la revisión devuelve una propuesta por orden sin mover ninguna', async ()
     await agent
       .post('/api/payments/manual/orders')
       .set('Authorization', `Bearer ${user.token}`)
-      .send({ packageId: 'starter', method: 'zinli', reference: 'REF-777' });
+      .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'REF-777' });
 
     const { configured, reviewed } = await manualPaymentService.reviewPending();
     assert.equal(configured, true);
@@ -152,7 +152,7 @@ test('con la aprobación automática apagada no aprueba aunque el asistente est�
     await agent
       .post('/api/payments/manual/orders')
       .set('Authorization', `Bearer ${user.token}`)
-      .send({ packageId: 'starter', method: 'zinli', reference: 'REF-888' });
+      .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'REF-888' });
 
     const result = await manualPaymentService.autoApprovePending();
     assert.equal(result.approved, 0);
@@ -178,7 +178,7 @@ test('encendida, la aprobación automática acredita y deja rastro', async () =>
     await agent
       .post('/api/payments/manual/orders')
       .set('Authorization', `Bearer ${user.token}`)
-      .send({ packageId: 'starter', method: 'zinli', reference: 'REF-999' });
+      .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'REF-999' });
 
     const result = await manualPaymentService.autoApprovePending();
     assert.equal(result.approved, 1);
@@ -210,7 +210,7 @@ test('la aprobación automática no toca un importe por encima del límite', asy
     await agent
       .post('/api/payments/manual/orders')
       .set('Authorization', `Bearer ${user.token}`)
-      .send({ packageId: 'starter', method: 'zinli', reference: 'REF-000' });
+      .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'REF-000' });
 
     const result = await manualPaymentService.autoApprovePending();
     assert.equal(result.approved, 0);
@@ -237,7 +237,7 @@ test('una referencia repetida no se aprueba sola', async () => {
       await agent
         .post('/api/payments/manual/orders')
         .set('Authorization', `Bearer ${user.token}`)
-        .send({ packageId: 'starter', method: 'zinli', reference: 'MISMA-REF' });
+        .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'MISMA-REF' });
     }
 
     const result = await manualPaymentService.autoApprovePending();

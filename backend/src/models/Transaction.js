@@ -15,6 +15,10 @@ const transactionSchema = new mongoose.Schema(
         'gift_bonus',
         'withdraw',
         'purchase',
+        // Ingreso bruto de una venta de monedas. Guarda lo que pagó el
+        // comprador; el reparto 40/60 va en `details`. Es la cifra de la que
+        // salen "cuánto entró" y "cuánto es de la plataforma".
+        'sale_revenue',
         'convert',
         'platform',
         'platform_bonus',

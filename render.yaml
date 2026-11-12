@@ -111,16 +111,30 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: PAYPAL_CLIENT_ID
-        sync: false
-      - key: PAYPAL_CLIENT_SECRET
-        sync: false
-      # Cobro manual (PayPal, Zinli…). Va con valor y no como secreto porque
-      # son los datos de pago que se le muestran al usuario, no credenciales.
-      # `link` es la página de pago a la que el usuario va directo y `payTo` el
-      # dato de pago directo (el correo de Zinli) que se muestra junto al enlace.
+      # Cobro manual. Va con valor y no como secreto porque son los datos de pago
+      # que se le muestran al usuario, no credenciales.
+      # Cobro SOLO con billetera cripto (USDT en BNB Smart Chain / BEP20).
+      # `asset`+`network` hacen que la tienda lo pinte como billetera con QR; la
+      # dirección es la BÓVEDA, que recibe el 60% de los usuarios.
       - key: MANUAL_PAYMENT_METHODS
-        value: '[{"id":"paypal","label":"PayPal","link":"","payTo":"taktak.messenger@gmail.com","details":"Paga el importe exacto en PayPal y pega aquí el número de operación."},{"id":"zinli","label":"Zinli","link":"https://recargas.zinli.com/mbbrqGmkwnhJk3C2LHDhkt","details":"Recarga con Zinli usando el enlace o el pago directo, y pega aquí el número de referencia."}]'
+        value: '[{"id":"usdt-bep20","label":"USDT (BNB Smart Chain)","asset":"USDT","network":"BEP20","payTo":"0xa5104da3580c390ce8d0e76c6aaafb0d66f3fa04","details":"Envía USDT por la red BNB Smart Chain (BEP20) a esta dirección y pega el hash de la transacción."}]'
+      # Billeteras del sistema: la del admin (40%) y la bóveda (60%).
+      - key: CRYPTO_NETWORK
+        value: BEP20
+      - key: CRYPTO_ADMIN_ADDRESS
+        value: '0xb8ae095350e8b141204b4bd61894be08efed54fc'
+      - key: CRYPTO_VAULT_ADDRESS
+        value: '0xa5104da3580c390ce8d0e76c6aaafb0d66f3fa04'
+      - key: CRYPTO_USDT_CONTRACT
+        value: '0x55d398326f99059fF775485246999027B3197955'
+      - key: CRYPTO_USDT_DECIMALS
+        value: '18'
+      - key: CRYPTO_RPC_URL
+        value: 'https://bsc-dataseed.binance.org'
+      # Pago automático de retiros desde la bóveda. Apagado: exige la clave
+      # privada de la bóveda en el servidor. Con false, el admin paga a mano.
+      - key: CRYPTO_VAULT_PAYOUT_ENABLED
+        value: 'false'
       # Asistente de revisión (opcional). Sin clave queda apagado y el panel
       # manual funciona igual. La base y el modelo deben ir juntos: el modelo es
       # el que entiende esa base (gpt-oss-120b es de Groq, gpt-4o-mini de OpenAI).

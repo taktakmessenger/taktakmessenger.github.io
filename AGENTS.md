@@ -1394,8 +1394,8 @@ siguiendo el mismo patrón que el botón de Google.
   `graph.facebook.com` y `www.facebook.com` (conexión); sin eso el botón falla
   en el navegador aunque el backend esté bien.
 - **El Graph API se puede apuntar a un servidor falso** con
-  `FACEBOOK_GRAPH_BASE`, igual que Stripe y PayPal, para probar la ruta de
-  extremo a extremo sin salir a internet.
+  `FACEBOOK_GRAPH_BASE`, igual que Stripe, para probar la ruta de extremo a
+  extremo sin salir a internet.
 
 Verificación: `backend/test/facebook.test.js` (cerrado sin configurar, token
 inválido, token de otra app, alta nueva, enlace con cuenta existente, providers)
@@ -1473,11 +1473,11 @@ señalización SFU con acuse de recibo, códec de vídeo, aislamiento entre sala
 limpieza al desconectar). La disposición de la rejilla se prueba aparte, sin
 navegador, en `frontend/test/liveGrid.test.js`.
 
-## Métodos de pago guardados (tarjeta y PayPal)
+## Métodos de pago guardados (tarjeta)
 
-El usuario registra su tarjeta y su cuenta de PayPal una vez y luego paga en un
-toque. Pantalla: `frontend/src/components/PaymentMethods.jsx`, vista
-`metodos-pago` en `App.jsx`, alcanzable desde Monedero y desde la tienda.
+El usuario registra su tarjeta una vez y luego paga en un toque. Pantalla:
+`frontend/src/components/PaymentMethods.jsx`, vista `metodos-pago` en `App.jsx`,
+alcanzable desde Monedero y desde la tienda.
 
 - **El número de tarjeta NUNCA entra en TAK TAK.** Stripe.js lo manda del
   navegador directo a Stripe con la clave publicable (`/api/payments/config` la
@@ -1485,17 +1485,14 @@ toque. Pantalla: `frontend/src/components/PaymentMethods.jsx`, vista
   últimos 4 y caducidad, y siempre leídos de Stripe
   (`stripeService.retrievePaymentMethod`), nunca del cliente. Guardar el número
   metería al proyecto en PCI-DSS y un vuelco daría tarjetas usables.
-- **PayPal guarda un `vault_id`**, no una tarjeta. Es un secreto de cobro: vive
-  en `PaymentMethod.providerRef`, que no se expone jamás (hay test).
 - **Cobrar y acreditar están separados.** `POST /methods/:id/pay` lanza el cargo
-  (`chargeStoredPaymentMethod` / `chargeStoredVault`) pero NO acredita monedas:
+  (`chargeStoredPaymentMethod`) pero NO acredita monedas:
   eso lo hace el webhook del proveedor. Acreditar en la respuesta regalaría
   monedas si el banco rechaza el cargo después.
 - **El importe sale del catálogo del servidor** (`env.coinPackages`), nunca del
   cliente, igual que en el checkout.
 - **Clave de idempotencia** por (usuario, método, paquete, minuto) en cabecera
-  (`Idempotency-Key` en Stripe, `PayPal-Request-Id` en PayPal): un doble clic no
-  cobra dos veces.
+  (`Idempotency-Key` en Stripe): un doble clic no cobra dos veces.
 - **Propiedad**: todas las consultas filtran por `user`; conocer el id de otro no
   permite ver, cobrar ni borrar (test de aislamiento).
 - **Baja**: primero se revoca en Mongo y luego se intenta desvincular del
@@ -1506,12 +1503,11 @@ toque. Pantalla: `frontend/src/components/PaymentMethods.jsx`, vista
   un cliente; sin él Stripe lo rechaza.
 
 Config (`backend/.env`): `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `STRIPE_API_BASE` (para tests), `PAYPAL_CLIENT_ID`,
-`PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_API_BASE`.
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_API_BASE` (para tests).
 
 Tests: `backend/test/payment-methods.test.js` contra un servidor falso real
-(`backend/test/fakeProviders.js`) que se levanta en localhost y al que se apuntan
-`stripeApiBase`/`paypalApiBase`. Es un HTTP de verdad, no un doble de funciones,
+(`backend/test/fakeProviders.js`) que se levanta en localhost y al que se apunta
+`stripeApiBase`. Es un HTTP de verdad, no un doble de funciones,
 así que ejercita form-encode, cabeceras y parseo. `stripeApiBase` se lee en cada
 llamada (`apiBase()`), no al cargar el módulo, para que el test pueda
 redirigirlo. Frontend: `frontend/test/stripe.test.js` sobre la lógica de

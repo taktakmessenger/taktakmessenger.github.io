@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { CallProvider, useCall } from './contexts/CallContext';
 import { VoiceRoomProvider } from './contexts/VoiceRoomContext';
+import { GroupCallProvider } from './contexts/GroupCallContext';
 import Navigation from './components/Navigation';
 import Splash from './components/Splash';
 import Home from './components/Home';
@@ -17,6 +18,7 @@ import Verification from './components/Verification';
 import AuthForm from './components/AuthForm';
 import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
+import GroupCallOverlay from './components/GroupCallOverlay';
 import Settings from './components/Settings';
 import NotificationPrompt from './components/NotificationPrompt';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -28,8 +30,6 @@ import Explore from './components/Explore';
 import BlockedUsers from './components/BlockedUsers';
 import PublicProfile from './components/PublicProfile';
 import CoinStore from './components/CoinStore';
-import PaymentResult from './components/PaymentResult';
-import PaymentMethods from './components/PaymentMethods';
 import api from './api/client';
 import { getToken } from './lib/session';
 import { syncPushSubscription } from './services/push.js';
@@ -141,9 +141,6 @@ function Shell() {
   // formulario, no llegaría a verse nunca. Se baja al terminar el flujo.
   const [authOpen, setAuthOpen] = useState(false);
   const [giftTarget, setGiftTarget] = useState(null);
-  const [paymentProvider, setPaymentProvider] = useState('stripe');
-  // Orden de PayPal que hay que confirmar al volver de la aprobación.
-  const [paypalLinkOrder, setPaypalLinkOrder] = useState(null);
   // Usuario con el que se quiere abrir un chat desde el feed. Se pasa a
   // Mensajes para que abra el hilo directamente en vez de dejar al usuario
   // buscándolo a mano en la bandeja.
@@ -180,7 +177,7 @@ function Shell() {
   }, [splashFading]);
 
   // Anything other than the feed needs a session.
-  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'pago-exito'].includes(view);
+  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda'].includes(view);
   // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
   // hasta que el flujo termina. Sin levantarlo aquí, el alta que acaba de crear
   // la sesión cerraría el formulario en el acto y se perdería la pantalla de
@@ -190,8 +187,7 @@ function Shell() {
   }, [needsAuth, user]);
 
   // Abrir una pantalla directamente cuando se llega desde fuera: el push de un
-  // aviso (`/?view=activity`) o la vuelta de una pasarela de pago
-  // (`/?view=pago-exito`). Se lee una sola vez, al arrancar: a partir de ahí
+  // aviso (`/?view=activity`). Se lee una sola vez, al arrancar: a partir de ahí
   // manda el estado, no la URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -203,18 +199,6 @@ function Shell() {
     // pantalla de verificación refresca el estado al montarse, así que basta
     // con abrirla.
     if (target === 'verification') setView('verification');
-    if (target === 'pago-exito') {
-      setPaymentProvider(params.get('provider') || 'stripe');
-      setView('pago-exito');
-    }
-    // Vuelta de la vinculación de PayPal: PayPal añade `token=<orden>` a la URL
-    // de retorno. Ese token es el id de la orden, y hay que confirmarlo para
-    // guardar el método. Se guarda aquí y la pantalla lo confirma al montarse.
-    if (params.get('link') === '1' && params.get('token')) {
-      setPaypalLinkOrder(params.get('token'));
-      setView('metodos-pago');
-    }
-    if (target === 'metodos-pago') setView('metodos-pago');
     // Enlace compartido de un vídeo (`/?video=<id>`). Se guarda el id y se deja
     // el feed como vista: el feed lo abre él mismo al cargar. No se cambia la
     // URL después, para no ensuciar el historial del navegador.
@@ -320,17 +304,6 @@ function Shell() {
           <CoinStore
             onBack={() => setView('wallet')}
             onPurchased={() => setView('wallet')}
-            onManageMethods={() => setView('metodos-pago')}
-          />
-        );
-      case 'pago-exito':
-        return <PaymentResult provider={paymentProvider} onDone={() => setView('wallet')} />;
-      case 'metodos-pago':
-        return (
-          <PaymentMethods
-            onBack={() => setView('wallet')}
-            paypalOrderId={paypalLinkOrder}
-            onPaypalConfirmed={() => setPaypalLinkOrder(null)}
           />
         );
       case 'profile':
@@ -450,6 +423,10 @@ function Shell() {
           debe verse sin cambiar de pestaña. */}
       <CallOverlay />
 
+      {/* La llamada grupal, por el mismo motivo: suena aunque estés en otra
+          pestaña. */}
+      <GroupCallOverlay />
+
       {/* La barra de la sala de voz también vive fuera de las vistas: si se
           desmontara al cambiar de pestaña, el audio remoto se cortaría. Es lo
           que permite seguir en el feed mientras hablas con tu creator. */}
@@ -490,7 +467,9 @@ export default function App() {
       <SocketProvider>
         <CallProvider>
           <VoiceRoomProvider>
-            <Shell />
+            <GroupCallProvider>
+              <Shell />
+            </GroupCallProvider>
           </VoiceRoomProvider>
         </CallProvider>
       </SocketProvider>

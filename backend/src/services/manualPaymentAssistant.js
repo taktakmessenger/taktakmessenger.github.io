@@ -20,7 +20,7 @@ function isConfigured() {
 // hace sospechosa. Sin él, el modelo aprueba "porque parece bien", que es
 // justo lo contrario de lo que se necesita para entregar dinero.
 const SYSTEM_PROMPT = `Eres el revisor de pagos de TAK TAK, una app de video con monedas TTC.
-Recibes una orden de pago manual: el usuario dice que pagó por fuera (Zinli, pago móvil, transferencia) y dejó una referencia.
+Recibes una orden de pago manual: el usuario dice que pagó por fuera (billetera cripto, transferencia) y dejó una referencia.
 Tu trabajo es proponer si se puede aprobar (acreditar monedas) o hay que rechazarla, y con qué seguridad.
 
 Aprueba (approve) solo si:

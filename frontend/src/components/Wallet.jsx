@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 
-// Etiquetas de los métodos de retiro. El servidor decide *cuáles* están
-// disponibles (p. ej. PayPal puede estar apagado); aquí solo se pone el nombre.
-const WITHDRAW_LABELS = { paypal: 'PayPal', zelle: 'Zelle', crypto: 'Cripto' };
+// Los retiros son solo a billetera cripto (USDT). El servidor manda cuáles
+// están disponibles; hoy la única vía es `crypto`.
+const WITHDRAW_LABELS = { crypto: 'Billetera cripto (USDT)' };
 
 // Clave de idempotencia para una solicitud de retiro: una por intento. Si el
 // envío se reintenta (red, doble toque), el servidor devuelve la misma
@@ -57,8 +57,8 @@ export default function Wallet({ onBack, onNavigate }) {
 
   // Los límites de retiro los fija el servidor. Se piden al montar para poder
   // validar en el formulario con las mismas cifras que aplica el backend. La
-  // lista de métodos también viene del servidor, así que PayPal desaparece si
-  // el operador lo apaga.
+  // lista de métodos también viene del servidor: solo se ofrece lo que el
+  // operador tenga declarado.
   useEffect(() => {
     api
       .get('/wallet/withdraw/config')
@@ -236,9 +236,6 @@ export default function Wallet({ onBack, onNavigate }) {
         <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(true)}>
           💸 Retirar Diamantes
         </button>
-        <button type="button" className="btn-secondary" onClick={() => onNavigate?.('metodos-pago')}>
-          💳 Métodos de pago
-        </button>
       </div>
 
       {showGift && (
@@ -309,25 +306,30 @@ export default function Wallet({ onBack, onNavigate }) {
                   Recibirás ≈ {(Number(withdraw.amount) * withdrawConfig.usdRate).toFixed(2)} USD
                 </small>
               )}
-              <select
-                value={withdraw.method}
-                onChange={(e) => setWithdraw({ ...withdraw, method: e.target.value })}
-              >
-                {(withdrawConfig?.methods || []).map((m) => (
-                  <option key={m} value={m}>{WITHDRAW_LABELS[m] || m}</option>
-                ))}
-              </select>
+              {(withdrawConfig?.methods || []).length > 1 && (
+                <select
+                  value={withdraw.method}
+                  onChange={(e) => setWithdraw({ ...withdraw, method: e.target.value })}
+                >
+                  {(withdrawConfig?.methods || []).map((m) => (
+                    <option key={m} value={m}>{WITHDRAW_LABELS[m] || m}</option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
-                placeholder="Correo o cuenta donde cobrar"
+                placeholder="Tu dirección de billetera (0x…)"
                 value={withdraw.details}
                 onChange={(e) => setWithdraw({ ...withdraw, details: e.target.value })}
                 maxLength={200}
                 required
               />
-              <small className="muted">
-                Revisa bien estos datos: el pago se envía a la cuenta que escribas aquí.
-              </small>
+              {withdrawConfig?.network && (
+                <small className="muted">
+                  ⚠️ Red obligatoria: <strong>{withdrawConfig.network}</strong>. Por otra red
+                  el dinero se pierde. El retiro se envía a la dirección que escribas aquí.
+                </small>
+              )}
               <div className="modal-buttons">
                 <button type="submit" className="btn-primary">Solicitar</button>
                 <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(false)}>

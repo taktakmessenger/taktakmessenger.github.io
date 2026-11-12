@@ -18,10 +18,10 @@ function loadEnv(rawValue) {
 
 test('un enlace http(s) se conserva', () => {
   const env = loadEnv(JSON.stringify([
-    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
+    { id: 'pago-link', label: 'Pago con enlace', link: 'https://example.com/pagar', details: 'Paga y pega la operación.' },
   ]));
 
-  assert.equal(env.manualPaymentMethods[0].link, 'https://paypal.me/ejemplo');
+  assert.equal(env.manualPaymentMethods[0].link, 'https://example.com/pagar');
   assert.equal(env.manualPaymentMethods[0].details, 'Paga y pega la operación.');
 });
 
@@ -43,14 +43,14 @@ test('sin enlace queda vacío', () => {
 
 test('payTo se conserva y se recorta', () => {
   const env = loadEnv(JSON.stringify([
-    { id: 'zinli', label: 'Zinli', link: 'https://recargas.zinli.com/x', payTo: '  cobro@example.com  ' },
+    { id: 'pago', label: 'Pago', link: 'https://example.com/x', payTo: '  cobro@example.com  ' },
   ]));
 
   assert.equal(env.manualPaymentMethods[0].payTo, 'cobro@example.com');
 });
 
 test('sin payTo queda vacío', () => {
-  const env = loadEnv(JSON.stringify([{ id: 'zinli', label: 'Zinli' }]));
+  const env = loadEnv(JSON.stringify([{ id: 'pago', label: 'Pago' }]));
 
   assert.equal(env.manualPaymentMethods[0].payTo, '');
 });
@@ -63,4 +63,49 @@ test('sin métodos configurados la lista queda vacía', () => {
 
 test('un JSON inválido falla al arrancar', () => {
   assert.throws(() => loadEnv('no-es-json'), /valid JSON/);
+});
+
+test('una billetera declara moneda y red', () => {
+  const env = loadEnv(JSON.stringify([
+    {
+      id: 'usdt-trc20',
+      label: 'USDT (TRC20)',
+      payTo: 'TXk9abc',
+      asset: 'USDT',
+      network: 'TRC20',
+    },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].asset, 'USDT');
+  assert.equal(env.manualPaymentMethods[0].network, 'TRC20');
+  assert.equal(env.manualPaymentMethods[0].payTo, 'TXk9abc');
+});
+
+test('sin moneda no hay red: no se marca como billetera a medias', () => {
+  // Una red sin moneda no dice nada, así que se descarta para no ofrecer una
+  // billetera incompleta que el usuario no sabría usar.
+  const env = loadEnv(JSON.stringify([
+    { id: 'raro', label: 'Raro', payTo: 'algo', network: 'TRC20' },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].asset, '');
+  assert.equal(env.manualPaymentMethods[0].network, '');
+});
+
+test('moneda sin red también queda como método normal', () => {
+  const env = loadEnv(JSON.stringify([
+    { id: 'raro2', label: 'Raro', payTo: 'algo', asset: 'USDT' },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].asset, 'USDT');
+  assert.equal(env.manualPaymentMethods[0].network, '');
+});
+
+test('un método normal no trae moneda ni red', () => {
+  const env = loadEnv(JSON.stringify([
+    { id: 'pago', label: 'Pago', payTo: 'cobro@example.com' },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].asset, '');
+  assert.equal(env.manualPaymentMethods[0].network, '');
 });

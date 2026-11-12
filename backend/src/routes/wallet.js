@@ -8,16 +8,17 @@ const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
 const env = require('../config/env');
-const paypalService = require('../services/paypalService');
 
 const router = express.Router();
 
-// Métodos de retiro que la app ofrece en el formulario. PayPal se filtra aparte
-// porque además de estar soportado tiene un interruptor operativo: con PayPal
-// apagado no debe aparecer como opción ni aceptarse una solicitud.
-const WITHDRAW_METHODS = ['paypal', 'zelle', 'crypto'];
-const withdrawMethodAllowed = (method) =>
-  method !== 'paypal' || paypalService.isEnabled();
+// Los retiros van SOLO a billetera cripto (USDT). Una sola vía, sin cuentas de
+// terceros ni comisiones de intermediario.
+const WITHDRAW_METHODS = ['crypto'];
+const withdrawMethodAllowed = (method) => method === 'crypto';
+
+// Una dirección EVM (0x + 40 hex) es lo único que se acepta como destino. Validar
+// aquí evita guardar una dirección mal escrita que luego perdería el dinero.
+const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 
 // Money-moving endpoints get a tighter limit than general reads.
 const moneyLimiter = rateLimit({
@@ -170,7 +171,10 @@ router.post(
     body('details')
       .trim()
       .notEmpty()
-      .withMessage('Indica la cuenta o los datos de cobro')
+      .withMessage('Indica tu dirección de billetera')
+      .bail()
+      .matches(EVM_ADDRESS)
+      .withMessage('Dirección de billetera inválida (debe empezar por 0x y tener 40 caracteres)')
       .isLength({ max: 200 }),
     // Clave de idempotencia del cliente: opcional, pero si viene se acota.
     body('idempotencyKey')
@@ -208,8 +212,11 @@ router.get(
       min: env.withdrawals.min,
       dailyCap: env.withdrawals.dailyCap,
       usdRate: env.withdrawals.usdRate,
-      // Solo los métodos que hoy se pueden usar: con PayPal apagado no se
-      // ofrece como opción, así que la UI no lo pinta.
+      // Red obligatoria del retiro, para que la UI la muestre en grande: enviar
+      // USDT por otra red pierde el dinero.
+      network: env.crypto.network,
+      asset: 'USDT',
+      // Solo los métodos que hoy se pueden usar (hoy, solo cripto).
       methods: WITHDRAW_METHODS.filter(withdrawMethodAllowed),
     });
   })

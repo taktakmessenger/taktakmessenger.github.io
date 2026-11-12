@@ -24,20 +24,11 @@ async function withProviders(behavior, fn) {
     stripeSecretKey: env.stripeSecretKey,
     stripePublishableKey: env.stripePublishableKey,
     stripeApiBase: env.stripeApiBase,
-    paypalClientId: env.paypalClientId,
-    paypalClientSecret: env.paypalClientSecret,
-    paypalApiBase: env.paypalApiBase,
   };
 
   env.stripeSecretKey = 'sk_test_fake';
   env.stripePublishableKey = 'pk_test_fake';
   env.stripeApiBase = fake.stripeUrl;
-  env.paypalClientId = 'paypal_client_fake';
-  env.paypalClientSecret = 'paypal_secret_fake';
-  env.paypalApiBase = fake.paypalUrl;
-
-  const paypal = require('../src/services/paypalService');
-  paypal._resetTokenCache();
 
   try {
     return await fn(fake);
@@ -45,10 +36,6 @@ async function withProviders(behavior, fn) {
     env.stripeSecretKey = original.stripeSecretKey;
     env.stripePublishableKey = original.stripePublishableKey;
     env.stripeApiBase = original.stripeApiBase;
-    env.paypalClientId = original.paypalClientId;
-    env.paypalClientSecret = original.paypalClientSecret;
-    env.paypalApiBase = original.paypalApiBase;
-    paypal._resetTokenCache();
     await fake.close();
   }
 }
@@ -165,63 +152,6 @@ test('un identificador de tarjeta con forma rara se rechaza antes de llamar a St
     assert.equal(res.status, 400);
     // Ni siquiera se llamó al proveedor.
     assert.equal(fake.calls.stripe.length, 0);
-  });
-});
-
-// --- PayPal ---------------------------------------------------------------
-
-test('vincular PayPal devuelve la URL de aprobación', async () => {
-  await withProviders({}, async (fake) => {
-    const agent = app();
-    const user = await registerUser(agent);
-
-    const res = await agent
-      .post('/api/payments/methods/paypal/link')
-      .set('Authorization', `Bearer ${user.token}`);
-
-    assert.equal(res.status, 201);
-    assert.equal(res.body.id, 'ORDER-VAULT-1');
-    assert.ok(res.body.url.includes('approve'));
-
-    // El alta tiene que pedir el vault; sin él PayPal no devuelve nada
-    // reutilizable y el "método guardado" no serviría para cobrar.
-    const vaultCall = fake.calls.paypal.find((c) => c.body.includes('store_in_vault'));
-    assert.ok(vaultCall, 'no se pidió el vault a PayPal');
-  });
-});
-
-test('confirmar PayPal guarda la cuenta con su correo', async () => {
-  await withProviders({}, async () => {
-    const agent = app();
-    const user = await registerUser(agent);
-
-    const res = await agent
-      .post('/api/payments/methods/paypal/confirm')
-      .set('Authorization', `Bearer ${user.token}`)
-      .send({ orderId: 'ORDER-VAULT-1' });
-
-    assert.equal(res.status, 201);
-    assert.equal(res.body.method.provider, 'paypal');
-    assert.equal(res.body.method.kind, 'paypal');
-    assert.equal(res.body.method.email, 'pagador@example.com');
-    assert.equal(res.body.method.isDefault, true);
-    // El vault_id es un secreto de cobro: no se expone.
-    assert.equal(res.body.method.providerRef, undefined);
-  });
-});
-
-test('si PayPal no devuelve vault, no se guarda un método muerto', async () => {
-  await withProviders({ captureWithoutVault: true }, async () => {
-    const agent = app();
-    const user = await registerUser(agent);
-
-    const res = await agent
-      .post('/api/payments/methods/paypal/confirm')
-      .set('Authorization', `Bearer ${user.token}`)
-      .send({ orderId: 'ORDER-VAULT-1' });
-
-    assert.equal(res.status, 400);
-    assert.equal(await PaymentMethod.countDocuments({}), 0);
   });
 });
 
@@ -459,31 +389,6 @@ test('no se puede cobrar con el método de otra persona', async () => {
   });
 });
 
-test('cobrar con PayPal guardado usa el vault y no vuelve a pedir aprobación', async () => {
-  await withProviders({}, async (fake) => {
-    const agent = app();
-    const user = await registerUser(agent);
-
-    const linked = await agent
-      .post('/api/payments/methods/paypal/confirm')
-      .set('Authorization', `Bearer ${user.token}`)
-      .send({ orderId: 'ORDER-VAULT-1' });
-
-    const pay = await agent
-      .post(`/api/payments/methods/${linked.body.method.id}/pay`)
-      .set('Authorization', `Bearer ${user.token}`)
-      .send({ packageId: 'starter' });
-
-    assert.equal(pay.status, 201);
-    assert.equal(pay.body.provider, 'paypal');
-
-    // El cobro tiene que llevar el vault_id: sin él PayPal cobraría a quien
-    // esté mirando la pantalla, no a la cuenta guardada.
-    const charge = fake.calls.paypal.find((c) => c.body.includes('VAULT-ABC-123'));
-    assert.ok(charge, 'el cobro no usó el vault');
-  });
-});
-
 // --- Aislamiento entre usuarios y seguridad ------------------------------
 
 test('el cliente de Stripe se crea una sola vez por usuario', async () => {
@@ -541,7 +446,6 @@ test('el servicio expone las pasarelas disponibles junto a la lista', async () =
 
   assert.equal(res.status, 200);
   assert.equal(typeof res.body.providers.stripe, 'boolean');
-  assert.equal(typeof res.body.providers.paypal, 'boolean');
 });
 
 // La clave publicable la necesita el navegador para tokenizar la tarjeta. No es
@@ -578,41 +482,5 @@ test('el providerRef nunca se expone en la API', async () => {
     const serialized = JSON.stringify(list.body);
     assert.ok(!serialized.includes('pm_card_visa'), 'el providerRef salió en la lista');
     assert.ok(!serialized.includes('providerRef'));
-  });
-});
-
-test('con PayPal apagado /methods no ofrece PayPal pero lo marca como bloqueado', async () => {
-  await withProviders({}, async () => {
-    const agent = app();
-    const user = await registerUser(agent);
-    const original = env.paypalEnabled;
-    env.paypalEnabled = false;
-    try {
-      const res = await agent
-        .get('/api/payments/methods')
-        .set('Authorization', `Bearer ${user.token}`);
-      assert.equal(res.status, 200);
-      assert.equal(res.body.providers.paypal, false, 'no se ofrece');
-      assert.equal(res.body.paypalBlocked, true, 'se marca como bloqueado');
-    } finally {
-      env.paypalEnabled = original;
-    }
-  });
-});
-
-test('con PayPal apagado no se puede iniciar el alta de PayPal', async () => {
-  await withProviders({}, async () => {
-    const agent = app();
-    const user = await registerUser(agent);
-    const original = env.paypalEnabled;
-    env.paypalEnabled = false;
-    try {
-      const res = await agent
-        .post('/api/payments/methods/paypal/link')
-        .set('Authorization', `Bearer ${user.token}`);
-      assert.equal(res.status, 503);
-    } finally {
-      env.paypalEnabled = original;
-    }
   });
 });

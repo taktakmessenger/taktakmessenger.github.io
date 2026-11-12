@@ -1,7 +1,7 @@
 // Traducción de WhaTaka: el servicio y su API.
 //
 // Se usa un servidor HTTP real (fakeTranslator) y se apunta el servicio a él,
-// igual que se hace con Stripe y PayPal: así se ejercita el mismo camino que en
+// igual que se hace con Stripe: así se ejercita el mismo camino que en
 // producción en vez de sustituir `translate` por un doble.
 
 const test = require('node:test');

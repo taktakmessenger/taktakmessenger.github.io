@@ -92,7 +92,7 @@ test('withdraw debits TTC-R and records a pending transaction', async () => {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${user.token}`)
-    .send({ amount: 120, method: 'paypal', details: 'user@example.com' });
+    .send({ amount: 120, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678' });
 
   assert.equal(res.status, 200, JSON.stringify(res.body));
 
@@ -116,7 +116,7 @@ test('a withdrawal below the minimum is rejected', async () => {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${user.token}`)
-    .send({ amount: 10, method: 'paypal', details: 'user@example.com' });
+    .send({ amount: 10, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678' });
 
   assert.equal(res.status, 400);
   assert.match(res.body.error, /mínimo/i);
@@ -130,7 +130,7 @@ test('a withdrawal without payout details is rejected', async () => {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${user.token}`)
-    .send({ amount: 120, method: 'paypal' });
+    .send({ amount: 120, method: 'crypto' });
 
   assert.equal(res.status, 400);
 });
@@ -155,7 +155,7 @@ test('over-withdrawal is rejected', async () => {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${user.token}`)
-    .send({ amount: 500, method: 'paypal', details: 'user@example.com' });
+    .send({ amount: 500, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678' });
 
   assert.equal(res.status, 400);
   assert.match(res.body.error, /insuficientes/i);

@@ -8263,3 +8263,314 @@
   font-size: 0.82rem;
   color: #ffb4b4;
 }
+
+/* ------------------------------------------------------------------
+   Llamada grupal ad-hoc (malla WebRTC, hasta 4 personas)
+   ------------------------------------------------------------------ */
+
+.groupcall-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background:
+    radial-gradient(700px 520px at 50% 15%, rgba(176, 75, 251, 0.28), transparent 62%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 60%, var(--bg) 100%);
+}
+
+.groupcall-overlay.minimized {
+  inset: auto 0 0 0;
+  height: auto;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-strong);
+}
+
+.groupcall-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.2rem 0.2rem 0.8rem;
+}
+
+.groupcall-state {
+  flex: 1;
+  font-size: 0.9rem;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupcall-min {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+/* Rejilla: dos columnas hasta cuatro personas, que es el tope de la llamada. */
+.groupcall-grid {
+  flex: 1;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  min-height: 0;
+}
+
+.groupcall-grid.count-1 {
+  grid-template-columns: 1fr;
+}
+
+.groupcall-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+
+.groupcall-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* El vídeo propio se refleja, como en cualquier app de vídeo. */
+}
+
+.groupcall-tile.self video {
+  transform: scaleX(-1);
+}
+
+.groupcall-tile-avatar {
+  display: grid;
+  place-items: center;
+}
+
+.groupcall-tile-name {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.75rem;
+  color: #fff;
+}
+
+.groupcall-audio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.groupcall-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 1rem 0 0.4rem;
+}
+
+/* --- Selector de personas ----------------------------------------- */
+
+.groupcall-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.8rem;
+}
+
+.groupcall-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.groupcall-picker-head strong {
+  flex: 1;
+}
+
+.groupcall-picker-back {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+}
+
+.groupcall-picker-count {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.groupcall-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.groupcall-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(176, 75, 251, 0.15);
+  color: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.groupcall-chip .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 0.7rem;
+}
+
+.groupcall-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  overflow-y: auto;
+}
+
+.groupcall-person {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.groupcall-person.on {
+  border-color: var(--primary);
+  background: rgba(176, 75, 251, 0.12);
+}
+
+.groupcall-person-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.groupcall-person-name small {
+  opacity: 0.7;
+}
+
+.groupcall-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  color: var(--primary);
+}
+
+.groupcall-picker-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------------
+   Pago con billetera cripto (USDT)
+   ------------------------------------------------------------------ */
+
+/* El botón de la wallet va primero y se distingue del resto: es la vía
+   preferida. El filo turquesa lo separa de los métodos manuales. */
+.wallet-pay-btn {
+  border: 1px solid var(--turquoise);
+}
+
+.wallet-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wallet-pay-amount {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.wallet-pay-amount strong {
+  color: var(--turquoise);
+}
+
+/* La red va en su propio recuadro de aviso: enviar USDT por la red equivocada
+   pierde el dinero, así que no puede ser letra pequeña perdida. */
+.wallet-pay-network {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--pink);
+  background: rgba(255, 45, 141, 0.12);
+  font-size: 0.85rem;
+}
+
+.wallet-pay-network strong {
+  color: var(--pink);
+}
+
+.wallet-pay-network small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.wallet-pay-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Fondo blanco explícito: el QR tiene que ser escaneable aunque el tema sea
+   oscuro. Un QR claro sobre fondo oscuro no lo lee la mitad de las cámaras. */
+.wallet-pay-qr img {
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 0.5rem;
+}
+
+.wallet-pay-qr small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.wallet-pay input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-size: 0.85rem;
+}

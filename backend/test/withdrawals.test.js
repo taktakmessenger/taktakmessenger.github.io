@@ -22,7 +22,7 @@ async function requestWithdrawal(agent, token, amount, extra = {}) {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${token}`)
-    .send({ amount, method: 'paypal', details: 'cobro@example.com', ...extra });
+    .send({ amount, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678', ...extra });
   return res;
 }
 
@@ -42,8 +42,8 @@ test('el administrador ve los retiros pendientes con su usuario', async () => {
   assert.equal(res.body.withdrawals.length, 1);
   const w = res.body.withdrawals[0];
   assert.equal(w.amount, 150);
-  assert.equal(w.method, 'paypal');
-  assert.equal(w.details, 'cobro@example.com');
+  assert.equal(w.method, 'crypto');
+  assert.equal(w.details, '0x1234567890abcdef1234567890abcdef12345678');
   assert.equal(w.status, 'pending');
   assert.equal(w.user.username, user.username);
 });
@@ -98,7 +98,7 @@ test('rechazar un retiro devuelve los Diamantes al usuario', async () => {
   const reject = await agent
     .post(`/api/admin/withdrawals/${created.body.transactionId}/reject`)
     .set('Authorization', `Bearer ${signToken(admin)}`)
-    .send({ reason: 'Cuenta de PayPal incorrecta' });
+    .send({ reason: 'Cuenta de cobro incorrecta' });
   assert.equal(reject.status, 200, JSON.stringify(reject.body));
   assert.equal(reject.body.status, 'rejected');
 
@@ -299,40 +299,40 @@ test('dos reintentos simultáneos con la misma clave no duplican el retiro', asy
   assert.equal(wallet.body.ttcR, 350);
 });
 
-// --- PayPal bloqueado por el operador -----------------------------------
+// --- Solo cripto ---------------------------------------------------------
 
-test('con PayPal apagado no se puede solicitar un retiro por PayPal', async () => {
+test('solo se admiten retiros a billetera cripto', async () => {
   const agent = app();
   const user = await registerUser(agent);
   await setWallet(user.user.id, { ttcR: 500 });
 
-  const env = require('../src/config/env');
-  const original = env.paypalEnabled;
-  env.paypalEnabled = false;
-  try {
-    const res = await requestWithdrawal(agent, user.token, '150');
-    assert.equal(res.status, 400);
-    assert.match(res.body.error, /método/i);
-  } finally {
-    env.paypalEnabled = original;
-  }
+  const res = await requestWithdrawal(agent, user.token, '150', { method: 'zelle', details: 'cobro@example.com' });
+  assert.equal(res.status, 400);
+  assert.match(res.body.details.map((d) => d.message).join(' '), /método/i);
 });
 
-test('con PayPal apagado desaparece de la lista de métodos de retiro', async () => {
+test('la dirección de retiro debe ser una dirección EVM válida', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 500 });
+
+  const bad = await requestWithdrawal(agent, user.token, '150', { details: 'no-es-una-direccion' });
+  assert.equal(bad.status, 400);
+  assert.match(bad.body.details.map((d) => d.message).join(' '), /dirección/i);
+
+  const ok = await requestWithdrawal(agent, user.token, '150');
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+});
+
+test('la configuración de retiro publica la red y solo el método cripto', async () => {
   const agent = app();
   const user = await registerUser(agent);
 
-  const env = require('../src/config/env');
-  const original = env.paypalEnabled;
-  env.paypalEnabled = false;
-  try {
-    const res = await agent
-      .get('/api/wallet/withdraw/config')
-      .set('Authorization', `Bearer ${user.token}`);
-    assert.equal(res.status, 200);
-    assert.ok(!res.body.methods.includes('paypal'));
-    assert.ok(res.body.methods.includes('zelle'));
-  } finally {
-    env.paypalEnabled = original;
-  }
+  const res = await agent
+    .get('/api/wallet/withdraw/config')
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.methods, ['crypto']);
+  assert.equal(res.body.network, 'BEP20');
+  assert.equal(res.body.asset, 'USDT');
 });

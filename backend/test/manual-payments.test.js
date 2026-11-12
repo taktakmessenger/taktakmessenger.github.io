@@ -18,7 +18,7 @@ test.beforeEach(async () => resetDb());
 test.after(async () => disconnectTestDb());
 
 const METHODS = [
-  { id: 'zinli', label: 'Zinli', details: 'Zinli: +58 412 000 0000' },
+  { id: 'usdt-bep20', label: 'USDT (BNB Smart Chain)', details: 'Envía USDT por BEP20 y pega el hash.' },
 ];
 
 // El cobro manual se configura en runtime en los tests, igual que hacen los de
@@ -47,7 +47,7 @@ async function createOrder(agent, token, overrides = {}) {
     .set('Authorization', `Bearer ${token}`)
     .send({
       packageId: 'starter',
-      method: 'zinli',
+      method: 'usdt-bep20',
       reference: 'REF-123456',
       ...overrides,
     });
@@ -69,9 +69,26 @@ test('con métodos configurados la tienda los publica', async () => {
     const res = await agent.get('/api/payments/config');
 
     assert.equal(res.body.providers.manual, true);
-    assert.equal(res.body.manualMethods[0].id, 'zinli');
-    assert.equal(res.body.manualMethods[0].label, 'Zinli');
-    assert.equal(res.body.manualMethods[0].details, 'Zinli: +58 412 000 0000');
+    assert.equal(res.body.manualMethods[0].id, 'usdt-bep20');
+    assert.equal(res.body.manualMethods[0].label, 'USDT (BNB Smart Chain)');
+    assert.equal(res.body.manualMethods[0].details, 'Envía USDT por BEP20 y pega el hash.');
+  } finally {
+    restore();
+  }
+});
+
+test('la tienda publica la billetera con moneda y red', async () => {
+  const restore = withManualMethods([
+    { id: 'usdt-trc20', label: 'USDT', payTo: 'TXk9abc', asset: 'USDT', network: 'TRC20' },
+  ]);
+  try {
+    const agent = app();
+    const res = await agent.get('/api/payments/config');
+
+    assert.equal(res.body.providers.manual, true);
+    assert.equal(res.body.manualMethods[0].asset, 'USDT');
+    assert.equal(res.body.manualMethods[0].network, 'TRC20');
+    assert.equal(res.body.manualMethods[0].payTo, 'TXk9abc');
   } finally {
     restore();
   }
@@ -79,13 +96,13 @@ test('con métodos configurados la tienda los publica', async () => {
 
 test('la tienda publica el enlace de pago del método', async () => {
   const restore = withManualMethods([
-    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
+    { id: 'pago-link', label: 'Pago con enlace', link: 'https://example.com/pagar', details: 'Paga y pega la operación.' },
   ]);
   try {
     const agent = app();
     const res = await agent.get('/api/payments/config');
 
-    assert.equal(res.body.manualMethods[0].link, 'https://paypal.me/ejemplo');
+    assert.equal(res.body.manualMethods[0].link, 'https://example.com/pagar');
   } finally {
     restore();
   }
@@ -97,7 +114,7 @@ test('crear una orden exige sesión', async () => {
     const agent = app();
     const res = await agent
       .post('/api/payments/manual/orders')
-      .send({ packageId: 'starter', method: 'zinli', reference: 'REF-1' });
+      .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'REF-1' });
 
     assert.equal(res.status, 401);
   } finally {
@@ -323,13 +340,13 @@ test('la cola se filtra por método y por rango de fechas', async () => {
 
     const all = await agent
       .get('/api/admin/manual-orders')
-      .query({ method: 'zinli' })
+      .query({ method: 'usdt-bep20' })
       .set('Authorization', `Bearer ${(await makeAdmin('adming')).token}`);
     assert.equal(all.body.orders.length, 2);
 
     const none = await agent
       .get('/api/admin/manual-orders')
-      .query({ method: 'paypal' })
+      .query({ method: 'otro-metodo' })
       .set('Authorization', `Bearer ${(await makeAdmin('adminh')).token}`);
     assert.equal(none.body.orders.length, 0);
   } finally {
@@ -375,48 +392,6 @@ test('solo un admin ve el resumen de compras', async () => {
       .set('Authorization', `Bearer ${user.token}`);
     assert.equal(res.status, 403);
   } finally {
-    restore();
-  }
-});
-
-test('el cobro manual por PayPal se ofrece aunque la pasarela esté apagada', async () => {
-  const restore = withManualMethods([
-    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
-    { id: 'zinli', label: 'Zinli', details: 'Zinli: +58 412 000 0000' },
-  ]);
-  const env = require('../src/config/env');
-  const original = env.paypalEnabled;
-  env.paypalEnabled = false;
-  try {
-    const agent = app();
-    const res = await agent.get('/api/payments/config');
-    const paypal = res.body.manualMethods.find((m) => m.id === 'paypal');
-    const zinli = res.body.manualMethods.find((m) => m.id === 'zinli');
-    assert.ok(paypal, 'PayPal sigue en la lista');
-    // El cobro manual no depende del interruptor de la pasarela: el usuario paga
-    // por fuera y un admin aprueba, así que se ofrece siempre y sin nube.
-    assert.notEqual(paypal.blocked, true);
-    assert.notEqual(zinli.blocked, true);
-  } finally {
-    env.paypalEnabled = original;
-    restore();
-  }
-});
-
-test('con la pasarela PayPal apagada sí se puede crear una orden manual por PayPal', async () => {
-  const restore = withManualMethods([
-    { id: 'paypal', label: 'PayPal', link: 'https://paypal.me/ejemplo', details: 'Paga y pega la operación.' },
-  ]);
-  const env = require('../src/config/env');
-  const original = env.paypalEnabled;
-  env.paypalEnabled = false;
-  try {
-    const agent = app();
-    const user = await registerUser(agent);
-    const res = await createOrder(agent, user.token, { method: 'paypal' });
-    assert.equal(res.status, 201);
-  } finally {
-    env.paypalEnabled = original;
     restore();
   }
 });

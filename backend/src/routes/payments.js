@@ -7,7 +7,6 @@ const paymentService = require('../services/paymentService');
 const paymentMethodService = require('../services/paymentMethodService');
 const manualPaymentService = require('../services/manualPaymentService');
 const stripeService = require('../services/stripeService');
-const paypalService = require('../services/paypalService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -49,14 +48,11 @@ router.get(
   asyncHandler(async (_req, res) => {
     res.json({
       providers: paymentService.availableProviders(),
-      // Ver `paypalBlocked` en `/methods`: la tienda lo usa para mostrar el
-      // método manual de PayPal tapado en vez de ofrecerlo.
-      paypalBlocked: !paypalService.isEnabled(),
       // Clave publicable de Stripe. No es un secreto: es la que usa el navegador
       // para tokenizar la tarjeta. Se sirve desde aquí para que la tienda no
       // dependa de una variable de compilación del frontend.
       publishableKey: stripeService.publishableKey(),
-      // Métodos de cobro manual (Zinli, pago móvil…). Van los datos de pago para
+      // Métodos de cobro manual (billetera cripto). Van los datos de pago para
       // que la tienda muestre a dónde enviar el dinero sin tenerlos hardcodeados.
       manualMethods: manualPaymentService.listMethods(),
     });
@@ -76,7 +72,7 @@ router.post(
   auth,
   checkoutLimiter,
   [
-    body('provider').isIn(['stripe', 'paypal']).withMessage('Proveedor no soportado'),
+    body('provider').isIn(['stripe']).withMessage('Proveedor no soportado'),
     body('packageId').isString().notEmpty().withMessage('Falta el paquete'),
   ],
   validate,
@@ -121,34 +117,6 @@ router.post(
 );
 
 /**
- * Webhook de PayPal.
- *
- * PayPal no firma con HMAC: hay que preguntarle a él si el evento es suyo. La
- * verificación se hace contra el cuerpo crudo, igual que en Stripe.
- */
-router.post(
-  '/webhook/paypal',
-  webhookLimiter,
-  asyncHandler(async (req, res) => {
-    if (!paypalService.canVerifyWebhooks()) {
-      throw new HttpError(503, 'Pagos con PayPal no configurados');
-    }
-
-    const authentic = await paypalService.verifyWebhookSignature({
-      headers: req.headers,
-      rawBody: req.rawBody,
-    });
-    if (!authentic) throw new HttpError(401, 'Firma inválida');
-
-    const parsed = paypalService.parseCompletedPayment(req.body);
-    if (!parsed) return res.json({ received: true, ignored: true });
-
-    const result = await paymentService.creditPurchase({ ...parsed, provider: 'paypal' });
-    res.json({ received: true, ...result });
-  })
-);
-
-/**
  * Payment provider webhook: credits TTC-C after a real purchase.
  *
  * Two properties the original prototype lacked and that matter more than
@@ -182,7 +150,7 @@ router.post(
       throw new HttpError(400, 'Falta el identificador del evento');
     }
 
-    // Un solo camino para acreditar: el mismo que usan Stripe y PayPal. Antes
+    // Un solo camino para acreditar: el mismo que usa Stripe. Antes
     // esta ruta duplicaba el abono y se dejaba fuera el premio de referidos, con
     // lo que una compra confirmada por aquí pagaba monedas pero no el premio.
     const amountPaidMinor = Number.isFinite(Number(amountPaid))
@@ -211,7 +179,7 @@ router.get(
   })
 );
 
-// --- Cobro manual (Zinli, pago móvil…) -------------------------------------
+// --- Cobro manual (billetera cripto) ---------------------------------------
 //
 // El usuario paga por fuera de la app, envía la referencia y un administrador
 // aprueba. La orden no acredita nada por sí sola: el abono lo hace la revisión.
@@ -289,10 +257,6 @@ router.get(
     res.json({
       methods,
       providers: paymentService.availableProviders(),
-      // PayPal puede estar configurado pero apagado por el operador. Se expone
-      // aparte para que la pantalla lo muestre tapado con una nube en vez de
-      // hacerlo desaparecer (el usuario ve que existe, pero no puede usarlo).
-      paypalBlocked: !paypalService.isEnabled(),
     });
   })
 );
@@ -325,33 +289,6 @@ router.post(
       userId: req.user.userId,
       paymentMethodId: req.body.paymentMethodId,
       label: req.body.label,
-    });
-    res.status(201).json({ method });
-  })
-);
-
-// Abre el alta de una cuenta de PayPal y devuelve la URL de aprobación.
-router.post(
-  '/methods/paypal/link',
-  auth,
-  methodLimiter,
-  asyncHandler(async (req, res) => {
-    const order = await paymentMethodService.startPaypalLink({ userId: req.user.userId });
-    res.status(201).json(order);
-  })
-);
-
-// Confirma el alta de PayPal cuando el usuario vuelve de aprobarla.
-router.post(
-  '/methods/paypal/confirm',
-  auth,
-  methodLimiter,
-  [body('orderId').isString().notEmpty().withMessage('Falta la orden de PayPal')],
-  validate,
-  asyncHandler(async (req, res) => {
-    const method = await paymentMethodService.confirmPaypalLink({
-      userId: req.user.userId,
-      orderId: req.body.orderId,
     });
     res.status(201).json({ method });
   })

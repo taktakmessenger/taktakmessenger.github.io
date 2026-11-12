@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import { useGroupCall } from '../contexts/GroupCallContext';
+import GroupCallPicker from './GroupCallPicker';
 import { userId } from '../lib/user';
 import { formatDuration } from '../lib/voiceNote';
 import { resolveViewerLanguage, normalizeLanguage, languageNativeName } from '../lib/translate';
@@ -1119,7 +1121,10 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
   // número. Van en la misma vista porque son la misma idea (hablar con alguien)
   // y así el botón de llamada no obliga a salir de la app.
   const [mode, setMode] = useState('chats');
+  // Selector de personas para una llamada grupal ad-hoc.
+  const [groupOpen, setGroupOpen] = useState(false);
   const { subscribe } = useSocket();
+  const { startGroupCall } = useGroupCall();
 
   function loadInbox() {
     return api
@@ -1223,6 +1228,15 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
       .catch((err) => setError(err.message));
   }
 
+  if (groupOpen) {
+    return (
+      <GroupCallPicker
+        onStart={startGroupCall}
+        onClose={() => setGroupOpen(false)}
+      />
+    );
+  }
+
   if (mode === 'dial') {
     return (
       <div className="messages">
@@ -1240,9 +1254,25 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
           <button type="button" className="whataka-tab active" aria-current="page">
             📞 Llamar
           </button>
+          <button
+            type="button"
+            className="whataka-tab"
+            onClick={() => setGroupOpen(true)}
+          >
+            👥 Grupal
+          </button>
         </div>
         <Dialer onCall={onCall} onOpenChat={openChatWith} />
       </div>
+    );
+  }
+
+  if (groupOpen) {
+    return (
+      <GroupCallPicker
+        onStart={startGroupCall}
+        onClose={() => setGroupOpen(false)}
+      />
     );
   }
 
@@ -1266,6 +1296,13 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
         </button>
         <button type="button" className="whataka-tab" onClick={() => setMode('dial')}>
           📞 Llamar
+        </button>
+        <button
+          type="button"
+          className="whataka-tab"
+          onClick={() => setGroupOpen(true)}
+        >
+          👥 Grupal
         </button>
       </div>
 

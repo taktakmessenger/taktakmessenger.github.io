@@ -3,7 +3,6 @@ const PaymentMethod = require('../models/PaymentMethod');
 const User = require('../models/User');
 const env = require('../config/env');
 const stripeService = require('./stripeService');
-const paypalService = require('./paypalService');
 const { HttpError } = require('../utils/http');
 
 // Métodos de pago guardados: alta, listado, baja y cobro.
@@ -16,9 +15,6 @@ const { HttpError } = require('../utils/http');
 
 // Cómo se enseña un método cuando el usuario no le puso nombre.
 function defaultLabel(method) {
-  if (method.kind === 'paypal') {
-    return method.email ? `PayPal · ${method.email}` : 'PayPal';
-  }
   const brand = method.brand ? method.brand.charAt(0).toUpperCase() + method.brand.slice(1) : 'Tarjeta';
   return `${brand} ···· ${method.last4}`;
 }
@@ -119,56 +115,6 @@ async function saveCard({ userId, paymentMethodId, label }) {
   return publicMethod(method);
 }
 
-/**
- * Prepara el alta de una cuenta de PayPal.
- *
- * PayPal no tokeniza tarjetas: lo que se guarda es la aprobación del usuario, y
- * con ella un `vault_id`. Se devuelve la URL de aprobación a la que hay que
- * mandar al navegador.
- */
-async function startPaypalLink({ userId }) {
-  if (!paypalService.isConfigured() || !paypalService.isEnabled()) {
-    throw new HttpError(503, 'El pago con PayPal no está disponible');
-  }
-
-  const returnUrl = `${env.appUrl}/?view=pago-exito&provider=paypal&link=1`;
-  const cancelUrl = `${env.appUrl}/?view=metodos-pago`;
-
-  return paypalService.createVaultOrder({ userId, returnUrl, cancelUrl });
-}
-
-/**
- * Confirma el alta de PayPal tras la aprobación del usuario.
- *
- * `orderId` viene de la vuelta del navegador. Se le pide a PayPal el estado de
- * la orden y de ahí se saca el `vault_id`. No se acredita nada aquí: guardar un
- * método no mueve dinero.
- */
-async function confirmPaypalLink({ userId, orderId }) {
-  if (!paypalService.isConfigured() || !paypalService.isEnabled()) {
-    throw new HttpError(503, 'El pago con PayPal no está disponible');
-  }
-  if (!orderId) throw new HttpError(400, 'Falta la orden de PayPal');
-
-  const order = await paypalService.captureOrder(orderId);
-  const vaultId = paypalService.extractVaultId(order);
-  if (!vaultId) {
-    // Sin vault_id no hay nada que cobrar después: es mejor decirlo que
-    // guardar un método muerto que falle al primer cobro.
-    throw new HttpError(400, 'PayPal no devolvió un método guardable');
-  }
-
-  const method = await upsertMethod({
-    userId,
-    provider: 'paypal',
-    kind: 'paypal',
-    providerRef: vaultId,
-    email: paypalService.extractPayerEmail(order),
-  });
-
-  return publicMethod(method);
-}
-
 // Alta idempotente: si el método ya estaba guardado, se actualiza en vez de
 // crear un duplicado. Cubre la carrera entre el webhook y la vuelta del
 // navegador, que pueden procesar el mismo alta a la vez.
@@ -184,7 +130,6 @@ async function upsertMethod(data) {
     last4: data.last4 ?? null,
     expMonth: data.expMonth ?? null,
     expYear: data.expYear ?? null,
-    email: data.email ?? null,
     label: data.label ?? null,
     revoked: false,
   };
@@ -335,27 +280,12 @@ async function chargeWithSavedMethod({ userId, methodId, packageId }) {
     return { provider: 'stripe', status: result.status, reference: result.id };
   }
 
-  if (method.provider === 'paypal') {
-    if (!paypalService.isConfigured() || !paypalService.isEnabled()) {
-      throw new HttpError(503, 'El pago con PayPal no está disponible');
-    }
-    const result = await paypalService.chargeStoredVault({
-      vaultId: method.providerRef,
-      userId,
-      pkg,
-      idempotencyKey,
-    });
-    return { provider: 'paypal', status: result.status, reference: result.id };
-  }
-
   throw new HttpError(400, 'Ese método no se puede cobrar');
 }
 
 module.exports = {
   startCardSetup,
   saveCard,
-  startPaypalLink,
-  confirmPaypalLink,
   listMethods,
   setDefault,
   removeMethod,
