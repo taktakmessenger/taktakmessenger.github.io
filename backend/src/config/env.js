@@ -287,6 +287,10 @@ function resolveCrypto() {
     throw new Error('CRYPTO_USDT_DECIMALS must be an integer between 0 and 36');
   }
 
+  // Clave privada de la bóveda. Solo se usa con el pago automático encendido;
+  // nunca se registra ni se envía al cliente.
+  const vaultPrivateKey = process.env.CRYPTO_VAULT_PRIVATE_KEY || null;
+
   return {
     network,
     adminAddress,
@@ -296,10 +300,12 @@ function resolveCrypto() {
     rpcUrl,
     chainId: Number(process.env.CRYPTO_CHAIN_ID ?? defaults.chainId ?? 0),
     explorer: (process.env.CRYPTO_EXPLORER || defaults.explorer || '').trim(),
-    vaultPayoutEnabled: process.env.CRYPTO_VAULT_PAYOUT_ENABLED === 'true',
-    // Clave privada de la bóveda. Solo se usa con el pago automático encendido;
-    // nunca se registra ni se envía al cliente.
-    vaultPrivateKey: process.env.CRYPTO_VAULT_PRIVATE_KEY || null,
+    // Sin la clave privada no hay forma de firmar el pago, así que la bandera
+    // no puede estar encendida: declararla encendida prometía un pago
+    // automático que no existe y el panel mostraba una capacidad falsa.
+    vaultPayoutEnabled:
+      process.env.CRYPTO_VAULT_PAYOUT_ENABLED === 'true' && Boolean(vaultPrivateKey),
+    vaultPrivateKey,
     // Confirmaciones mínimas para dar por bueno un depósito.
     confirmations: Number(process.env.CRYPTO_CONFIRMATIONS ?? 3),
     // Bóveda declarada: las dos direcciones son lo mínimo para repartir.
