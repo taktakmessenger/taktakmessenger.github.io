@@ -239,6 +239,9 @@ export default function Upload({ onUploaded }) {
           update={update}
           isNSFW={isNSFW}
           setIsNSFW={setIsNSFW}
+          sounds={sounds}
+          sound={sound}
+          setSound={setSound}
           sources={sources}
           newsSource={newsSource}
           setNewsSource={setNewsSource}
@@ -349,6 +352,9 @@ function UploadForm({
   update,
   isNSFW,
   setIsNSFW,
+  sounds,
+  sound,
+  setSound,
   sources,
   newsSource,
   setNewsSource,
