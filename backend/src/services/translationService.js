@@ -5,7 +5,7 @@
 // "en el suyo" se resuelve aquí: el servicio recibe un texto y el idioma de
 // quien lo va a leer, y devuelve el texto en ese idioma.
 //
-// El proveedor es conmutable y opcional, igual que Stripe o PayPal en esta app:
+// El proveedor es conmutable y opcional, igual que Stripe en esta app:
 //
 //   - Con `TRANSLATE_PROVIDER` y su clave, se llama al proveedor real.
 //   - Sin nada configurado, se usa un proveedor "local" que no traduce pero

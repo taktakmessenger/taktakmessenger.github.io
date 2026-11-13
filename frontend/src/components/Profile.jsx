@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { attachVideoSource } from '../lib/video';
+import { exportVideo as downloadExport } from '../lib/download';
 import { formatCount } from '../lib/format';
+import EditVideoDialog from './EditVideoDialog';
+import ConfirmDialog from './ConfirmDialog';
 
 // Rejilla de vídeos del perfil, como en TikTok: miniaturas verticales en tres
 // columnas. Al tocar una se abre el vídeo a pantalla completa, en el mismo
@@ -25,7 +28,7 @@ function VideoGrid({ videos, onOpen }) {
           ) : (
             <video
               className="profile-thumb-fallback"
-              src={v.hlsUrl || v.videoUrl}
+              src={v.videoUrl}
               muted
               playsInline
               preload="metadata"
@@ -46,7 +49,7 @@ function VideoGrid({ videos, onOpen }) {
 
 // Una diapositiva del reproductor. Solo la activa carga y reproduce el vídeo:
 // las demás muestran su miniatura, para no descargar en vano el perfil entero.
-function PlayerSlide({ video, active, onExport, onReprocess }) {
+function PlayerSlide({ video, active, onExport, onReprocess, onEdit, onDelete }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -57,7 +60,12 @@ function PlayerSlide({ video, active, onExport, onReprocess }) {
     return detach;
   }, [active, video]);
 
-  const needsOptimize = video.transcodeStatus === 'failed' || !video.hlsUrl;
+  // Se ofrece optimizar cuando la conversión falló o cuando nunca se hizo
+  // (`none` y sin HLS): en ese caso el vídeo se sirve tal cual y un original
+  // HEVC/AV1 se ve en negro, así que hay algo real que arreglar. Solo se oculta
+  // mientras ya está en curso.
+  const needsOptimize =
+    video.transcodeStatus === 'failed' || (!video.hlsUrl && video.transcodeStatus !== 'processing');
 
   return (
     <section className="profile-player-slide" data-video-id={video._id}>
@@ -87,6 +95,12 @@ function PlayerSlide({ video, active, onExport, onReprocess }) {
           <button type="button" className="btn-ghost" onClick={() => onExport(video)}>
             ⬇️ Exportar limpio
           </button>
+          <button type="button" className="btn-ghost" onClick={() => onEdit(video)}>
+            ✏️ Editar
+          </button>
+          <button type="button" className="btn-ghost danger" onClick={() => onDelete(video)}>
+            🗑️ Eliminar
+          </button>
         </div>
       </div>
     </section>
@@ -96,7 +110,7 @@ function PlayerSlide({ video, active, onExport, onReprocess }) {
 // Reproductor a pantalla completa de un vídeo del perfil. Reutiliza el mismo
 // patrón que el feed (HLS con reserva al original) y permite deslizar entre los
 // vídeos del perfil, como la lista de TikTok.
-function ProfilePlayer({ videos, startId, onClose, onExport, onReprocess }) {
+function ProfilePlayer({ videos, startId, onClose, onExport, onReprocess, onEdit, onDelete }) {
   const [index, setIndex] = useState(() => {
     const i = videos.findIndex((v) => v._id === startId);
     return i < 0 ? 0 : i;
@@ -152,6 +166,8 @@ function ProfilePlayer({ videos, startId, onClose, onExport, onReprocess }) {
             active={i === index}
             onExport={onExport}
             onReprocess={onReprocess}
+            onEdit={onEdit}
+            onDelete={onDelete}
           />
         ))}
       </div>
@@ -168,6 +184,11 @@ export default function Profile({ onNavigate }) {
   const [busy, setBusy] = useState(false);
   // Vídeo abierto a pantalla completa, o null si se está viendo la rejilla.
   const [playing, setPlaying] = useState(null);
+  // Edición y borrado de un vídeo propio, abiertos desde el reproductor.
+  const [editFor, setEditFor] = useState(null);
+  const [deleteFor, setDeleteFor] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -202,14 +223,9 @@ export default function Profile({ onNavigate }) {
     setError('');
     setNotice('');
     try {
-      const { data } = await api.get(`/videos/${video._id}/export`);
-      // Straight to the original file: no watermark, no re-encode.
-      const link = document.createElement('a');
-      link.href = data.downloadUrl;
-      link.download = data.filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      // Descarga con la sesión puesta (blob) y no con un enlace directo: el
+      // endpoint exige estar autenticado y un `<a>` no manda la cabecera.
+      const data = await downloadExport(video._id);
       setNotice(`Exportando "${data.filename}" sin marca de agua`);
     } catch (err) {
       setError(err.message);
@@ -250,6 +266,37 @@ export default function Profile({ onNavigate }) {
         // Silencioso: el usuario ya ve el estado en la lista.
       }
     }, 3000);
+  }
+
+  // Al editar, se actualizan solo los campos editables de la lista.
+  function applyVideoUpdate(updated) {
+    if (!updated?._id) return;
+    setVideos((prev) =>
+      prev.map((v) =>
+        v._id === updated._id
+          ? { ...v, title: updated.title, description: updated.description, tags: updated.tags }
+          : v
+      )
+    );
+    setNotice('Vídeo actualizado');
+  }
+
+  // Al eliminar, el vídeo sale de la lista y del reproductor en el acto.
+  async function removeVideo(video) {
+    if (!video?._id) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/videos/${video._id}`);
+      setVideos((prev) => prev.filter((v) => v._id !== video._id));
+      if (playing === video._id) setPlaying(null);
+      setDeleteFor(null);
+      setNotice('Vídeo eliminado');
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function reprocessVideo(video) {
@@ -339,6 +386,32 @@ export default function Profile({ onNavigate }) {
           onClose={() => setPlaying(null)}
           onExport={exportVideo}
           onReprocess={reprocessVideo}
+          onEdit={(video) => setEditFor(video)}
+          onDelete={(video) => setDeleteFor(video)}
+        />
+      )}
+
+      {editFor && (
+        <EditVideoDialog
+          video={editFor}
+          onClose={() => setEditFor(null)}
+          onSaved={applyVideoUpdate}
+        />
+      )}
+
+      {deleteFor && (
+        <ConfirmDialog
+          title="¿Eliminar este vídeo?"
+          message="Se borrará el vídeo y sus comentarios. Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          danger
+          busy={deleting}
+          error={deleteError}
+          onConfirm={() => removeVideo(deleteFor)}
+          onClose={() => {
+            setDeleteFor(null);
+            setDeleteError('');
+          }}
         />
       )}
     </div>

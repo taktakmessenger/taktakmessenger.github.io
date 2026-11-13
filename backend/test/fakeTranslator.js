@@ -1,6 +1,6 @@
 // Servidor falso de traducción para los tests.
 //
-// Igual que `fakeProviders.js` con Stripe y PayPal: se levanta un HTTP real en
+// Igual que `fakeProviders.js` con Stripe: se levanta un HTTP real en
 // localhost y se apunta el servicio a él. Así se ejercita el mismo código que en
 // producción (URL, cabeceras, form-encode, parseo de la respuesta) en lugar de
 // sustituir la función `translate` por un doble, que es donde se cuelan los

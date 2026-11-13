@@ -6,6 +6,7 @@ import {
   writeSoundOn,
   isMuted,
   shouldPauseFeed,
+  shouldPlay,
   listAudioOutputs,
   applySink,
   clampVolume,
@@ -76,6 +77,20 @@ test('el feed se pausa con una llamada en curso', () => {
   }
   // Un estado nulo (aún sin contexto) no debe dejar el feed sonando por error.
   assert.equal(shouldPauseFeed(false, undefined), true);
+});
+
+test('la pausa manual detiene solo la tarjeta visible y se puede reanudar', () => {
+  // La tarjeta visible sin pausa manual se reproduce.
+  assert.equal(shouldPlay(true, false), true);
+  // Visible pero pausada a mano: no se reproduce aunque sea la que se ve.
+  assert.equal(shouldPlay(true, true), false);
+  // Una tarjeta que no es la visible nunca se reproduce, con o sin pausa.
+  assert.equal(shouldPlay(false, false), false);
+  assert.equal(shouldPlay(false, true), false);
+  // Reanudar (quitar la pausa) vuelve a reproducirla.
+  assert.equal(shouldPlay(true, false), true);
+  // Un valor ausente de pausa se trata como "en marcha".
+  assert.equal(shouldPlay(true, undefined), true);
 });
 
 test('lista las salidas de audio del dispositivo', async () => {

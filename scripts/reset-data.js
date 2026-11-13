@@ -39,8 +39,8 @@ const USER_DATA = [
 const CATALOGUES = ['gifts', 'sounds', 'newssources'];
 
 const ADMIN = {
-  username: process.env.ADMIN_USERNAME || 'eliecerdepablos',
-  email: process.env.ADMIN_EMAIL || 'eliecerdepablos@gmail.com',
+  username: process.env.ADMIN_USERNAME || 'admin',
+  email: process.env.ADMIN_EMAIL || 'admin@example.com',
   phone: process.env.ADMIN_PHONE || '+584146487704',
   password: process.env.ADMIN_PASSWORD || 'TakTak-Admin-2026',
 };

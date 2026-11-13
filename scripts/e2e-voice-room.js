@@ -50,7 +50,11 @@ async function clickByText(page, text) {
 // o de la cabecera del directo (la barra se oculta con la rejilla abierta).
 async function roomMode(page) {
   return page.evaluate(() => {
-    const el = document.querySelector('.voice-mode') || document.querySelector('.live-stage-title small');
+    // El modo viaja como atributo del contenedor del directo; la barra flotante
+    // lo enseña cuando está minimizado.
+    const attr = document.querySelector('.live-stage[data-mode]')?.dataset.mode;
+    if (attr) return attr;
+    const el = document.querySelector('.voice-mode');
     if (!el) return null;
     return el.textContent.includes('grupo') ? 'sfu' : 'mesh';
   });

@@ -34,6 +34,55 @@ const attachmentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Contenido enriquecido del chat, en un solo subdocumento discriminado por
+// `type` (que siempre coincide con `kind` del mensaje):
+//
+// - location: un punto en el mapa. Se guarda lat/lng y, opcionalmente, el
+//   nombre del sitio y una dirección corta.
+// - contact: una tarjeta con el nombre y el teléfono de un contacto que el
+//   usuario tiene en la agenda del teléfono. No es un usuario de TAK TAK: es
+//   texto que el receptor puede guardar.
+// - poll: una pregunta con opciones. `votes` guarda, por cada opción, qué
+//   usuarios votaron, para poder pintar el resultado y quién votó qué.
+// - event: una cita con título, fecha de inicio y, si la hay, de fin y lugar.
+//
+// Se guarda todo junto y no en cuatro campos porque los campos comunes son pocos
+// y así un mensaje rico nunca arrastra un subdocumento con campos de otro tipo.
+const richSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['location', 'contact', 'poll', 'event'],
+      required: true,
+    },
+    // --- location ---
+    lat: { type: Number, min: -90, max: 90 },
+    lng: { type: Number, min: -180, max: 180 },
+    placeName: { type: String, trim: true, maxlength: 120 },
+
+    // --- contact ---
+    contactName: { type: String, trim: true, maxlength: 80 },
+    contactPhone: { type: String, trim: true, maxlength: 40 },
+
+    // --- poll ---
+    question: { type: String, trim: true, maxlength: 200 },
+    options: { type: [String], default: undefined },
+    // `votes[i]` son los ids que eligieron `options[i]`. Se guarda como listas
+    // paralelas a `options` (mismo orden, misma longitud) para que el índice de
+    // la opción sea el índice del voto.
+    votes: { type: [[mongoose.Schema.Types.ObjectId]], default: undefined },
+    allowMultiple: { type: Boolean, default: false },
+
+    // --- event ---
+    title: { type: String, trim: true, maxlength: 140 },
+    startsAt: { type: Date },
+    endsAt: { type: Date },
+    location: { type: String, trim: true, maxlength: 160 },
+    notes: { type: String, trim: true, maxlength: 500 },
+  },
+  { _id: false }
+);
+
 const messageSchema = new mongoose.Schema(
   {
     conversation: {
@@ -50,9 +99,23 @@ const messageSchema = new mongoose.Schema(
     // Una llamada vive en el mismo flujo que el texto, como en WhatsApp. Así el
     // hilo la ordena, el contador de no leídos la cuenta y la paginación la
     // pagina sin código adicional. `kind` decide cómo se pinta.
-    kind: { type: String, enum: ['text', 'call', 'attachment'], default: 'text' },
+    //
+    // Además del texto, una llamada y un adjunto, el hilo admite los tipos que
+    // WhatsApp llama "contenido enriquecido": ubicación, contacto, encuesta y
+    // evento. Van como `kind` propio y no como adjunto porque no son archivos:
+    // una encuesta se vota, un contacto abre un chat, un evento tiene fecha.
+    kind: {
+      type: String,
+      enum: ['text', 'call', 'attachment', 'location', 'contact', 'poll', 'event'],
+      default: 'text',
+    },
     call: { type: callInfoSchema, default: undefined },
     attachment: { type: attachmentSchema, default: undefined },
+    // Los cuatro tipos ricos comparten un único subdocumento `rich` con un
+    // discriminador `type`, en vez de cuatro campos opcionales: así el modelo no
+    // acumula campos muertos y añadir un tipo nuevo no obliga a tocar el
+    // esquema. `kind` y `rich.type` siempre coinciden.
+    rich: { type: richSchema, default: undefined },
     // Un mensaje puede llevar texto y adjunto a la vez (el pie de foto), por eso
     // no son excluyentes.
     text: {

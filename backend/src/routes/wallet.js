@@ -3,12 +3,22 @@ const rateLimit = require('express-rate-limit');
 const { body, query } = require('express-validator');
 const walletService = require('../services/walletService');
 const notificationService = require('../services/notificationService');
+const referralService = require('../services/referralService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
-const { asyncHandler } = require('../utils/http');
+const { asyncHandler, HttpError } = require('../utils/http');
 const env = require('../config/env');
 
 const router = express.Router();
+
+// Los retiros van SOLO a billetera cripto (USDT). Una sola vía, sin cuentas de
+// terceros ni comisiones de intermediario.
+const WITHDRAW_METHODS = ['crypto'];
+const withdrawMethodAllowed = (method) => method === 'crypto';
+
+// Una dirección EVM (0x + 40 hex) es lo único que se acepta como destino. Validar
+// aquí evita guardar una dirección mal escrita que luego perdería el dinero.
+const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 
 // Money-moving endpoints get a tighter limit than general reads.
 const moneyLimiter = rateLimit({
@@ -127,24 +137,88 @@ router.get(
   })
 );
 
+router.get(
+  '/referral',
+  auth,
+  asyncHandler(async (req, res) => {
+    // El código se crea aquí, en la primera visita a la pantalla: así solo se
+    // gasta un código en las cuentas que de verdad invitan a alguien.
+    await referralService.ensureCode(req.user.userId);
+    res.json(await referralService.stats(req.user.userId));
+  })
+);
+
 router.post(
   '/withdraw',
   auth,
   moneyLimiter,
   [
-    body('amount').isFloat({ gt: 0 }).withMessage('Monto inválido').toFloat(),
-    body('method').trim().notEmpty().withMessage('Método de retiro requerido'),
-    body('details').optional().trim().isLength({ max: 200 }),
+    // El importe se normaliza a cadena decimal y se valida con BigInt en el
+    // servicio, no con `Number`, para que no lo decida el redondeo en coma
+    // flotante. Se acepta un número de un cliente antiguo (se redondea al
+    // céntimo) y una cadena del cliente nuevo (se valida tal cual).
+    body('amount')
+      .exists()
+      .withMessage('Monto inválido')
+      .bail()
+      .customSanitizer((v) => (typeof v === 'number' ? v.toFixed(2) : v))
+      .isString()
+      .withMessage('Monto inválido')
+      .bail()
+      .matches(/^\d+(?:\.\d{1,2})?$/)
+      .withMessage('Monto inválido: usa como máximo 2 decimales'),
+    body('method').trim().isIn(WITHDRAW_METHODS).withMessage('Método no admitido'),
+    body('details')
+      .trim()
+      .notEmpty()
+      .withMessage('Indica tu dirección de billetera')
+      .bail()
+      .matches(EVM_ADDRESS)
+      .withMessage('Dirección de billetera inválida (debe empezar por 0x y tener 40 caracteres)')
+      .isLength({ max: 200 }),
+    // Clave de idempotencia del cliente: opcional, pero si viene se acota.
+    body('idempotencyKey')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ min: 8, max: 100 })
+      .matches(/^[a-zA-Z0-9_-]+$/)
+      .withMessage('Clave de idempotencia inválida'),
   ],
   validate,
   asyncHandler(async (req, res) => {
+    if (!withdrawMethodAllowed(req.body.method)) {
+      throw new HttpError(400, 'Método de retiro no admitido');
+    }
     const result = await walletService.requestWithdrawal({
       userId: req.user.userId,
       amount: req.body.amount,
       method: req.body.method,
       details: req.body.details,
+      idempotencyKey: req.body.idempotencyKey,
     });
     res.json({ message: 'Solicitud de retiro procesada', ...result });
+  })
+);
+
+// Parámetros que la pantalla de retiro necesita para validar antes de enviar:
+// mínimo, tope diario y tasa de conversión a dólares. Van aquí y no en el
+// cliente para que un cambio de configuración no deje la UI mintiendo.
+router.get(
+  '/withdraw/config',
+  auth,
+  asyncHandler(async (_req, res) => {
+    res.json({
+      min: env.withdrawals.min,
+      dailyCap: env.withdrawals.dailyCap,
+      usdRate: env.withdrawals.usdRate,
+      // Red obligatoria del retiro, para que la UI la muestre en grande: enviar
+      // USDT por otra red pierde el dinero.
+      network: env.crypto.network,
+      asset: 'USDT',
+      // Solo los métodos que hoy se pueden usar (hoy, solo cripto).
+      methods: WITHDRAW_METHODS.filter(withdrawMethodAllowed),
+    });
   })
 );
 

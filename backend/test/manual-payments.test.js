@@ -18,7 +18,7 @@ test.beforeEach(async () => resetDb());
 test.after(async () => disconnectTestDb());
 
 const METHODS = [
-  { id: 'zinli', label: 'Zinli', details: 'Zinli: +58 412 000 0000' },
+  { id: 'usdt-bep20', label: 'USDT (BNB Smart Chain)', details: 'Envía USDT por BEP20 y pega el hash.' },
 ];
 
 // El cobro manual se configura en runtime en los tests, igual que hacen los de
@@ -47,7 +47,7 @@ async function createOrder(agent, token, overrides = {}) {
     .set('Authorization', `Bearer ${token}`)
     .send({
       packageId: 'starter',
-      method: 'zinli',
+      method: 'usdt-bep20',
       reference: 'REF-123456',
       ...overrides,
     });
@@ -69,9 +69,40 @@ test('con métodos configurados la tienda los publica', async () => {
     const res = await agent.get('/api/payments/config');
 
     assert.equal(res.body.providers.manual, true);
-    assert.equal(res.body.manualMethods[0].id, 'zinli');
-    assert.equal(res.body.manualMethods[0].label, 'Zinli');
-    assert.equal(res.body.manualMethods[0].details, 'Zinli: +58 412 000 0000');
+    assert.equal(res.body.manualMethods[0].id, 'usdt-bep20');
+    assert.equal(res.body.manualMethods[0].label, 'USDT (BNB Smart Chain)');
+    assert.equal(res.body.manualMethods[0].details, 'Envía USDT por BEP20 y pega el hash.');
+  } finally {
+    restore();
+  }
+});
+
+test('la tienda publica la billetera con moneda y red', async () => {
+  const restore = withManualMethods([
+    { id: 'usdt-trc20', label: 'USDT', payTo: 'TXk9abc', asset: 'USDT', network: 'TRC20' },
+  ]);
+  try {
+    const agent = app();
+    const res = await agent.get('/api/payments/config');
+
+    assert.equal(res.body.providers.manual, true);
+    assert.equal(res.body.manualMethods[0].asset, 'USDT');
+    assert.equal(res.body.manualMethods[0].network, 'TRC20');
+    assert.equal(res.body.manualMethods[0].payTo, 'TXk9abc');
+  } finally {
+    restore();
+  }
+});
+
+test('la tienda publica el enlace de pago del método', async () => {
+  const restore = withManualMethods([
+    { id: 'pago-link', label: 'Pago con enlace', link: 'https://example.com/pagar', details: 'Paga y pega la operación.' },
+  ]);
+  try {
+    const agent = app();
+    const res = await agent.get('/api/payments/config');
+
+    assert.equal(res.body.manualMethods[0].link, 'https://example.com/pagar');
   } finally {
     restore();
   }
@@ -83,7 +114,7 @@ test('crear una orden exige sesión', async () => {
     const agent = app();
     const res = await agent
       .post('/api/payments/manual/orders')
-      .send({ packageId: 'starter', method: 'zinli', reference: 'REF-1' });
+      .send({ packageId: 'starter', method: 'usdt-bep20', reference: 'REF-1' });
 
     assert.equal(res.status, 401);
   } finally {
@@ -284,6 +315,82 @@ test('el usuario ve el estado de sus propias órdenes', async () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.orders.length, 1);
     assert.equal(res.body.orders[0].status, 'pending');
+  } finally {
+    restore();
+  }
+});
+
+test('la cola se filtra por método y por rango de fechas', async () => {
+  const restore = withManualMethods();
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    await createOrder(agent, user.token, { reference: 'REF-A' });
+    await createOrder(agent, user.token, { reference: 'REF-B' });
+
+    // Fuera de rango: todo lo anterior a mañana no debe salir si pedimos a partir
+    // de una fecha futura.
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const empty = await agent
+      .get('/api/admin/manual-orders')
+      .query({ from: future })
+      .set('Authorization', `Bearer ${(await makeAdmin('adminf')).token}`);
+    assert.equal(empty.status, 200);
+    assert.equal(empty.body.orders.length, 0);
+
+    const all = await agent
+      .get('/api/admin/manual-orders')
+      .query({ method: 'usdt-bep20' })
+      .set('Authorization', `Bearer ${(await makeAdmin('adming')).token}`);
+    assert.equal(all.body.orders.length, 2);
+
+    const none = await agent
+      .get('/api/admin/manual-orders')
+      .query({ method: 'otro-metodo' })
+      .set('Authorization', `Bearer ${(await makeAdmin('adminh')).token}`);
+    assert.equal(none.body.orders.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('el resumen de compras cuenta órdenes, monedas y compradores', async () => {
+  const restore = withManualMethods();
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    const created = await createOrder(agent, user.token);
+    const admin = await makeAdmin('adminres');
+
+    await agent
+      .post(`/api/admin/manual-orders/${created.body.order._id}/approve`)
+      .set('Authorization', `Bearer ${admin.token}`);
+
+    const res = await agent
+      .get('/api/admin/manual-orders/summary')
+      .query({ status: 'approved' })
+      .set('Authorization', `Bearer ${admin.token}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ordenes, 1);
+    assert.equal(res.body.monedas, 500);
+    assert.equal(res.body.usd, 6.99);
+    assert.equal(res.body.compradores.length, 1);
+    assert.equal(res.body.compradores[0].monedas, 500);
+  } finally {
+    restore();
+  }
+});
+
+test('solo un admin ve el resumen de compras', async () => {
+  const restore = withManualMethods();
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    const res = await agent
+      .get('/api/admin/manual-orders/summary')
+      .set('Authorization', `Bearer ${user.token}`);
+    assert.equal(res.status, 403);
   } finally {
     restore();
   }

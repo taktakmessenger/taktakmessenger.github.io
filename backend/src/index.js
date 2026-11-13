@@ -2,6 +2,7 @@ const createApp = require('./app');
 const db = require('./config/db');
 const env = require('./config/env');
 const { seedGifts } = require('./services/giftService');
+const { seedSounds } = require('./services/soundCatalog');
 const { initLiveSockets } = require('./services/liveSockets');
 const sfu = require('./services/sfuService');
 const manualPaymentService = require('./services/manualPaymentService');
@@ -62,6 +63,11 @@ async function main() {
       // gift sent by name would be rejected.
       const seeded = await seedGifts();
       if (seeded > 0) console.log(`🎁 Catálogo de regalos: ${seeded} nuevos`);
+
+      // Música CC0 para los vídeos: sin catálogo, la pantalla de creación no
+      // tendría nada que ofrecer y la función quedaría muerta.
+      const seededSounds = await seedSounds();
+      if (seededSounds > 0) console.log(`🎵 Catálogo de música: ${seededSounds} nuevas`);
 
       startManualReviewScheduler();
     })

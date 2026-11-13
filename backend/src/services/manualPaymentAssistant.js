@@ -1,4 +1,5 @@
 const env = require('../config/env');
+const assistantClient = require('./assistantClient');
 
 // Asistente de revisión de pagos manuales.
 //
@@ -12,14 +13,14 @@ const env = require('../config/env');
 // null y el panel sigue funcionando sin sugerencia.
 
 function isConfigured() {
-  return Boolean(env.assistantApiKey);
+  return assistantClient.isConfigured();
 }
 
 // El prompt fija el criterio: qué hace que una orden se pueda aprobar y qué la
 // hace sospechosa. Sin él, el modelo aprueba "porque parece bien", que es
 // justo lo contrario de lo que se necesita para entregar dinero.
 const SYSTEM_PROMPT = `Eres el revisor de pagos de TAK TAK, una app de video con monedas TTC.
-Recibes una orden de pago manual: el usuario dice que pagó por fuera (Zinli, pago móvil, transferencia) y dejó una referencia.
+Recibes una orden de pago manual: el usuario dice que pagó por fuera (billetera cripto, transferencia) y dejó una referencia.
 Tu trabajo es proponer si se puede aprobar (acreditar monedas) o hay que rechazarla, y con qué seguridad.
 
 Aprueba (approve) solo si:
@@ -85,32 +86,22 @@ async function suggest(order, context = {}) {
   if (!isConfigured()) return null;
 
   try {
-    const response = await fetch(`${env.assistantApiBase}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.assistantApiKey}`,
-      },
-      body: JSON.stringify({
+    const data = await assistantClient.callAssistant({
+      body: {
         model: env.assistantModel,
         temperature: 0,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: buildUserMessage(order, context) },
         ],
-      }),
-      signal: AbortSignal.timeout(20000),
+      },
+      timeoutMs: 20000,
+      log: '[ASISTENTE PAGOS]',
     });
 
-    if (!response.ok) {
-      console.warn(`[ASISTENTE] El proveedor respondió ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
     return parseSuggestion(data.choices?.[0]?.message?.content);
   } catch (error) {
-    console.warn(`[ASISTENTE] Sin sugerencia: ${error.message}`);
+    console.warn(`[ASISTENTE PAGOS] Sin sugerencia: ${error.message}`);
     return null;
   }
 }

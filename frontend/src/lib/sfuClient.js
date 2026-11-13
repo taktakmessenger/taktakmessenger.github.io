@@ -37,10 +37,11 @@ export async function createSfuClient({
 
   // Un transporte para enviar (nuestro micrófono) y otro para recibir (el audio
   // de los demás). Van separados porque el sentido de la conexión es distinto y
-  // así se puede cerrar uno sin tocar el otro.
-  const sendTransport = await device.createSendTransport(
-    await transportParams('send')
-  );
+  // así se puede cerrar uno sin tocar el otro. El espectador no envía nada, así
+  // que no se le crea el de envío: serían unos puertos del SFU sin uso.
+  const sendTransport = localStream
+    ? await device.createSendTransport(await transportParams('send'))
+    : null;
 
   const recvTransport = await device.createRecvTransport(
     await transportParams('recv')
@@ -60,7 +61,7 @@ export async function createSfuClient({
 
   // Mediasoup-client pide conectar el transporte cuando ya tiene la oferta DTLS
   // lista; el servidor es quien la acepta.
-  sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+  sendTransport?.on('connect', ({ dtlsParameters }, callback, errback) => {
     emitAck('voice:connect-transport', { transportId: sendTransport.id, dtlsParameters })
       .then((r) => (r?.ok ? callback() : errback(new Error(r?.error))))
       .catch(errback);
@@ -73,7 +74,7 @@ export async function createSfuClient({
   });
 
   // Al publicar, el servidor crea el productor y avisa a los demás.
-  sendTransport.on('produce', ({ kind, rtpParameters, appData }, callback, errback) => {
+  sendTransport?.on('produce', ({ kind, rtpParameters, appData }, callback, errback) => {
     emitAck('voice:produce', { transportId: sendTransport.id, kind, rtpParameters, appData })
       .then((r) => (r?.ok ? callback({ id: r.producerId }) : errback(new Error(r?.error))))
       .catch(errback);
@@ -83,17 +84,20 @@ export async function createSfuClient({
   // para que quien entra pueda decidir qué consume: en un directo con veinte
   // invitados, suscribirse a todos los vídeos satura el móvil, así que el
   // cliente consume el vídeo de pocos (el del anfitrión siempre) y el audio de
-  // todos. Con una sola pista no habría esa elección.
+  // todos. Con una sola pista no habría esa elección. Un espectador no trae
+  // stream local: no publica nada, solo consume.
   const producers = [];
-  for (const track of localStream.getTracks()) {
-    // La cámara de un móvil puede venir a 1280x720 o más. Se pide al codificador
-    // que arranque razonable para una ventana de rejilla; el SFU y el cliente
-    // ajustan después con las capas.
-    const options = { track };
-    if (track.kind === 'video') {
-      options.encodings = [{ maxBitrate: 900_000 }];
+  if (localStream) {
+    for (const track of localStream.getTracks()) {
+      // La cámara de un móvil puede venir a 1280x720 o más. Se pide al codificador
+      // que arranque razonable para una ventana de rejilla; el SFU y el cliente
+      // ajustan después con las capas.
+      const options = { track };
+      if (track.kind === 'video') {
+        options.encodings = [{ maxBitrate: 900_000 }];
+      }
+      producers.push(await sendTransport.produce(options));
     }
-    producers.push(await sendTransport.produce(options));
   }
 
   // Se guarda por productor para poder cerrarlos todos al salir.
@@ -142,7 +146,7 @@ export async function createSfuClient({
       for (const consumer of consumers.values()) consumer.close();
       consumers.clear();
       producers.forEach((p) => p.close());
-      sendTransport.close();
+      sendTransport?.close();
       recvTransport.close();
     },
   };

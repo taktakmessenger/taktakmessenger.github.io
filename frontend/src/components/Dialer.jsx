@@ -2,6 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
 import { loadProviders } from '../lib/providers';
 import { matches } from '../lib/search';
+import { PhoneIcon, VideoIcon } from './ChatIcons';
+import {
+  contactsApiAvailable,
+  flattenContacts,
+  mergeContacts,
+  loadCache,
+  saveCache,
+} from '../lib/contacts';
 
 // Banderas a partir del código ISO. Se derivan del código en vez de guardar una
 // tabla: 245 países a mano se desincronizan, y el emoji regional se calcula.
@@ -48,6 +56,11 @@ export default function Dialer({ onCall, onOpenChat }) {
   const [contacts, setContacts] = useState([]);
   const [contactsState, setContactsState] = useState('idle');
   const [contactDraft, setContactDraft] = useState({ name: '', phone: '' });
+  const [syncing, setSyncing] = useState(false);
+  // Lo último leído de la agenda en esta sesión. Se guarda aparte para poder
+  // recomponer la lista al añadir o borrar un contacto manual sin volver a
+  // abrir el selector del sistema.
+  const deviceContactsRef = useRef([]);
   // Voz o vídeo. La videollamada solo existe entre cuentas de TAK TAK: a un
   // teléfono normal se le puede llamar por voz, no con vídeo, porque no hay
   // dónde entregarle la imagen.
@@ -156,47 +169,60 @@ export default function Dialer({ onCall, onOpenChat }) {
     };
   }, [pickerOpen]);
 
-  // Contactos del teléfono. `navigator.contacts` solo existe en algunos
-  // navegadores móviles y exige permiso explícito, así que se pide con un botón
-  // y no al montar: pedir contactos nada más abrir el marcador es invasivo y en
-  // la mayoría de navegadores de escritorio ni siquiera existe la API.
+  // Lee la agenda del teléfono. El navegador no da permiso permanente, así que
+  // esta función siempre la dispara un toque del usuario.
+  async function readDeviceContacts() {
+    const picked = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+    const list = flattenContacts(picked);
+    deviceContactsRef.current = list;
+    saveCache(list);
+    return list;
+  }
+
+  // Sincroniza por gesto del usuario. Es el único camino que existe: la Contact
+  // Picker API no tiene permiso permanente, así que no se puede leer la agenda
+  // "sola" ni en segundo plano. El botón cambia de «Importar» (primera vez) a
+  // «Actualizar» (traer cambios recientes).
   async function importContacts() {
-    if (!navigator.contacts?.select) {
+    if (!contactsApiAvailable()) {
       setContactsState('unsupported');
       return;
     }
 
+    setSyncing(true);
     setContactsState('loading');
     try {
-      const picked = await navigator.contacts.select(['name', 'tel'], { multiple: true });
-      const list = [];
-      for (const entry of picked || []) {
-        const name = entry.name?.[0] || 'Sin nombre';
-        for (const tel of entry.tel || []) {
-          list.push({ name, phone: tel });
-        }
-      }
-      setContacts(list);
+      const list = await readDeviceContacts();
+      setContacts((prev) => mergeContacts(list, prev.filter((c) => c.manual)));
       setContactsState(list.length ? 'ready' : 'empty');
     } catch {
       // El usuario cerró el diálogo o denegó el permiso: no es un error que
       // haya que gritar.
       setContactsState('denied');
+    } finally {
+      setSyncing(false);
     }
   }
 
-  // Contactos guardados a mano. Se persisten en el propio dispositivo porque son
-  // una libreta local, no una lista de la cuenta: no hay razón para subirlos al
-  // servidor ni para perderlos al recargar.
+  // Al abrir el marcador se muestran los contactos que ya se compartieron antes
+  // (cacheados) y los manuales. Eso es lo máximo que permite el navegador sin un
+  // gesto nuevo: no se puede volver a leer la agenda sola.
   useEffect(() => {
+    const cached = loadCache();
+    deviceContactsRef.current = cached.list;
+
+    let manual = [];
     try {
       const saved = JSON.parse(localStorage.getItem('taktak_contacts') || '[]');
-      if (Array.isArray(saved) && saved.length) {
-        setContacts((prev) => [...prev, ...saved]);
-        setContactsState('ready');
-      }
+      if (Array.isArray(saved)) manual = saved.filter((c) => c.manual);
     } catch {
       // Un almacenamiento corrupto no debe romper el marcador.
+    }
+
+    const merged = mergeContacts(cached.list, manual);
+    if (merged.length) {
+      setContacts(merged);
+      setContactsState('ready');
     }
   }, []);
 
@@ -205,10 +231,10 @@ export default function Dialer({ onCall, onOpenChat }) {
     const name = contactDraft.name.trim();
     const phone = contactDraft.phone.trim();
     if (!name || !phone) return;
-    const entry = { name, phone, manual: true };
+    const entry = { name, phone, manual: true, source: 'manual' };
     setContacts((prev) => {
       if (prev.some((c) => c.name === name && c.phone === phone)) return prev;
-      const next = [...prev, entry];
+      const next = mergeContacts(deviceContactsRef.current, [...prev.filter((c) => c.manual), entry]);
       try {
         localStorage.setItem('taktak_contacts', JSON.stringify(next.filter((c) => c.manual)));
       } catch {
@@ -388,7 +414,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           onClick={() => setCallKind('audio')}
           aria-pressed={callKind === 'audio'}
         >
-          📞 Voz
+          <PhoneIcon size={18} /> Voz
         </button>
         <button
           type="button"
@@ -396,7 +422,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           onClick={() => setCallKind('video')}
           aria-pressed={callKind === 'video'}
         >
-          🎥 Vídeo
+          <VideoIcon size={18} /> Vídeo
         </button>
       </div>
 
@@ -499,7 +525,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           disabled={!number.trim() || busy}
           aria-label={callKind === 'video' ? 'Videollamada' : 'Llamar'}
         >
-          {callKind === 'video' ? '🎥' : '📞'}
+          {callKind === 'video' ? <VideoIcon size={26} /> : <PhoneIcon size={26} />}
         </button>
         <button
           type="button"
@@ -575,11 +601,27 @@ export default function Dialer({ onCall, onOpenChat }) {
             type="button"
             className="btn-secondary"
             onClick={importContacts}
-            disabled={contactsState === 'loading'}
+            disabled={syncing || contactsState === 'loading'}
           >
-            {contactsState === 'loading' ? 'Leyendo…' : 'Importar'}
+            {syncing || contactsState === 'loading'
+              ? 'Leyendo…'
+              : contacts.length
+                ? 'Actualizar'
+                : 'Importar'}
           </button>
         </div>
+
+        {/* El navegador no da permiso permanente para la agenda: la primera vez
+            hay que pulsar «Importar» y, a partir de ahí, los contactos quedan
+            guardados y aparecen solos al abrir el marcador. Para traer cambios
+            recientes hace falta volver a pulsar, porque el navegador exige un
+            gesto cada vez. */}
+        {contacts.length > 0 && (
+          <p className="muted dialer-hint">
+            Tus contactos quedan guardados y aparecen solos. Pulsa «Actualizar» para
+            traer los cambios recientes de la agenda.
+          </p>
+        )}
 
         {contactsState === 'unsupported' && (
           <p className="muted dialer-hint">

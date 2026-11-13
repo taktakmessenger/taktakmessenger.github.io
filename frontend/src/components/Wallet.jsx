@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 
+// Los retiros son solo a billetera cripto (USDT). El servidor manda cuáles
+// están disponibles; hoy la única vía es `crypto`.
+const WITHDRAW_LABELS = { crypto: 'Billetera cripto (USDT)' };
+
+// Clave de idempotencia para una solicitud de retiro: una por intento. Si el
+// envío se reintenta (red, doble toque), el servidor devuelve la misma
+// solicitud en vez de descontar los Diamantes dos veces.
+function newIdempotencyKey() {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `wd-${Date.now().toString(36)}-${rand}`;
+}
+
 export default function Wallet({ onBack, onNavigate }) {
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -10,7 +22,10 @@ export default function Wallet({ onBack, onNavigate }) {
   const [showGift, setShowGift] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [gift, setGift] = useState({ recipient: '', amount: '', giftName: '' });
-  const [withdraw, setWithdraw] = useState({ amount: '', method: 'paypal', details: '' });
+  const [withdraw, setWithdraw] = useState({ amount: '', method: '', details: '' });
+  const [withdrawConfig, setWithdrawConfig] = useState(null);
+  const [referral, setReferral] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const loadWallet = useCallback(async () => {
     try {
@@ -30,6 +45,61 @@ export default function Wallet({ onBack, onNavigate }) {
   useEffect(() => {
     loadWallet();
   }, [loadWallet]);
+
+  // El código de invitación se pide aparte del monedero: es un dato del programa
+  // de referidos y no del saldo. Si falla, la pantalla sigue enseñando el saldo.
+  useEffect(() => {
+    api
+      .get('/wallet/referral')
+      .then(({ data }) => setReferral(data))
+      .catch(() => {});
+  }, []);
+
+  // Los límites de retiro los fija el servidor. Se piden al montar para poder
+  // validar en el formulario con las mismas cifras que aplica el backend. La
+  // lista de métodos también viene del servidor: solo se ofrece lo que el
+  // operador tenga declarado.
+  useEffect(() => {
+    api
+      .get('/wallet/withdraw/config')
+      .then(({ data }) => {
+        setWithdrawConfig(data);
+        const methods = data.methods || [];
+        setWithdraw((w) => ({
+          ...w,
+          method: methods.includes(w.method) ? w.method : methods[0] || '',
+        }));
+      })
+      .catch(() => {});
+  }, []);
+
+  async function copyReferral() {
+    if (!referral?.link) return;
+    try {
+      await navigator.clipboard.writeText(referral.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Sin permiso de portapapeles (o sin https): se enseña el enlace para
+      // copiarlo a mano en vez de fallar en silencio.
+      setNotice(`Tu enlace de invitación: ${referral.link}`);
+    }
+  }
+
+  async function shareReferral() {
+    if (!referral?.link) return;
+    const text = `Únete a TAK TAK con mi enlace: ${referral.link}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'TAK TAK', text, url: referral.link });
+        return;
+      }
+    } catch {
+      // El usuario canceló el diálogo de compartir: no es un error.
+      return;
+    }
+    copyReferral();
+  }
 
   async function handleGift(e) {
     e.preventDefault();
@@ -58,12 +128,14 @@ export default function Wallet({ onBack, onNavigate }) {
     setNotice('');
     try {
       await api.post('/wallet/withdraw', {
-        amount: Number(withdraw.amount),
+        // Cadena, no Number: el importe se valida exacto en el servidor.
+        amount: String(withdraw.amount),
         method: withdraw.method,
         details: withdraw.details,
+        idempotencyKey: newIdempotencyKey(),
       });
       setShowWithdraw(false);
-      setWithdraw({ amount: '', method: 'paypal', details: '' });
+      setWithdraw({ amount: '', method: withdraw.method, details: '' });
       setNotice('Solicitud de retiro enviada');
       await loadWallet();
     } catch (err) {
@@ -121,6 +193,39 @@ export default function Wallet({ onBack, onNavigate }) {
         </div>
       )}
 
+      {referral && (
+        <div className="referral-card">
+          <h3>🤝 Invita y gana</h3>
+          <p className="muted">
+            Comparte tu enlace. Cuando alguien se registre con él y compre monedas, ganas el{' '}
+            <strong>{Math.round((referral.percent || 0) * 100)}%</strong> de lo que compre.
+          </p>
+          <p className="referral-link">
+            <code>{referral.link}</code>
+          </p>
+          <div className="referral-stats">
+            <span>
+              <strong>{referral.invited}</strong> invitados
+            </span>
+            <span>
+              <strong>{Number(referral.earned || 0).toFixed(2)}</strong> monedas ganadas
+            </span>
+          </div>
+          <div className="wallet-actions">
+            <button type="button" className="btn-primary" onClick={shareReferral}>
+              📤 Compartir enlace
+            </button>
+            <button type="button" className="btn-secondary" onClick={copyReferral}>
+              {copied ? '✅ Copiado' : '📋 Copiar'}
+            </button>
+          </div>
+          <small className="muted">
+            Las monedas del premio son de regalo: se gastan en TAK TAK (regalos, torneos), pero no
+            se pueden retirar.
+          </small>
+        </div>
+      )}
+
       <div className="wallet-actions">
         <button type="button" className="btn-primary" onClick={() => onNavigate?.('tienda')}>
           🪙 Comprar monedas
@@ -130,9 +235,6 @@ export default function Wallet({ onBack, onNavigate }) {
         </button>
         <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(true)}>
           💸 Retirar Diamantes
-        </button>
-        <button type="button" className="btn-secondary" onClick={() => onNavigate?.('metodos-pago')}>
-          💳 Métodos de pago
         </button>
       </div>
 
@@ -180,30 +282,54 @@ export default function Wallet({ onBack, onNavigate }) {
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modal-content">
             <h3>Retirar Diamantes</h3>
+            <p className="muted">
+              Tienes <strong>{wallet.diamonds.toFixed(2)}</strong> Diamantes retirables.
+              {withdrawConfig && (
+                <>
+                  {' '}Mínimo {withdrawConfig.min} · máximo {withdrawConfig.dailyCap} al día.
+                  {' '}1 Diamante = {withdrawConfig.usdRate} USD.
+                </>
+              )}
+            </p>
             <form onSubmit={handleWithdraw}>
               <input
                 type="number"
                 placeholder="Monto en Diamantes"
                 value={withdraw.amount}
                 onChange={(e) => setWithdraw({ ...withdraw, amount: e.target.value })}
-                min="0.01"
+                min={withdrawConfig?.min ?? 0.01}
                 step="0.01"
                 required
               />
-              <select
-                value={withdraw.method}
-                onChange={(e) => setWithdraw({ ...withdraw, method: e.target.value })}
-              >
-                <option value="paypal">PayPal</option>
-                <option value="zelle">Zelle</option>
-                <option value="crypto">Cripto</option>
-              </select>
+              {withdrawConfig && Number(withdraw.amount) > 0 && (
+                <small className="muted">
+                  Recibirás ≈ {(Number(withdraw.amount) * withdrawConfig.usdRate).toFixed(2)} USD
+                </small>
+              )}
+              {(withdrawConfig?.methods || []).length > 1 && (
+                <select
+                  value={withdraw.method}
+                  onChange={(e) => setWithdraw({ ...withdraw, method: e.target.value })}
+                >
+                  {(withdrawConfig?.methods || []).map((m) => (
+                    <option key={m} value={m}>{WITHDRAW_LABELS[m] || m}</option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
-                placeholder="Detalles de pago"
+                placeholder="Tu dirección de billetera (0x…)"
                 value={withdraw.details}
                 onChange={(e) => setWithdraw({ ...withdraw, details: e.target.value })}
+                maxLength={200}
+                required
               />
+              {withdrawConfig?.network && (
+                <small className="muted">
+                  ⚠️ Red obligatoria: <strong>{withdrawConfig.network}</strong>. Por otra red
+                  el dinero se pierde. El retiro se envía a la dirección que escribas aquí.
+                </small>
+              )}
               <div className="modal-buttons">
                 <button type="submit" className="btn-primary">Solicitar</button>
                 <button type="button" className="btn-secondary" onClick={() => setShowWithdraw(false)}>
@@ -236,6 +362,16 @@ export default function Wallet({ onBack, onNavigate }) {
                             ? '✨'
                             : '📘'}{' '}
                   {tx.amount} TTC
+                  {tx.type === 'withdraw' && (
+                    <small className="tx-paid">
+                      {' · '}
+                      {tx.status === 'completed'
+                        ? '✅ Pagado'
+                        : tx.status === 'rejected'
+                          ? '❌ Rechazado'
+                          : '⏳ Pendiente'}
+                    </small>
+                  )}
                   {tx.type === 'purchase' && tx.amountPaid != null && (
                     <small className="tx-paid"> · {tx.amountPaid.toFixed(2)} {tx.currency || 'USD'}</small>
                   )}

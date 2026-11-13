@@ -135,6 +135,58 @@ async function listMessages(conversationId, userId, { limit = 30, before } = {})
   return messages.reverse().map(serializeMessage);
 }
 
+// Normaliza el contenido enriquecido para el cliente. Se devuelve siempre un
+// objeto con `type` y solo los campos que ese tipo usa: así el frontend no tiene
+// que saber qué campos puede ignorar.
+function serializeRich(rich) {
+  if (!rich || !rich.type) return null;
+
+  if (rich.type === 'location') {
+    return {
+      type: 'location',
+      lat: rich.lat,
+      lng: rich.lng,
+      placeName: rich.placeName || '',
+    };
+  }
+
+  if (rich.type === 'contact') {
+    return {
+      type: 'contact',
+      name: rich.contactName || '',
+      phone: rich.contactPhone || '',
+    };
+  }
+
+  if (rich.type === 'poll') {
+    const options = (rich.options || []).map(String);
+    // `votes` viene como listas paralelas a `options`; se rellena con [] por si
+    // un documento viejo guardó menos listas que opciones.
+    const votes = options.map((_, i) => (rich.votes?.[i] || []).map(String));
+    return {
+      type: 'poll',
+      question: rich.question || '',
+      options,
+      votes,
+      totals: votes.map((v) => v.length),
+      allowMultiple: Boolean(rich.allowMultiple),
+    };
+  }
+
+  if (rich.type === 'event') {
+    return {
+      type: 'event',
+      title: rich.title || '',
+      startsAt: rich.startsAt || null,
+      endsAt: rich.endsAt || null,
+      location: rich.location || '',
+      notes: rich.notes || '',
+    };
+  }
+
+  return null;
+}
+
 function serializeMessage(m) {
   const senderId = m.sender?._id || m.sender;
   const deliveredTo = (m.deliveredTo || []).map(String);
@@ -176,6 +228,7 @@ function serializeMessage(m) {
           durationSeconds: m.attachment.durationSeconds || 0,
         }
       : null,
+    rich: serializeRich(m.rich),
     text: m.deletedAt ? '' : m.text || '',
     deleted: Boolean(m.deletedAt),
     status,
@@ -193,15 +246,26 @@ function attachmentPreview(attachment) {
   return attachment.name ? `${label}: ${attachment.name}` : label;
 }
 
+// Vista previa de un mensaje rico para la lista de chats, por el mismo motivo
+// que `attachmentPreview`: sin ella el chat aparecería vacío en el inbox.
+function richPreview(rich) {
+  if (!rich?.type) return '';
+  if (rich.type === 'location') return `📍 Ubicación${rich.placeName ? `: ${rich.placeName}` : ''}`;
+  if (rich.type === 'contact') return `👤 Contacto: ${rich.contactName || ''}`.trim();
+  if (rich.type === 'poll') return `📊 Encuesta: ${rich.question || ''}`.trim();
+  if (rich.type === 'event') return `📅 Evento: ${rich.title || ''}`.trim();
+  return '';
+}
+
 // Persists a message and updates the conversation's denormalised preview and
 // unread counters in one place, so both the REST endpoint and the websocket
 // produce identical state.
 //
-// Un mensaje puede llevar solo texto, solo adjunto, o las dos cosas (el pie de
-// foto). Debe haber al menos una de las dos: un mensaje vacío no tiene sentido.
-async function sendMessage({ conversationId, senderId, text, attachment }) {
+// Un mensaje puede llevar solo texto, solo adjunto, solo contenido rico, o una
+// combinación (el pie de foto). Debe haber al menos algo que enviar.
+async function sendMessage({ conversationId, senderId, text, attachment, rich }) {
   const body = String(text || '').trim();
-  if (!body && !attachment) {
+  if (!body && !attachment && !rich) {
     throw new HttpError(400, 'El mensaje no puede estar vacío');
   }
 
@@ -215,12 +279,17 @@ async function sendMessage({ conversationId, senderId, text, attachment }) {
     throw new HttpError(403, 'No puedes enviar mensajes a este usuario');
   }
 
+  // El `kind` sale del contenido, no lo elige el cliente: así no puede declarar
+  // "texto" y mandar una encuesta, ni colar un `kind` que el modelo no admite.
+  const kind = rich?.type || (attachment ? 'attachment' : 'text');
+
   const message = await Message.create({
     conversation: conversation._id,
     sender: senderId,
-    kind: attachment ? 'attachment' : 'text',
+    kind,
     text: body,
     attachment: attachment || undefined,
+    rich: rich || undefined,
   });
 
   const unread = new Map(conversation.unread || []);
@@ -232,7 +301,9 @@ async function sendMessage({ conversationId, senderId, text, attachment }) {
   }
 
   conversation.lastMessageAt = message.createdAt;
-  conversation.lastMessagePreview = (body || attachmentPreview(attachment)).slice(0, 140);
+  conversation.lastMessagePreview = (
+    body || attachmentPreview(attachment) || richPreview(rich)
+  ).slice(0, 140);
   conversation.unread = unread;
   await conversation.save();
 
@@ -244,6 +315,56 @@ async function sendMessage({ conversationId, senderId, text, attachment }) {
     message: serializeMessage(message),
     conversationId: conversation._id,
     participants: conversation.participants.map(String),
+  };
+}
+
+// Vota en una encuesta del hilo. Un voto por opción y usuario: si ya había
+// votado esa opción, el segundo toque lo retira (como WhatsApp, donde se puede
+// cambiar de opinión). Con `allowMultiple` se pueden marcar varias opciones; sin
+// él, votar una limpia las demás.
+async function votePoll({ conversationId, userId, messageId, optionIndex }) {
+  await loadForParticipant(conversationId, userId);
+
+  const message = await Message.findById(messageId);
+  if (!message || String(message.conversation) !== String(conversationId)) {
+    throw new HttpError(404, 'Mensaje no encontrado');
+  }
+  if (message.kind !== 'poll' || !message.rich || message.rich.type !== 'poll') {
+    throw new HttpError(400, 'Ese mensaje no es una encuesta');
+  }
+
+  const index = Number(optionIndex);
+  const options = message.rich.options || [];
+  if (!Number.isInteger(index) || index < 0 || index >= options.length) {
+    throw new HttpError(400, 'Opción inválida');
+  }
+
+  // `votes` se normaliza a una lista por opción antes de tocarla: los
+  // documentos creados antes de este cambio pueden no tenerla.
+  const votes = options.map((_, i) => (message.rich.votes?.[i] || []).map(String));
+  const me = String(userId);
+  const already = votes[index].includes(me);
+
+  if (already) {
+    votes[index] = votes[index].filter((id) => id !== me);
+  } else {
+    if (!message.rich.allowMultiple) {
+      // Una sola respuesta: se quita el voto de las demás opciones.
+      for (let i = 0; i < votes.length; i += 1) {
+        votes[i] = votes[i].filter((id) => id !== me);
+      }
+    }
+    votes[index] = [...votes[index], me];
+  }
+
+  message.rich.votes = votes;
+  message.markModified('rich.votes');
+  await message.save();
+  await message.populate('sender', 'username profile.displayName profile.avatar');
+
+  return {
+    message: serializeMessage(message),
+    conversationId: message.conversation,
   };
 }
 
@@ -436,5 +557,6 @@ module.exports = {
   presenceOf,
   serializeMessage,
   ownsAttachment,
+  votePoll,
   MAX_PAGE,
 };

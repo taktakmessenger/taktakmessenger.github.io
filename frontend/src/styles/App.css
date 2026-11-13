@@ -822,6 +822,46 @@
   color: var(--muted);
 }
 
+/* Invita y gana: la tarjeta del programa de referidos en el monedero. */
+.referral-card {
+  border: 1px solid rgba(176, 75, 251, 0.35);
+  background: linear-gradient(135deg, rgba(176, 75, 251, 0.1), rgba(0, 247, 212, 0.08));
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.referral-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.referral-card .referral-link {
+  margin: 0;
+  word-break: break-all;
+}
+
+.referral-card .referral-link code {
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.referral-stats {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.referral-stats strong {
+  color: var(--accent, #00f7d4);
+}
+
 /* ------------------------------------------------------------------
    Feed vertical (estilo TikTok) con ajuste por tarjeta.
    ------------------------------------------------------------------ */
@@ -844,10 +884,12 @@
   position: relative;
 }
 
-/* Control de sonido, fijo arriba a la derecha, por encima del vídeo. */
+/* Control de sonido, fijo arriba a la derecha, por encima del vídeo. Se
+   separa del borde superior con el área segura para no quedar bajo la barra de
+   estado ni el recorte redondeado del móvil. */
 .reel-sound {
   position: absolute;
-  top: 0.9rem;
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
   right: 0.9rem;
   z-index: 5;
   width: 2.4rem;
@@ -879,6 +921,7 @@
   top: 0.9rem;
   left: 50%;
   transform: translateX(-50%);
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
   z-index: 5;
   padding: 0.5rem 0.9rem;
   border-radius: 999px;
@@ -889,6 +932,36 @@
   font-weight: 600;
   backdrop-filter: blur(8px);
   cursor: pointer;
+}
+
+/* Botón de pausa/reanudar. Va debajo del de sonido para no taparlo y se
+   mantiene discreto: el vídeo es el protagonista, no el control. */
+.reel-pause {
+  position: absolute;
+  top: calc(0.9rem + 2.4rem + 0.5rem + env(safe-area-inset-top, 0px));
+  right: 0.9rem;
+  z-index: 5;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(13, 10, 26, 0.6);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.2s ease;
+}
+.reel-pause:hover {
+  transform: scale(1.08);
+}
+.reel-pause.paused {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--glow-cyan);
 }
 
 .reel {
@@ -1010,6 +1083,19 @@
 
 @media (prefers-reduced-motion: reduce) {
   .reel-disc.spin { animation: none; }
+}
+
+.reel-sound-name {
+  display: block;
+  max-width: 140px;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: #fff;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 .reel-author p {
@@ -1234,6 +1320,20 @@
   margin: 0;
 }
 
+/* Cabecera de WhaTaka: el emblema del mango púrpura junto al nombre. El mango
+   es la marca de la sección y sustituye a los emojis 💬/📞, que cambiaban de
+   forma en cada sistema. */
+.whataka-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.whataka-title svg {
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px var(--glow-purple));
+}
+
 .btn-new-chat {
   width: 42px;
   height: 42px;
@@ -1412,11 +1512,11 @@
 .thread-header {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.7rem;
-  /* Cabecera sólida en degradado violeta, como la barra verde de WhatsApp:
-     el color de la marca marca dónde empieza la conversación. */
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover) 60%, var(--turquoise-deep));
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  /* Cabecera sólida en el morado de la marca, como la barra verde de WhatsApp:
+     marca dónde empieza la conversación y da contraste a los iconos blancos. */
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
   border-bottom: none;
   color: #fff;
 }
@@ -1433,12 +1533,19 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
-.thread-peer-id strong {
+/* Nombre y estado se recortan con puntos suspensivos: sin esto, un nombre o un
+   "última vez…" largos se salían de la columna y se montaban encima de los
+   botones de llamada. */
+.thread-peer-id strong,
+.thread-peer-id small {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Dentro de la cabecera violeta el texto va en blanco: el gris de `--muted`
@@ -1464,7 +1571,59 @@
 
 .thread-call {
   display: flex;
-  gap: 0.35rem;
+  /* Un poco más de aire entre los botones de llamada: con 0.35rem se veían
+     pegados, y en una cabecera táctil el dedo necesita distinguirlos. */
+  gap: 0.4rem;
+  align-items: center;
+}
+
+/* Los botones de la cabecera del chat (volver, traducir, llamar, vídeo) van en
+   círculos de 42 px. `min-width` los mantiene cuadrados aunque el icono sea
+   estrecho, y `flex: 0 0 auto` evita que el nombre largo los aplaste. */
+.thread-header .btn-ghost,
+.thread-call .btn-secondary {
+  flex: 0 0 auto;
+  min-width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Sobre el morado de la cabecera el gris de `btn-ghost` casi no se veía: aquí
+   el icono va en blanco y el fondo es un disco translúcido, como en WhatsApp. */
+.thread-header .btn-ghost {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+.thread-header .btn-ghost:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+/* En la cabecera el botón de llamada también va en disco translúcido blanco
+   para que los iconos blancos se lean sobre el morado. */
+.thread-call .btn-secondary {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.thread-call .btn-secondary:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+.thread-call .btn-secondary:disabled {
+  opacity: 0.45;
+}
+
+/* El icono de traducir apagado va en blanco (hereda el color del botón); cuando
+   la traducción está encendida lo pone en fucsia el propio componente. */
+.thread-header .translate-toggle.on {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .thread-body {
@@ -1640,46 +1799,477 @@
   background: var(--surface-2);
 }
 
+/* --- Tarjetas de contenido rico dentro de la burbuja --- */
+.rich-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 12rem;
+  max-width: 100%;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: rgba(10, 6, 20, 0.35);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.bubble-row.mine .rich-card {
+  background: rgba(10, 6, 20, 0.28);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.rich-card-icon {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+}
+
+.rich-location .rich-card-icon {
+  background: linear-gradient(135deg, var(--accent-strong), var(--turquoise-deep));
+}
+
+.rich-event .rich-card-icon {
+  background: linear-gradient(135deg, var(--pink), var(--primary));
+}
+
+.rich-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.rich-card-body strong {
+  font-size: 0.92rem;
+}
+
+.rich-card-body small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
+.bubble-row.mine .rich-card-body small {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.rich-event-notes {
+  font-style: italic;
+}
+
+.rich-card-action {
+  flex: none;
+  margin-left: auto;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: #04241f;
+  background: linear-gradient(135deg, var(--turquoise), var(--turquoise-deep));
+}
+
+/* Encuesta: la tarjeta no es una fila sino un bloque con la pregunta arriba. */
+.rich-poll {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  min-width: 13rem;
+}
+
+.rich-poll-question {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.rich-poll-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rich-poll-option {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(10, 6, 20, 0.4);
+  color: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.rich-poll-option.chosen {
+  border-color: var(--accent);
+}
+
+.rich-poll-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(0, 247, 212, 0.18);
+  transition: width 0.2s ease;
+}
+
+.rich-poll-label,
+.rich-poll-count {
+  position: relative;
+  z-index: 1;
+}
+
+.rich-poll-count {
+  flex: none;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.rich-poll-total {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+/* --- Menú de adjuntos (el clip) --- */
+.attach-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(4, 3, 10, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.attach-sheet {
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(13, 10, 26, 0.98), rgba(7, 7, 13, 0.99));
+  border-top: 1px solid var(--border-strong);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow);
+  animation: comments-rise 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attach-sheet {
+    animation: none;
+  }
+}
+
+.attach-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+  font-weight: 700;
+}
+
+.attach-close {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.attach-close:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.attach-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem 0.4rem;
+}
+
+.attach-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.attach-option:disabled {
+  opacity: 0.45;
+}
+
+.attach-icon {
+  width: 3.2rem;
+  height: 3.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  transition: transform 0.1s ease;
+}
+
+.attach-option:hover .attach-icon {
+  transform: scale(1.06);
+}
+
+.attach-icon-violet {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+}
+.attach-icon-pink {
+  background: linear-gradient(135deg, var(--pink), var(--primary));
+}
+.attach-icon-cyan {
+  background: linear-gradient(135deg, var(--turquoise), var(--turquoise-deep));
+}
+.attach-icon-amber {
+  background: linear-gradient(135deg, #ffb347, #ff8a3d);
+}
+
+.attach-option small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* --- Formularios de contenido rico (ubicación, contacto, encuesta, evento) --- */
+.rich-form-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(4, 3, 10, 0.7);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.rich-form {
+  width: 100%;
+  max-width: 420px;
+  max-height: 86dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1.1rem;
+  background: linear-gradient(180deg, rgba(19, 14, 36, 0.99), rgba(11, 8, 22, 0.99));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.rich-form h3 {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+}
+
+.rich-form label,
+.rich-form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.rich-form input,
+.rich-form textarea {
+  font-size: 0.95rem;
+  color: var(--text);
+  background: rgba(10, 6, 20, 0.75);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-family: inherit;
+}
+
+.rich-form input:focus,
+.rich-form textarea:focus {
+  outline: none;
+  border-color: var(--turquoise);
+  box-shadow: 0 0 0 3px rgba(0, 247, 212, 0.22);
+}
+
+.rich-option-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.rich-option-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.rich-option-remove {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rich-option-remove:hover {
+  color: var(--pink);
+}
+
+.rich-inline-btn {
+  align-self: flex-start;
+  padding: 0.5rem 0.8rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.rich-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.rich-check input {
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+}
+
+.rich-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
 .thread-composer {
   display: flex;
-  gap: 0.5rem;
-  padding: 0.6rem 0.7rem;
+  gap: 0.35rem;
+  padding: 0.5rem 0.55rem;
   border-top: 1px solid var(--border);
   background: rgba(13, 10, 26, 0.78);
   backdrop-filter: blur(6px);
-  /* El compositor admite una fila de vista previa encima; con `wrap`, el botón
-     de adjuntar y el campo no se aprietan cuando hay un adjunto elegido. */
+  /* El compositor admite una fila de vista previa encima; con `wrap`, la fila de
+     botones no se aprieta cuando hay un adjunto elegido. */
   flex-wrap: wrap;
   align-items: center;
 }
 
-/* Botón de adjuntar, redondo y con el acento de la marca. */
-.composer-attach {
+/* Botones de icono del compositor (emoji, clip, cámara). Son círculos discretos
+   para que no compitan con el turquesa del micro y el enviar. */
+.composer-icon {
   flex: 0 0 auto;
   width: 2.4rem;
   height: 2.4rem;
   display: grid;
   place-items: center;
-  font-size: 1.1rem;
-  border: 1px solid var(--border-strong, var(--border));
+  border: none;
   border-radius: 50%;
-  background: var(--surface-2);
-  color: var(--text);
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.1s ease;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.composer-icon:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.composer-icon:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.composer-icon:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.composer-emoji[aria-expanded='true'] {
+  color: var(--accent);
+}
+
+/* Paleta de emojis: una rejilla que aparece encima del compositor. Se ancla al
+   propio formulario con `position: absolute` y este es su contexto. */
+.thread-composer {
+  position: relative;
+}
+
+.emoji-palette {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 0.4rem;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.15rem;
+  padding: 0.5rem;
+  max-width: min(20rem, calc(100vw - 1.6rem));
+  background: linear-gradient(180deg, rgba(19, 14, 36, 0.99), rgba(11, 8, 22, 0.99));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: comments-rise 0.14s ease-out;
+}
+
+.emoji-palette button {
+  width: 2.3rem;
+  height: 2.3rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  line-height: 1;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.emoji-palette button:hover {
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emoji-palette {
+    animation: none;
+  }
 }
 
 .composer-attach:hover:not(:disabled) {
-  border-color: var(--turquoise, var(--primary));
+  color: var(--turquoise, var(--primary));
 }
 
-.composer-attach:active:not(:disabled) {
-  transform: scale(0.94);
-}
-
-.composer-attach:disabled {
-  opacity: 0.5;
-  cursor: default;
+.composer-camera:hover:not(:disabled) {
+  color: var(--pink);
 }
 
 /* Vista previa del adjunto antes de enviarlo. Ocupa toda la fila, encima del
@@ -1954,6 +2544,16 @@
   color: var(--muted);
 }
 
+/* Reloj de la llamada, como el de WhatsApp: cuenta desde que se descuelga.
+   Cifras tabulares para que el número no baile al cambiar de segundo. */
+.call-info .call-timer {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
 /* Aviso informativo: se distingue del error por el color, no por el tamaño, para
    que quede claro que la llamada sigue en pie. */
 .call-info .notice {
@@ -1985,18 +2585,59 @@
 
 .call-actions {
   display: flex;
-  gap: 0.7rem;
-  padding-top: 1rem;
+  /* En un móvil la fila tiene que caber sin cortarse. `wrap` es la red de
+     seguridad: si aun con botones compactos no entran (pantallas de 320 px),
+     bajan a una segunda fila en vez de salirse por los lados. */
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 100%;
+  padding-top: 0.8rem;
 }
 
 .call-btn {
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  padding: 0.7rem 1.3rem;
+  /* Cuadrado de 44 px: el mínimo táctil recomendado en móvil. Como casi todos
+     son iconos, el ancho queda fijo y la fila no se desborda. */
+  min-width: 2.75rem;
+  height: 2.75rem;
+  padding: 0 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  line-height: 1;
   color: var(--text);
   background: var(--surface-2);
   backdrop-filter: blur(8px);
+  transition: transform 0.12s ease, background 0.18s ease;
+}
+
+/* Los botones de llamada llevan ahora iconos SVG en lugar de emojis. Se
+   alinean al centro del botón y responden al toque con un pequeño encogido,
+   como los de WhatsApp. */
+.call-btn svg {
+  display: block;
+}
+
+.call-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+/* En un móvil la pantalla de llamada no debe llevar márgenes anchos: cada
+   píxel de ancho es un botón que cabe en la fila de abajo sin partirse. */
+@media (max-width: 640px) {
+  .call-overlay {
+    padding: 1rem 0.7rem;
+  }
+
+  .call-actions {
+    gap: 0.35rem;
+  }
 }
 
 .call-btn.accept {
@@ -2286,6 +2927,7 @@
   align-items: center;
   gap: 0.7rem;
   padding: calc(0.7rem + env(safe-area-inset-top)) 0.9rem 0.7rem;
+  position: relative;
 }
 
 .live-badge {
@@ -2316,6 +2958,78 @@
   flex-direction: column;
   min-width: 0;
   flex: 1;
+}
+
+/* Ficha del anfitrión en la cabecera, como la de TikTok: avatar redondo con
+   anillo de directo, nombre y, debajo, la insignia EN VIVO y cuánta gente mira. */
+.live-host-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.live-host-avatar {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 0 4px var(--pink);
+}
+
+.live-host-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.live-host-text strong {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-host-text small {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+/* Cuántos espectadores están mirando. */
+.live-viewers {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Rótulo del rol cuando entras como espectador. */
+.live-role {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #0d0a1a;
+  background: var(--accent);
+  white-space: nowrap;
+}
+
+/* Botones de la derecha de la cabecera (diseño, comentarios, minimizar). */
+.live-stage-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .live-stage-title strong {
@@ -2457,6 +3171,25 @@
   aspect-ratio: 3 / 4;
 }
 
+/* Diseño "Rejilla" (el otro de TikTok): el anfitrión deja de ser la ventana
+   grande y pasa a ser una más de la cuadrícula, así que se anula la altura fija
+   que tiene en el diseño de panel y todos comparten la misma proporción. */
+.live-grid.all-equal .live-tile.host {
+  height: auto;
+  width: auto;
+  flex-shrink: 1;
+  aspect-ratio: 3 / 4;
+}
+
+/* Aviso cuando el anfitrión está solo: invita a compartir el enlace. */
+.live-stage-hint {
+  margin: 0.4rem 0 0;
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 .live-stage-controls {
   display: flex;
   justify-content: center;
@@ -2488,8 +3221,280 @@
   border-color: var(--pink);
 }
 
+/* Sala de juegos: dos ases cruzados en V. El SVG se inclina un poco hacia
+   dentro para que las dos cartas se lean como una V. */
+.live-ctrl-aces {
+  width: 30px;
+  height: 24px;
+  display: block;
+}
+
+.live-ctrl-aces .ace-card {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 700;
+  fill: #fff;
+}
+
+.live-ctrl.games.active {
+  background: rgba(255, 217, 74, 0.22);
+  border-color: #ffd94a;
+}
+
+.live-ctrl.games.active .live-ctrl-aces .ace-card {
+  fill: #ffd94a;
+}
+
 .live-ctrl:active {
   transform: scale(0.94);
+}
+
+/* ------------------------------------------------------------------
+   Comentarios y regalos del directo (encima del vídeo, estilo TikTok)
+   ------------------------------------------------------------------ */
+.live-stage-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.live-chat {
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+/* Oculta sin desmontar: el chat sigue suscrito a la sala mientras se eligen
+   regalos, para no perder el evento del regalo que se está enviando. */
+.live-chat-hidden {
+  display: none;
+}
+
+.live-chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 32vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  /* Los comentarios se leen sobre el vídeo: sin esto el texto se pierde en una
+     escena clara. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: auto;
+}
+
+.live-chat-list li {
+  align-self: flex-start;
+  max-width: 92%;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: #fff;
+  background: rgba(5, 3, 12, 0.55);
+  backdrop-filter: blur(4px);
+  word-break: break-word;
+}
+
+.live-chat-list li strong {
+  color: var(--accent);
+}
+
+.live-chat-system {
+  background: rgba(255, 92, 138, 0.28) !important;
+}
+
+/* Aviso de Asistak, el asistente administrativo: se distingue del sistema
+   normal para que se vea que viene de la moderación y no de un regalo. */
+.live-chat-asistak {
+  background: rgba(176, 75, 251, 0.32) !important;
+  border-left: 3px solid #b04bfb;
+  font-style: italic;
+}
+
+.live-chat-error {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: #fff;
+  background: rgba(255, 45, 141, 0.75);
+  pointer-events: auto;
+}
+
+.live-chat-form {
+  display: flex;
+  gap: 0.4rem;
+  pointer-events: auto;
+}
+
+.live-chat-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(5, 3, 12, 0.72);
+  color: #fff;
+  font-size: 0.85rem;
+  backdrop-filter: blur(6px);
+}
+
+.live-chat-form input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.live-chat-send {
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  border: none;
+  font-weight: 700;
+  color: #0d0a1a;
+  background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+  cursor: pointer;
+}
+
+.live-chat-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Regalos: tira de botones sobre el vídeo, con el saldo a la vista. */
+.live-gifts {
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border-radius: 16px;
+  background: rgba(5, 3, 12, 0.82);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(8px);
+  z-index: 2;
+}
+
+.live-gifts-balance {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.live-gifts-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.live-gift-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 64px;
+  padding: 0.5rem 0.4rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.live-gift-btn strong {
+  font-size: 0.72rem;
+}
+
+.live-gift-btn small {
+  color: var(--muted);
+}
+
+.live-gift-btn.selected {
+  border-color: var(--accent);
+  background: rgba(0, 247, 212, 0.16);
+  box-shadow: 0 0 20px -8px var(--glow-cyan);
+}
+
+.live-gift-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.live-gifts-send {
+  width: 100%;
+}
+
+.live-gifts-notice {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+/* Animación breve del regalo recibido: entra, se ve y se va sola. */
+.live-gift-flash {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: #fff;
+  background: linear-gradient(120deg, rgba(255, 92, 138, 0.92), rgba(139, 92, 246, 0.92));
+  box-shadow: 0 0 30px -6px var(--glow-purple);
+  animation: live-gift-flash 2.6s ease-out forwards;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.live-gift-flash-icon {
+  font-size: 1.3rem;
+}
+
+@keyframes live-gift-flash {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -14px) scale(1);
+  }
+}
+
+/* Botón de comentarios activo en la cabecera del directo. */
+.live-stage-min.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.voice-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3050,6 +4055,26 @@
   opacity: 0.8;
 }
 
+.upload-sound {
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.upload-sound legend {
+  padding: 0 0.4rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.sound-preview {
+  width: 100%;
+  height: 36px;
+}
+
 /* Panel de comentarios. Ocupa la parte inferior de la pantalla, como una hoja
    móvil: el vídeo sigue visible y reproduciéndose detrás, que es el contexto
    del hilo. Usa position:fixed para no desmontar el reproductor. */
@@ -3245,6 +4270,10 @@
 
 .whataka-tab {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.55rem 0.75rem;
   border: none;
   border-radius: 999px;
@@ -3253,6 +4282,10 @@
   font-weight: 700;
   font-size: 0.85rem;
   transition: color 0.18s ease, background 0.18s ease;
+}
+
+.whataka-tab svg {
+  flex-shrink: 0;
 }
 
 .whataka-tab.active {
@@ -3762,7 +4795,8 @@
   margin-bottom: 1rem;
 }
 
-.screen-head h2 {
+.screen-head h2,
+.screen-head h3 {
   margin: 0;
   font-size: 1.35rem;
 }
@@ -4239,6 +5273,49 @@
   background: rgba(255, 255, 255, 0.05);
   color: inherit;
   font-size: 0.85rem;
+}
+
+/* Enlace directo a la cuenta de cobro. Va como botón ancho y llamativo porque
+   es el paso que el usuario no podía resolver antes: saber a quién pagar. */
+.manual-pay-link {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.manual-pay-link:active {
+  filter: brightness(0.92);
+}
+
+/* El enlace también como texto copiable: el usuario tiene que llevárselo a otra
+   app para pagar, así que tiene que poder leerlo y copiarlo en un toque. */
+.manual-pay-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.manual-pay-value {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.manual-pay-copy-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Sugerencia del asistente en la cola de pagos manuales. Se colorea según lo
@@ -5425,7 +6502,7 @@
    solos y no se pisen cuando el texto del selector crece. */
 .home-topbar {
   position: absolute;
-  top: 0.9rem;
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   z-index: 6;
@@ -5672,6 +6749,60 @@
   background: var(--surface);
 }
 
+/* Resultado de fuera de TAK TAK (música o vídeo con licencia libre). Se lee
+   como una fila con su botón de traer a la derecha; en pantalla estrecha el
+   botón baja debajo para no aplastar el título. */
+.ext-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.ext-item-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.ext-item-body strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ext-item-body audio {
+  width: 100%;
+  margin-top: 0.3rem;
+}
+
+.ext-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex: 0 0 auto;
+  background: var(--surface-2);
+}
+
+.ext-item .btn-primary {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 420px) {
+  .ext-item {
+    flex-wrap: wrap;
+  }
+  .ext-item .btn-primary {
+    width: 100%;
+  }
+}
+
 .search-user-main {
   flex: 1;
   display: flex;
@@ -5835,6 +6966,26 @@
   gap: 0.5rem;
 }
 
+/* Formulario de edición de un vídeo: los mismos campos que la subida, en el
+   diálogo de confirmación. */
+.edit-video-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.edit-video-form input,
+.edit-video-form textarea {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: inherit;
+  resize: vertical;
+}
+
 .report-done {
   display: flex;
   flex-direction: column;
@@ -5895,13 +7046,17 @@
    ------------------------------------------------------------------ */
 .composer-mic {
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
+  width: 2.6rem;
+  height: 2.6rem;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text);
-  font-size: 1.1rem;
+  border: none;
+  /* Círculo turquesa, igual que el botón de enviar: en WhatsApp el micro ocupa
+     el mismo sitio que el avión de papel cuando no hay texto escrito. */
+  background: linear-gradient(135deg, var(--turquoise), var(--turquoise-deep));
+  color: #04241f;
+  box-shadow: 0 6px 16px -8px var(--glow-cyan);
   cursor: pointer;
   touch-action: none;
   user-select: none;
@@ -6046,6 +7201,101 @@
 
 .admin-section-head h3 {
   margin: 0;
+}
+
+/* Identidad de GLENIS IA, la asistente del administrador: su retrato real en un
+   marco circular con el aro dorado de la marca, junto a su nombre. */
+.glenis-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.glenis-avatar {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, #e1c889, #d2a12d 45%, #8a6d15);
+  box-shadow: 0 6px 18px -8px rgba(210, 161, 45, 0.6);
+  display: block;
+}
+
+.glenis-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  border: 2px solid var(--bg, #07070d);
+}
+
+.glenis-id {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.glenis-id h3 {
+  margin: 0;
+}
+
+.glenis-role {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #a99cc9);
+}
+
+/* Asistente del administrador: chat sencillo, con el historial arriba y la caja
+   de texto abajo. Solo se muestra dentro del panel de admin. */
+.admin-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.admin-chat-msg {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.admin-chat-msg strong {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+  margin-bottom: 0.2rem;
+}
+
+.admin-chat-msg p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.admin-chat-msg.user {
+  border-color: var(--turquoise);
+  background: rgba(0, 247, 212, 0.08);
+}
+
+.admin-chat-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-chat-form input {
+  flex: 1;
+  min-width: 0;
 }
 
 .admin-filters {
@@ -6342,4 +7592,1084 @@
   .call-btn-dot {
     animation: none;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* POKERTAK: mesa de póker privada dentro del directo                  */
+/* ------------------------------------------------------------------ */
+
+.ptak-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 214, 90, 0.08), transparent 60%),
+    linear-gradient(160deg, #0d3b2e 0%, #0a2a22 60%, #071c17 100%);
+  color: #f4f7f5;
+  overflow: hidden;
+}
+
+.ptak-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Sin salto de línea: si algo no cabe, se encoge o se recorta, pero nunca se
+     apila un botón encima de otro ni se sale de la pantalla. */
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.ptak-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.ptak-name {
+  display: block;
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: #ffd94a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.ptak-tagline {
+  display: block;
+  font-size: 11px;
+  color: #cfe6d8;
+  letter-spacing: 1px;
+}
+
+.ptak-head-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.ptak-phase,
+.ptak-pot {
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 42vw;
+}
+
+.ptak-pot {
+  background: rgba(255, 217, 74, 0.16);
+  color: #ffe98a;
+}
+
+/* Menú de tres puntos: el chat y el cerrar caben aquí sin apilarse. */
+.ptak-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ptak-menu-btn {
+  min-width: 40px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+/* El panel flota sobre la mesa, anclado a la esquina derecha, justo bajo la
+   cabecera. Como la cabecera recorta lo que sobresale, vive fuera de ella y por
+   eso necesita su propio `position: fixed` y una capa por encima del tapete. */
+.ptak-menu {
+  position: fixed;
+  right: 10px;
+  top: 52px;
+  z-index: 80;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 12px;
+  background: #0d3b2e;
+  border: 1px solid rgba(255, 217, 74, 0.4);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.ptak-menu-item {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #f4f7f5;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ptak-menu-item:hover,
+.ptak-menu-item.on {
+  background: rgba(255, 217, 74, 0.16);
+}
+
+.ptak-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.ptak-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ptak-btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.ptak-btn.primary {
+  background: linear-gradient(180deg, #ffd94a, #f0a91b);
+  border-color: #b9790a;
+  color: #3a2600;
+  font-weight: 700;
+}
+
+.ptak-btn.allin {
+  background: linear-gradient(180deg, #ff7a59, #d63a1f);
+  border-color: #8f2410;
+  font-weight: 700;
+}
+
+.ptak-btn.ghost {
+  padding: 6px 10px;
+  background: transparent;
+}
+
+.ptak-error {
+  margin: 8px 14px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(214, 58, 31, 0.22);
+  border: 1px solid rgba(255, 122, 89, 0.5);
+  font-size: 13px;
+}
+
+.ptak-felt {
+  position: relative;
+  flex: 1 1 auto;
+  /* La mesa es un óvalo contenido: no se estira hasta llenar toda la pantalla ni
+     se sale de ella. Con el ancho máximo y el alto acotado, en el móvil queda a
+     la vista entera, con los controles debajo siempre alcanzables. */
+  width: min(100%, 620px);
+  /* Alargada hacia arriba: con nueve asientos el óvalo necesita más alto para
+     que las caras de arriba y de abajo no se junten en el centro. */
+  min-height: 58vh;
+  max-height: 72vh;
+  margin: 8px auto;
+  border-radius: 46% / 34%;
+  background:
+    radial-gradient(ellipse at center, #1a6b52 0%, #12503d 55%, #0c3628 100%);
+  border: 8px solid #5a3a1c;
+  box-shadow:
+    inset 0 0 60px rgba(0, 0, 0, 0.5),
+    0 12px 30px rgba(0, 0, 0, 0.45);
+  min-height: 0;
+}
+
+.ptak-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: min(60%, 320px);
+  pointer-events: none;
+}
+
+.ptak-center-logo {
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
+}
+
+.ptak-center-name {
+  margin: 2px 0 0;
+  font-size: 22px;
+  letter-spacing: 4px;
+  color: #ffd94a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.ptak-center-tagline {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: #ffe98a;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.ptak-board {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ptak-board-empty {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ptak-last {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Cartas */
+.ptak-card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 60px;
+  border-radius: 7px;
+  background: #fff;
+  color: #14202b;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  line-height: 1;
+}
+
+.ptak-card.red {
+  color: #cf2b2b;
+}
+
+.ptak-card-rank {
+  font-size: 19px;
+}
+
+.ptak-card-suit {
+  font-size: 17px;
+}
+
+.ptak-card.back {
+  background:
+    repeating-linear-gradient(45deg, #1d4ed8 0 6px, #1e3a8a 6px 12px);
+  border: 2px solid #0f1e46;
+}
+
+.ptak-card.empty {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+}
+
+/* Póker face: la cara del jugador en un óvalo. Vertical, como un retrato, para
+   que quepa la cara y no se deforme; el borde dorado marca la mesa de póker. */
+.ptak-face {
+  position: relative;
+  width: 66px;
+  height: 80px;
+  border-radius: 50% / 50%;
+  overflow: hidden;
+  background: linear-gradient(160deg, #1d5c46, #0c3628);
+  border: 2px solid rgba(255, 217, 74, 0.55);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ptak-face.off {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Óvalo de un asiento libre: hueco, con un "+", para que la mesa enseñe las
+   plazas que quedan sin parecer rota. */
+.ptak-face.empty {
+  border-style: dashed;
+  border-color: rgba(255, 217, 74, 0.28);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.ptak-face-plus {
+  font-size: 24px;
+  color: rgba(255, 217, 74, 0.5);
+}
+
+.ptak-face-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ptak-face-initial {
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ptak-face-muted {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 11px;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 999px;
+  padding: 1px 3px;
+}
+
+/* Asientos */
+.ptak-seat {
+  position: absolute;
+  /* El escalado va aquí y no en las medidas sueltas: así la cara, las cartas y
+     los datos encogen juntos cuando se sientan muchos, sin descuadrar nada. */
+  transform: translate(-50%, -50%) scale(var(--seat-scale, 1));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  /* Ajustado al contenido: la cara manda el ancho, no una caja fija. Con nueve
+     jugadores esto es lo que evita que los recuadros se pisen entre ellos. */
+  width: max-content;
+  max-width: 108px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(4, 20, 15, 0.72);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Asiento libre: se ve, pero sin robar protagonismo a los jugadores. */
+.ptak-seat.empty {
+  background: rgba(4, 20, 15, 0.32);
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ptak-seat-free {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ptak-seat.turn {
+  border-color: #ffd94a;
+  box-shadow: 0 0 0 3px rgba(255, 217, 74, 0.35), 0 0 18px rgba(255, 217, 74, 0.5);
+}
+
+.ptak-seat.self {
+  border-color: #4ade80;
+}
+
+.ptak-seat.folded {
+  opacity: 0.45;
+}
+
+.ptak-seat.allin {
+  border-color: #ff7a59;
+}
+
+.ptak-seat.winner {
+  border-color: #ffd94a;
+  background: rgba(255, 217, 74, 0.18);
+}
+
+.ptak-seat-cards {
+  display: flex;
+  gap: 3px;
+  min-height: 45px;
+  align-items: center;
+}
+
+.ptak-seat-cards .ptak-card {
+  width: 29px;
+  height: 41px;
+}
+
+.ptak-seat-cards .ptak-card-rank {
+  font-size: 14px;
+}
+
+.ptak-seat-cards .ptak-card-suit {
+  font-size: 13px;
+}
+
+.ptak-seat-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.ptak-seat-info strong {
+  font-size: 11px;
+  max-width: 66px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptak-seat-stack {
+  font-size: 11px;
+  color: #ffe98a;
+}
+
+.ptak-seat-bet,
+.ptak-seat-hand {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ptak-seat-crown {
+  position: absolute;
+  top: -14px;
+  font-size: 20px;
+}
+
+/* Botón del repartidor: marca a quién le toca repartir, como la ficha "D". */
+.ptak-seat-dealer {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: #0c3628;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Asistak, el repartidor, en la esquina superior izquierda del tapete: abajo
+   chocaba con el asiento propio y los controles, y arriba en el centro chocaba
+   con el asiento de arriba cuando hay pocos jugadores (con dos, el asiento de
+   arriba cae justo en el medio). La esquina está libre con cualquier número de
+   jugadores. Va estrecho para no comerse el tapete. */
+.ptak-dealer {
+  position: absolute;
+  left: 6px;
+  top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 2px 4px;
+  border-radius: 9px;
+  background: rgba(4, 20, 15, 0.72);
+  border: 1px solid rgba(255, 217, 74, 0.35);
+  pointer-events: none;
+  z-index: 6;
+  max-width: 40px;
+}
+
+.ptak-dealer-name {
+  font-size: 8px;
+  font-weight: 700;
+  color: #ffd94a;
+  letter-spacing: 0.3px;
+}
+
+.ptak-dealer-role {
+  font-size: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ptak-empty {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+/* Comentarios de la mesa: el mismo hilo del directo, encajado sobre el tapete.
+   Se ancla a la derecha para no tapar el centro ni los asientos de arriba. */
+.ptak-chat {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: min(72%, 320px);
+  max-height: 55%;
+  z-index: 5;
+}
+
+.ptak-chat .live-chat {
+  position: relative;
+  inset: auto;
+  max-height: 100%;
+}
+
+/* Controles */
+.ptak-controls {
+  padding: 10px 14px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.32);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ptak-buyin,
+.ptak-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Entrada: atajos de importe, control para subirlo y botón de sentarse. */
+.ptak-buyin {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.ptak-buyin-quick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ptak-buyin-quick .ptak-btn {
+  flex: 1;
+  min-width: 64px;
+}
+
+.ptak-buyin-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ptak-buyin-custom label {
+  font-size: 13px;
+  color: #ffe98a;
+  text-align: center;
+}
+
+.ptak-buyin-custom input[type='range'] {
+  width: 100%;
+  accent-color: #ffd94a;
+}
+
+.ptak-actions .ptak-btn {
+  flex: 1;
+  min-width: 96px;
+}
+
+/* Las tres acciones de la mano, siempre presentes: retirarse, igualar/pasar y
+   subir o all-in. El color separa las que retiran (rojo suave) de las que meten
+   fichas (dorado). */
+.ptak-actions .ptak-btn.fold {
+  border-color: rgba(255, 122, 89, 0.5);
+  background: rgba(214, 58, 31, 0.18);
+}
+
+.ptak-actions .ptak-btn.call {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.ptak-actions .ptak-btn.raise {
+  font-weight: 700;
+}
+
+.ptak-raise {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Fila de reparto de Asistak: su cara y el botón de dar las cartas. */
+.ptak-deal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ptak-raise input[type='range'] {
+  flex: 1;
+  accent-color: #ffd94a;
+}
+
+.ptak-wait {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ptak-closed {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+@media (max-width: 480px) {
+  /* En el móvil el recuadro va algo más grande que antes: el asiento ocupado se
+     agranda por encima de esto (escala) y el libre se queda en este tamaño, así
+     las nueve plazas caben y las caras de los que juegan se ven mejor. */
+  .ptak-seat {
+    width: max-content;
+    max-width: 92px;
+    padding: 5px;
+  }
+  .ptak-seat-info strong {
+    max-width: 54px;
+  }
+  .ptak-face {
+    width: 54px;
+    height: 66px;
+  }
+  .ptak-face-initial {
+    font-size: 24px;
+  }
+  .ptak-felt {
+    /* Alargada: con nueve asientos el óvalo necesita más alto para que las caras
+       de arriba y de abajo no se junten. */
+    min-height: 54vh;
+    max-height: 70vh;
+    margin: 6px auto;
+    border-width: 6px;
+  }
+  .ptak-center {
+    width: 62%;
+  }
+  .ptak-center-logo {
+    width: 44px;
+    height: 44px;
+  }
+  .ptak-center-name {
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+  .ptak-center-tagline {
+    font-size: 10px;
+  }
+  .ptak-board {
+    min-height: 50px;
+    margin-top: 6px;
+  }
+  .ptak-card {
+    width: 34px;
+    height: 49px;
+  }
+  .ptak-card-rank {
+    font-size: 16px;
+  }
+  .ptak-card-suit {
+    font-size: 14px;
+  }
+  .ptak-seat-cards .ptak-card {
+    width: 26px;
+    height: 37px;
+  }
+  .ptak-dealer {
+    padding: 3px 8px;
+  }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Torneos de POKERTAK                                                 */
+/* ------------------------------------------------------------------ */
+/* El cartel de torneos vive encima de los botones de entrada, solo para quien
+   aún no tiene asiento. Enseña hora, entrada, inscritos y lo que se llevaría
+   cada puesto, para que se sepa qué se paga antes de inscribirse. */
+.ptak-tourneys {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.ptak-tourney {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ptak-tourney-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ptak-tourney-when {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  text-transform: capitalize;
+}
+
+.ptak-tourney-meta,
+.ptak-tourney-prizes {
+  margin: 0;
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+
+.ptak-tourney .ptak-btn {
+  margin-top: 4px;
+}
+
+.ptak-tourneys-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #ffb4b4;
+}
+
+/* ------------------------------------------------------------------
+   Llamada grupal ad-hoc (malla WebRTC, hasta 4 personas)
+   ------------------------------------------------------------------ */
+
+.groupcall-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background:
+    radial-gradient(700px 520px at 50% 15%, rgba(176, 75, 251, 0.28), transparent 62%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 60%, var(--bg) 100%);
+}
+
+.groupcall-overlay.minimized {
+  inset: auto 0 0 0;
+  height: auto;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-strong);
+}
+
+.groupcall-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.2rem 0.2rem 0.8rem;
+}
+
+.groupcall-state {
+  flex: 1;
+  font-size: 0.9rem;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupcall-min {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+/* Rejilla: dos columnas hasta cuatro personas, que es el tope de la llamada. */
+.groupcall-grid {
+  flex: 1;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  min-height: 0;
+}
+
+.groupcall-grid.count-1 {
+  grid-template-columns: 1fr;
+}
+
+.groupcall-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+
+.groupcall-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* El vídeo propio se refleja, como en cualquier app de vídeo. */
+}
+
+.groupcall-tile.self video {
+  transform: scaleX(-1);
+}
+
+.groupcall-tile-avatar {
+  display: grid;
+  place-items: center;
+}
+
+.groupcall-tile-name {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.75rem;
+  color: #fff;
+}
+
+.groupcall-audio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.groupcall-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 1rem 0 0.4rem;
+}
+
+/* --- Selector de personas ----------------------------------------- */
+
+.groupcall-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.8rem;
+}
+
+.groupcall-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.groupcall-picker-head strong {
+  flex: 1;
+}
+
+.groupcall-picker-back {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+}
+
+.groupcall-picker-count {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.groupcall-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.groupcall-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(176, 75, 251, 0.15);
+  color: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.groupcall-chip .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 0.7rem;
+}
+
+.groupcall-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  overflow-y: auto;
+}
+
+.groupcall-person {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.groupcall-person.on {
+  border-color: var(--primary);
+  background: rgba(176, 75, 251, 0.12);
+}
+
+.groupcall-person-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.groupcall-person-name small {
+  opacity: 0.7;
+}
+
+.groupcall-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  color: var(--primary);
+}
+
+.groupcall-picker-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------------
+   Pago con billetera cripto (USDT)
+   ------------------------------------------------------------------ */
+
+/* El botón de la wallet va primero y se distingue del resto: es la vía
+   preferida. El filo turquesa lo separa de los métodos manuales. */
+.wallet-pay-btn {
+  border: 1px solid var(--turquoise);
+}
+
+.wallet-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wallet-pay-amount {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.wallet-pay-amount strong {
+  color: var(--turquoise);
+}
+
+/* La red va en su propio recuadro de aviso: enviar USDT por la red equivocada
+   pierde el dinero, así que no puede ser letra pequeña perdida. */
+.wallet-pay-network {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--pink);
+  background: rgba(255, 45, 141, 0.12);
+  font-size: 0.85rem;
+}
+
+.wallet-pay-network strong {
+  color: var(--pink);
+}
+
+.wallet-pay-network small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.wallet-pay-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Fondo blanco explícito: el QR tiene que ser escaneable aunque el tema sea
+   oscuro. Un QR claro sobre fondo oscuro no lo lee la mitad de las cámaras. */
+.wallet-pay-qr img {
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 0.5rem;
+}
+
+.wallet-pay-qr small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.wallet-pay input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-size: 0.85rem;
 }

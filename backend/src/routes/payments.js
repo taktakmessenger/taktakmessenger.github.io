@@ -2,14 +2,11 @@ const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
-const User = require('../models/User');
-const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const paymentService = require('../services/paymentService');
 const paymentMethodService = require('../services/paymentMethodService');
 const manualPaymentService = require('../services/manualPaymentService');
 const stripeService = require('../services/stripeService');
-const paypalService = require('../services/paypalService');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
@@ -24,12 +21,14 @@ const webhookLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones' },
 });
 
-const checkoutLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const checkoutLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Constant-time comparison so a wrong secret cannot be recovered by timing.
@@ -53,7 +52,7 @@ router.get(
       // para tokenizar la tarjeta. Se sirve desde aquí para que la tienda no
       // dependa de una variable de compilación del frontend.
       publishableKey: stripeService.publishableKey(),
-      // Métodos de cobro manual (Zinli, pago móvil…). Van los datos de pago para
+      // Métodos de cobro manual (billetera cripto). Van los datos de pago para
       // que la tienda muestre a dónde enviar el dinero sin tenerlos hardcodeados.
       manualMethods: manualPaymentService.listMethods(),
     });
@@ -73,7 +72,7 @@ router.post(
   auth,
   checkoutLimiter,
   [
-    body('provider').isIn(['stripe', 'paypal']).withMessage('Proveedor no soportado'),
+    body('provider').isIn(['stripe']).withMessage('Proveedor no soportado'),
     body('packageId').isString().notEmpty().withMessage('Falta el paquete'),
   ],
   validate,
@@ -118,34 +117,6 @@ router.post(
 );
 
 /**
- * Webhook de PayPal.
- *
- * PayPal no firma con HMAC: hay que preguntarle a él si el evento es suyo. La
- * verificación se hace contra el cuerpo crudo, igual que en Stripe.
- */
-router.post(
-  '/webhook/paypal',
-  webhookLimiter,
-  asyncHandler(async (req, res) => {
-    if (!paypalService.canVerifyWebhooks()) {
-      throw new HttpError(503, 'Pagos con PayPal no configurados');
-    }
-
-    const authentic = await paypalService.verifyWebhookSignature({
-      headers: req.headers,
-      rawBody: req.rawBody,
-    });
-    if (!authentic) throw new HttpError(401, 'Firma inválida');
-
-    const parsed = paypalService.parseCompletedPayment(req.body);
-    if (!parsed) return res.json({ received: true, ignored: true });
-
-    const result = await paymentService.creditPurchase({ ...parsed, provider: 'paypal' });
-    res.json({ received: true, ...result });
-  })
-);
-
-/**
  * Payment provider webhook: credits TTC-C after a real purchase.
  *
  * Two properties the original prototype lacked and that matter more than
@@ -179,47 +150,23 @@ router.post(
       throw new HttpError(400, 'Falta el identificador del evento');
     }
 
-    // Idempotency: a duplicate event id means the provider retried a delivery
-    // we already processed.
-    const existing = await Transaction.findOne({ externalId });
-    if (existing) {
-      return res.json({ received: true, duplicate: true });
-    }
+    // Un solo camino para acreditar: el mismo que usa Stripe. Antes
+    // esta ruta duplicaba el abono y se dejaba fuera el premio de referidos, con
+    // lo que una compra confirmada por aquí pagaba monedas pero no el premio.
+    const amountPaidMinor = Number.isFinite(Number(amountPaid))
+      ? Math.round(Number(amountPaid) * 100)
+      : undefined;
 
-    const pkg = env.coinPackages.find((p) => p.id === packageId);
-    if (!pkg) throw new HttpError(400, 'Paquete de monedas desconocido');
-
-    const user = await User.findByIdAndUpdate(
+    const result = await paymentService.creditPurchase({
+      externalId,
       userId,
-      { $inc: { 'wallet.ttcC': pkg.coins } },
-      { new: true }
-    );
-    if (!user) throw new HttpError(404, 'Usuario no encontrado');
+      packageId,
+      amountPaidMinor,
+      currency,
+      provider: 'webhook',
+    });
 
-    try {
-      await Transaction.create({
-        from: user._id,
-        amount: pkg.coins,
-        type: 'purchase',
-        ttcType: 'ttcC',
-        packageId: pkg.id,
-        externalId,
-        amountPaid: amountPaid ?? pkg.priceUsd,
-        currency: currency || 'USD',
-        status: 'completed',
-        details: `Compra de ${pkg.coins} TTC-C (paquete ${pkg.id})`,
-      });
-    } catch (err) {
-      // A concurrent delivery of the same event lost the unique-index race.
-      // Undo this credit so the buyer is not paid twice.
-      if (err.code === 11000) {
-        await User.updateOne({ _id: user._id }, { $inc: { 'wallet.ttcC': -pkg.coins } });
-        return res.json({ received: true, duplicate: true });
-      }
-      throw err;
-    }
-
-    res.json({ received: true, coins: pkg.coins, balance: user.wallet.ttcC });
+    res.json({ received: true, ...result });
   })
 );
 
@@ -232,17 +179,19 @@ router.get(
   })
 );
 
-// --- Cobro manual (Zinli, pago móvil…) -------------------------------------
+// --- Cobro manual (billetera cripto) ---------------------------------------
 //
 // El usuario paga por fuera de la app, envía la referencia y un administrador
 // aprueba. La orden no acredita nada por sí sola: el abono lo hace la revisión.
 
-const manualLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const manualLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Crea una orden pendiente. El paquete se manda por id: el precio y las monedas
@@ -289,12 +238,14 @@ router.get(
 // filtran siempre por `userId`, así que conocer el id de una tarjeta ajena no
 // sirve de nada.
 
-const methodLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas peticiones' },
+const methodLimiter = env.isTest
+  ? (req, res, next) => next()
+  : rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones' },
 });
 
 // Lista los métodos guardados del usuario.
@@ -338,33 +289,6 @@ router.post(
       userId: req.user.userId,
       paymentMethodId: req.body.paymentMethodId,
       label: req.body.label,
-    });
-    res.status(201).json({ method });
-  })
-);
-
-// Abre el alta de una cuenta de PayPal y devuelve la URL de aprobación.
-router.post(
-  '/methods/paypal/link',
-  auth,
-  methodLimiter,
-  asyncHandler(async (req, res) => {
-    const order = await paymentMethodService.startPaypalLink({ userId: req.user.userId });
-    res.status(201).json(order);
-  })
-);
-
-// Confirma el alta de PayPal cuando el usuario vuelve de aprobarla.
-router.post(
-  '/methods/paypal/confirm',
-  auth,
-  methodLimiter,
-  [body('orderId').isString().notEmpty().withMessage('Falta la orden de PayPal')],
-  validate,
-  asyncHandler(async (req, res) => {
-    const method = await paymentMethodService.confirmPaypalLink({
-      userId: req.user.userId,
-      orderId: req.body.orderId,
     });
     res.status(201).json({ method });
   })

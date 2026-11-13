@@ -51,3 +51,14 @@ test('attachVideoSource no falla sin elemento ni vídeo', () => {
   assert.equal(typeof attachVideoSource({}, null), 'function');
   assert.doesNotThrow(() => attachVideoSource(null, null)());
 });
+
+test('attachVideoSource cae al original si el HLS no se puede reproducir', async () => {
+  // En Node no hay MediaSource ni `canPlayType`, así que hls.js no puede
+  // reproducir: el reproductor debe caer al fichero original en vez de quedarse
+  // en negro. Es el mismo camino que se recorre cuando el bucket bloquea el HLS
+  // por CORS.
+  const el = { src: '', canPlayType: () => '' };
+  attachVideoSource(el, { videoUrl: '/uploads/original.mp4', hlsUrl: '/uploads/hls/index.m3u8' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(el.src, '/uploads/original.mp4');
+});

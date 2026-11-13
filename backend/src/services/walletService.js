@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const db = require('../config/db');
 const { HttpError } = require('../utils/http');
+const { parseMoney, numberToUnits, formatMoney, INPUT_DECIMALS } = require('../utils/money');
 
 /**
  * Debit `amount` from a user's spendable coins, only if the total covers it.
@@ -63,6 +64,19 @@ async function creditWithdrawable(userId, { ttcR = 0, bonusC = 0 } = {}, session
   const inc = { 'stats.totalGiftsReceived': 1 };
   if (ttcR) inc['wallet.ttcR'] = ttcR;
   if (bonusC) inc['wallet.bonusC'] = bonusC;
+  return User.findOneAndUpdate({ _id: userId }, { $inc: inc }, { new: true, session });
+}
+
+/**
+ * Devuelve monedas gastables a un usuario, cada tipo a su cubo. Se usa al salir
+ * de una mesa de POKERTAK: las fichas respaldadas por monedas pagadas vuelven
+ * como pagadas y las de regalo como regalo, para no convertir una en otra.
+ */
+async function creditSpendable(userId, { ttcC = 0, bonusC = 0 } = {}, session) {
+  const inc = {};
+  if (ttcC) inc['wallet.ttcC'] = ttcC;
+  if (bonusC) inc['wallet.bonusC'] = bonusC;
+  if (Object.keys(inc).length === 0) return User.findById(userId);
   return User.findOneAndUpdate({ _id: userId }, { $inc: inc }, { new: true, session });
 }
 
@@ -232,14 +246,187 @@ async function compensate({ userId, bonusC = 0, ttcC = 0 }) {
 }
 
 /**
- * Request a withdrawal of TTC-R. The balance is debited atomically and a
- * pending transaction is recorded; actual payout is handled out of band.
+ * Métodos de cobro admitidos para un retiro. Es una lista cerrada a propósito:
+ * `method` viaja desde el cliente y acaba en el registro contable, así que un
+ * valor libre permitiría etiquetas arbitrarias ("banco-que-no-existe") que luego
+ * nadie sabe interpretar al pagar.
  */
-async function requestWithdrawal({ userId, amount, method, details }) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new HttpError(400, 'Monto inválido');
+const PAYOUT_METHODS = ['crypto'];
+
+/**
+ * Solicita un retiro de Diamantes (TTC-R).
+ *
+ * Orden de las comprobaciones, de la más barata a la que toca el saldo: importe,
+ * método, tope diario y, por último, el débito atómico. El débito es la guarda
+ * real: el `$gte` sobre `wallet.ttcR` impide que dos solicitudes simultáneas
+ * dejen el saldo en negativo.
+ *
+ * Los Diamantes se descuentan ya, al pedir: si se dejaran en el saldo hasta
+ * pagarlos, el usuario podría gastarlos o pedir otro retiro con los mismos y la
+ * suma de solicitudes superaría lo que tiene. El dinero "en vuelo" queda
+ * registrado en la transacción `pending`.
+ *
+ * Dos garantías que no se pueden perder en una frontera de dinero:
+ *
+ * 1. **Importe exacto.** El importe entra como cadena y se valida con BigInt
+ *    (`parseMoney`), no con `Number`. Así `0.1 + 0.2` del navegador no decide
+ *    si el saldo alcanza; se compara el mismo valor entero contra el saldo.
+ *
+ * 2. **Idempotencia.** Cada intento lleva una `idempotencyKey`. Si la petición
+ *    se reintenta (red, doble toque, reenvío del navegador), la clave única
+ *    impide descontar los Diamantes dos veces y se devuelve la solicitud ya
+ *    creada. La comprobación de duplicado va **dentro** de la misma transacción
+ *    que el débito cuando la base lo permite, de modo que no hay ventana entre
+ *    "¿ya existe?" y "cobro".
+ */
+async function requestWithdrawal({ userId, amount, method, details, idempotencyKey }) {
+  // El importe puede llegar como cadena (nuevo, exacto) o como número (clientes
+  // antiguos). En ambos casos se normaliza a cadena decimal antes de validar.
+  const raw = typeof amount === 'string' ? amount : String(amount);
+  const units = parseMoney(raw, INPUT_DECIMALS);
+  if (units === null) {
+    throw new HttpError(400, `Monto inválido: usa como máximo ${INPUT_DECIMALS} decimales`);
   }
 
+  const minUnits = numberToUnits(env.withdrawals.min);
+  if (minUnits === null || units < minUnits) {
+    throw new HttpError(400, `El mínimo para retirar es ${env.withdrawals.min} Diamantes`);
+  }
+  if (!PAYOUT_METHODS.includes(method)) {
+    throw new HttpError(400, 'Método de retiro no admitido');
+  }
+  // El dato de cobro es obligatorio: un retiro sin cuenta a la que pagar se
+  // queda en la cola para siempre y hay que rechazarlo a mano.
+  if (!details || !String(details).trim()) {
+    throw new HttpError(400, 'Indica la cuenta o los datos de cobro');
+  }
+
+  const value = Number(formatMoney(units));
+  const key = normalizeIdempotencyKey(idempotencyKey);
+
+  // Sin clave, o con una base sin transacciones, se mantiene el camino de
+  // siempre: no se inventa una idempotencia que la base no puede sostener.
+  if (!key) {
+    return createWithdrawalOnce({ userId, amount: value, method, details });
+  }
+
+  if (await db.supportsTransactions()) {
+    return runWithdrawalTransaction({ userId, value, method, details, key });
+  }
+
+  return createWithdrawalOnce({ userId, amount: value, method, details, key });
+}
+
+// La clave la genera el cliente; se acota y se rechaza cualquier cosa rara para
+// que no pueda colisionar con la de otro usuario ni inyectar nada.
+function normalizeIdempotencyKey(value) {
+  if (typeof value !== 'string') return '';
+  const key = value.trim();
+  return /^[a-zA-Z0-9_-]{8,100}$/.test(key) ? key : '';
+}
+
+// Ejecuta la comprobación de duplicado y el débito dentro de una transacción
+// Mongo. Si dos peticiones con la misma clave entran a la vez, la segunda no
+// encuentra documento que descontar (el saldo ya bajó) o choca con el índice
+// único al crear la transacción, y se resuelve devolviendo la ya creada.
+async function runWithdrawalTransaction({ userId, value, method, details, key }) {
+  const session = await mongoose.startSession();
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      const existing = await findWithdrawalByKey(key, session);
+      if (existing) {
+        result = { ...withdrawalResult(existing), replayed: true };
+        return;
+      }
+
+      const user = await User.findOneAndUpdate(
+        { _id: userId, 'wallet.ttcR': { $gte: value } },
+        { $inc: { 'wallet.ttcR': -value } },
+        { new: true, session }
+      );
+      if (!user) throw new HttpError(400, 'TTC-R insuficientes');
+
+      await assertDailyCap(userId, value, session);
+
+      const [transaction] = await Transaction.create(
+        [
+          {
+            from: userId,
+            amount: value,
+            type: 'withdraw',
+            ttcType: 'ttcR',
+            method,
+            details: String(details).trim().slice(0, 200),
+            status: 'pending',
+            idempotencyKey: key,
+          },
+        ],
+        { session }
+      );
+
+      result = withdrawalResult(transaction);
+    });
+    return result;
+  } catch (error) {
+    // Carrera perdida contra el índice único: la otra petición ya creó la
+    // solicitud, así que se devuelve esa en vez de fallar.
+    if (error && error.code === 11000) {
+      const existing = await findWithdrawalByKey(key);
+      if (existing) return { ...withdrawalResult(existing), replayed: true };
+    }
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+}
+
+async function findWithdrawalByKey(key, session) {
+  const query = Transaction.findOne({ idempotencyKey: key, type: 'withdraw' });
+  return session ? query.session(session) : query;
+}
+
+function withdrawalResult(transaction) {
+  return {
+    amount: transaction.amount,
+    method: transaction.method,
+    transactionId: transaction._id,
+  };
+}
+
+/**
+ * Tope diario: se cuentan las solicitudes vivas de las últimas 24 h. Las
+ * rechazadas no cuentan porque sus Diamantes ya volvieron al usuario.
+ */
+async function assertDailyCap(userId, amount, session) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const pipeline = [
+    {
+      $match: {
+        from: new mongoose.Types.ObjectId(String(userId)),
+        type: 'withdraw',
+        status: { $in: ['pending', 'completed'] },
+        createdAt: { $gte: since },
+      },
+    },
+    { $group: { _id: null, total: { $sum: '$amount' } } },
+  ];
+  const [recent] = session
+    ? await Transaction.aggregate(pipeline).session(session)
+    : await Transaction.aggregate(pipeline);
+
+  const used = recent?.total || 0;
+  if (used + amount > env.withdrawals.dailyCap) {
+    throw new HttpError(
+      400,
+      `Superas el tope diario de ${env.withdrawals.dailyCap} Diamantes. Ya pediste ${round2(used)} en las últimas 24 h.`
+    );
+  }
+}
+
+// Camino sin transacciones: mismo comportamiento de siempre, con la clave
+// aplicada al crear la transacción para que un reintento no duplique.
+async function createWithdrawalOnce({ userId, amount, method, details, key }) {
   const user = await User.findOneAndUpdate(
     { _id: userId, 'wallet.ttcR': { $gte: amount } },
     { $inc: { 'wallet.ttcR': -amount } },
@@ -247,17 +434,196 @@ async function requestWithdrawal({ userId, amount, method, details }) {
   );
   if (!user) throw new HttpError(400, 'TTC-R insuficientes');
 
-  const transaction = await Transaction.create({
-    from: userId,
-    amount,
-    type: 'withdraw',
-    ttcType: 'ttcR',
-    method,
-    details,
-    status: 'pending',
-  });
+  await assertDailyCap(userId, amount);
 
-  return { amount, method, transactionId: transaction._id };
+  let transaction;
+  try {
+    transaction = await Transaction.create({
+      from: userId,
+      amount,
+      type: 'withdraw',
+      ttcType: 'ttcR',
+      method,
+      details: String(details).trim().slice(0, 200),
+      status: 'pending',
+      ...(key ? { idempotencyKey: key } : {}),
+    });
+  } catch (error) {
+    // Si la clave ya existía, se devuelven los Diamantes y la solicitud previa.
+    if (error && error.code === 11000 && key) {
+      await User.updateOne({ _id: userId }, { $inc: { 'wallet.ttcR': amount } });
+      const existing = await findWithdrawalByKey(key);
+      if (existing) return { ...withdrawalResult(existing), replayed: true };
+    }
+    throw error;
+  }
+
+  return withdrawalResult(transaction);
+}
+
+/**
+ * Cola de retiros para el administrador. Se listan del más antiguo al más nuevo
+ * (FIFO): el que lleva más esperando es el que toca pagar.
+ */
+async function listWithdrawals({ status, limit = 50 } = {}) {
+  const query = { type: 'withdraw' };
+  if (status) query.status = status;
+
+  const withdrawals = await Transaction.find(query)
+    .sort({ createdAt: 1 })
+    .limit(Math.min(Number(limit) || 50, 200))
+    .populate('from', 'username profile.displayName profile.avatar');
+
+  return withdrawals.map((w) => ({
+    id: w._id,
+    amount: w.amount,
+    method: w.method,
+    details: w.details,
+    status: w.status,
+    createdAt: w.createdAt,
+    reviewedAt: w.reviewedAt,
+    reason: w.reason,
+    user: w.from
+      ? {
+          id: w.from._id,
+          username: w.from.username,
+          displayName: w.from.profile?.displayName || null,
+        }
+      : null,
+  }));
+}
+
+/**
+ * Marca un retiro como pagado.
+ *
+ * No mueve saldo: los Diamantes se descontaron al solicitarlo. El `status:
+ * 'pending'` en el filtro es la guarda de idempotencia: si dos administradores
+ * pulsan "pagar" a la vez, solo el primero actualiza algo y el segundo recibe
+ * un 409 en vez de marcar dos veces el mismo pago.
+ */
+async function payWithdrawal({ transactionId, adminId }) {
+  const withdrawal = await Transaction.findOne({ _id: transactionId, type: 'withdraw' });
+  if (!withdrawal) throw new HttpError(404, 'Retiro no encontrado');
+  if (withdrawal.status !== 'pending') {
+    throw new HttpError(409, 'Ese retiro ya fue resuelto');
+  }
+
+  // Periodo de retención: da margen a detectar un fraude antes de sacar el
+  // dinero. Con `holdHours = 0` (por defecto) no retiene nada.
+  if (env.withdrawals.holdHours > 0) {
+    const releasableAt = new Date(withdrawal.createdAt).getTime() + env.withdrawals.holdHours * 3600 * 1000;
+    if (Date.now() < releasableAt) {
+      throw new HttpError(
+        409,
+        `Este retiro está en retención hasta ${new Date(releasableAt).toISOString()}`
+      );
+    }
+  }
+
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: transactionId, type: 'withdraw', status: 'pending' },
+    { $set: { status: 'completed', reviewedBy: adminId, reviewedAt: new Date() } },
+    { new: true }
+  );
+  if (!updated) throw new HttpError(409, 'Ese retiro ya fue resuelto');
+
+  return { id: updated._id, status: updated.status, amount: updated.amount, userId: updated.from };
+}
+
+/**
+ * Rechaza un retiro y devuelve los Diamantes.
+ *
+ * La devolución va después del cambio de estado, no antes: el filtro
+ * `status: 'pending'` es el que garantiza que solo se devuelve una vez. Si el
+ * proceso se cortara entre las dos escrituras, quedaría un retiro rechazado sin
+ * devolver, que es recuperable a mano; al revés (devolver y no cambiar el
+ * estado) se podría devolver dos veces.
+ */
+async function rejectWithdrawal({ transactionId, adminId, reason }) {
+  const withdrawal = await Transaction.findOne({ _id: transactionId, type: 'withdraw' });
+  if (!withdrawal) throw new HttpError(404, 'Retiro no encontrado');
+  if (withdrawal.status !== 'pending') {
+    throw new HttpError(409, 'Ese retiro ya fue resuelto');
+  }
+
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: transactionId, type: 'withdraw', status: 'pending' },
+    {
+      $set: {
+        status: 'rejected',
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+        reason: reason ? String(reason).trim().slice(0, 300) : '',
+      },
+    },
+    { new: true }
+  );
+  if (!updated) throw new HttpError(409, 'Ese retiro ya fue resuelto');
+
+  await User.updateOne({ _id: updated.from }, { $inc: { 'wallet.ttcR': updated.amount } });
+
+  return {
+    id: updated._id,
+    status: updated.status,
+    amount: updated.amount,
+    userId: updated.from,
+    reason: updated.reason,
+  };
+}
+
+/**
+ * Convierte Monedas pagadas (`ttcC`) en Diamantes retirables (`ttcR`).
+ *
+ * Solo la usa el administrador: es la válvula que permite al dueño convertir
+ * monedas que ya están en su cuenta. La conversión es 1 a 1 por defecto
+ * (`COIN_TO_DIAMOND_RATE`), sin pasar por el reparto de regalos, y queda
+ * registrada en el libro con `type: 'convert'` para poder auditarla.
+ *
+ * El débito va primero y con `$gte`, así que nunca deja el saldo en negativo: si
+ * dos conversiones coinciden, la segunda no encuentra documento y reintenta con
+ * el saldo ya actualizado.
+ */
+async function convertCoinsToDiamonds({ userId, coins, rate }) {
+  const amount = round2(Number(coins));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HttpError(400, 'Cantidad inválida');
+  }
+
+  const appliedRate = Number.isFinite(Number(rate)) && Number(rate) > 0 ? Number(rate) : 1;
+  const diamonds = round2(amount * appliedRate);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const user = await User.findOneAndUpdate(
+      { _id: userId, 'wallet.ttcC': { $gte: amount } },
+      { $inc: { 'wallet.ttcC': -amount, 'wallet.ttcR': diamonds } },
+      { new: true }
+    );
+    if (user) {
+      await Transaction.create({
+        from: userId,
+        to: userId,
+        amount,
+        type: 'convert',
+        ttcType: 'ttcR',
+        details: `${amount} Monedas → ${diamonds} Diamantes (tasa ${appliedRate})`,
+      });
+      return { coins: amount, diamonds, rate: appliedRate, wallet: user.wallet };
+    }
+
+    // El saldo no alcanzaba en este intento. Si de verdad no llega, no hay
+    // nada que reintentar; se comprueba para dar un mensaje claro en vez de un
+    // fallo opaco tras diez vueltas.
+    const current = await User.findById(userId).select('wallet');
+    if (!current) throw new HttpError(404, 'Usuario no encontrado');
+    if ((current.wallet.ttcC || 0) < amount) {
+      throw new HttpError(
+        400,
+        `No tienes suficientes Monedas: ${round2(current.wallet.ttcC || 0)} disponibles, ${amount} pedidas`
+      );
+    }
+  }
+
+  throw new HttpError(409, 'No se pudo completar la conversión, inténtalo de nuevo');
 }
 
 async function getWallet(userId) {
@@ -302,10 +668,15 @@ function round2(n) {
 module.exports = {
   sendGift,
   requestWithdrawal,
+  listWithdrawals,
+  payWithdrawal,
+  rejectWithdrawal,
+  convertCoinsToDiamonds,
   getWallet,
   getPlatformEarnings,
   listTransactions,
   debitSpendable,
+  creditSpendable,
   creditWithdrawable,
   round2,
 };
