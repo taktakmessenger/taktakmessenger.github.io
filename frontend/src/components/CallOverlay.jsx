@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCall } from '../contexts/CallContext';
 import TranslateIcon from './TranslateIcon';
+import {
+  PhoneIcon,
+  MicIcon,
+  MicOffIcon,
+  CameraIcon,
+  CameraOffIcon,
+  SpeakerIcon,
+  ChevronDownIcon,
+  HangUpIcon,
+  VolumeIcon,
+  VolumeOffIcon,
+} from './ChatIcons';
+import WhaTakaEmblem from './WhaTakaEmblem';
+import { formatCallTimer } from '../lib/callTimer';
 import { listAudioOutputs, applySink, applyVolume } from '../lib/sound';
 import { dragTo, cornerOf, cornerPosition } from '../lib/pipPosition';
 
@@ -74,6 +88,25 @@ export default function CallOverlay() {
   // cada movimiento del puntero y no deben provocar un render por sí solos.
   const dragRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+
+  // Reloj de la llamada, como el de WhatsApp. Arranca al quedar en curso y se
+  // reinicia en cada llamada: `status` pasa por 'active' una sola vez por
+  // llamada, así que el efecto vuelve a empezar de cero al entrar en ese estado.
+  // Se lleva con `Date.now` y no sumando 1 por tick para que un intervalo que
+  // llega tarde (pestaña en segundo plano) no atrase el reloj.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (status !== 'active') {
+      setElapsed(0);
+      return undefined;
+    }
+    const startedAt = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [status]);
 
   // Medidas del área y del cuadro, o `null` si aún no son fiables (elemento
   // todavía sin altura). Se exige un mínimo para no colocar el cuadro con una
@@ -365,7 +398,20 @@ export default function CallOverlay() {
 
         <div className="call-info">
           <strong>@{peer?.username || '…'}</strong>
+          {/* El estado va siempre en el primer `<span>`: es lo que leen las
+              pruebas de extremo a extremo para saber en qué punto está la
+              llamada. El reloj se añade como hermano, no dentro, para no
+              cambiar ese texto. */}
           <span>{LABELS[status] || status}</span>
+          {isActive && (
+            <div
+              className="call-timer"
+              role="timer"
+              aria-label={`Duración ${formatCallTimer(elapsed)}`}
+            >
+              {formatCallTimer(elapsed)}
+            </div>
+          )}
           {error && <small className="error">{error}</small>}
           {!error && notice && <small className="notice">{notice}</small>}
         </div>
@@ -417,7 +463,9 @@ export default function CallOverlay() {
             durante el timbrado no hay voz que regular. */}
         {isActive && (
           <div className="call-volume">
-            <span aria-hidden="true">{volume === 0 ? '🔇' : '🔊'}</span>
+            <span aria-hidden="true">
+              {volume === 0 ? <VolumeOffIcon size={18} /> : <VolumeIcon size={18} />}
+            </span>
             <input
               type="range"
               min="0"
@@ -435,10 +483,10 @@ export default function CallOverlay() {
         {isIncoming ? (
           <>
             <button type="button" className="call-btn accept" onClick={acceptCall}>
-              ✅ Aceptar
+              <PhoneIcon size={20} /> Aceptar
             </button>
             <button type="button" className="call-btn end" onClick={rejectCall}>
-              ❌ Rechazar
+              <HangUpIcon size={20} /> Rechazar
             </button>
           </>
         ) : (
@@ -448,8 +496,9 @@ export default function CallOverlay() {
               className={`call-btn ${muted ? 'off' : ''}`}
               onClick={toggleMute}
               aria-pressed={muted}
+              aria-label={muted ? 'Activar micrófono' : 'Silenciar micrófono'}
             >
-              {muted ? '🔇' : '🎤'}
+              {muted ? <MicOffIcon /> : <MicIcon />}
             </button>
 
             {kind === 'video' && (
@@ -458,8 +507,9 @@ export default function CallOverlay() {
                 className={`call-btn ${camOff ? 'off' : ''}`}
                 onClick={toggleCamera}
                 aria-pressed={camOff}
+                aria-label={camOff ? 'Encender cámara' : 'Apagar cámara'}
               >
-                {camOff ? '📷' : '🎥'}
+                {camOff ? <CameraOffIcon /> : <CameraIcon />}
               </button>
             )}
 
@@ -473,7 +523,7 @@ export default function CallOverlay() {
                 aria-pressed={speakerOn}
                 aria-label={speakerOn ? 'Desactivar altavoz' : 'Activar altavoz'}
               >
-                {speakerOn ? '🔊' : '📞'}
+                {speakerOn ? <SpeakerIcon /> : <PhoneIcon />}
               </button>
             )}
 
@@ -512,12 +562,12 @@ export default function CallOverlay() {
                 onClick={toggleMinimize}
                 aria-label="Minimizar llamada"
               >
-                🔽
+                <ChevronDownIcon />
               </button>
             )}
 
             <button type="button" className="call-btn end" onClick={hangUp}>
-              📵 Colgar
+              <HangUpIcon size={20} /> Colgar
             </button>
           </>
         )}

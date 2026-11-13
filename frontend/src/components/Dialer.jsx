@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
 import { loadProviders } from '../lib/providers';
 import { matches } from '../lib/search';
+import { PhoneIcon, VideoIcon } from './ChatIcons';
 import {
   contactsApiAvailable,
   flattenContacts,
@@ -413,7 +414,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           onClick={() => setCallKind('audio')}
           aria-pressed={callKind === 'audio'}
         >
-          📞 Voz
+          <PhoneIcon size={18} /> Voz
         </button>
         <button
           type="button"
@@ -421,7 +422,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           onClick={() => setCallKind('video')}
           aria-pressed={callKind === 'video'}
         >
-          🎥 Vídeo
+          <VideoIcon size={18} /> Vídeo
         </button>
       </div>
 
@@ -524,7 +525,7 @@ export default function Dialer({ onCall, onOpenChat }) {
           disabled={!number.trim() || busy}
           aria-label={callKind === 'video' ? 'Videollamada' : 'Llamar'}
         >
-          {callKind === 'video' ? '🎥' : '📞'}
+          {callKind === 'video' ? <VideoIcon size={26} /> : <PhoneIcon size={26} />}
         </button>
         <button
           type="button"

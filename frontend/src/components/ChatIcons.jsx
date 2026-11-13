@@ -148,3 +148,101 @@ export function CloseIcon({ size = 22 }) {
     </svg>
   );
 }
+
+// Iconos de la pantalla de llamada. Faltaban porque los botones usaban emojis
+// (🎤 📷 🔊 🔽 📵), que en varios Android salían como cuadros vacíos y no
+// heredaban el color del botón. Con SVG el icono es el mismo en todas partes y
+// se puede apagar (tachado) para decir "esto está silenciado" sin cambiar de
+// símbolo, que es lo que hace WhatsApp.
+
+export function MicOffIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />
+      <path d="M12 18v3" />
+      <path d="M4 4l16 16" />
+    </svg>
+  );
+}
+
+export function CameraOffIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <rect x="3" y="6.5" width="12" height="11" rx="2.4" />
+      <path d="M15 10.5l5.2-2.6a.6.6 0 0 1 .9.5v7.2a.6.6 0 0 1-.9.5L15 13.5" />
+      <path d="M4 4l16 16" />
+    </svg>
+  );
+}
+
+export function VolumeIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" />
+      <path d="M16 9a4 4 0 0 1 0 6" />
+      <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+    </svg>
+  );
+}
+
+export function VolumeOffIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" />
+      <path d="M16 10l4 4M20 10l-4 4" />
+    </svg>
+  );
+}
+
+export function SpeakerIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" />
+      <path d="M16 9a4 4 0 0 1 0 6" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} strokeWidth="2" aria-hidden="true">
+      <path d="M5 9l7 7 7-7" />
+    </svg>
+  );
+}
+
+// Auricular colgado (colgar la llamada). Es el teléfono girado, no el mismo
+// icono del botón de llamar, para que "colgar" se lea de un vistazo.
+export function HangUpIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <path d="M6.5 3.5h3l1.4 3.7-1.9 1.3a12 12 0 0 0 5.5 5.5l1.3-1.9 3.7 1.4v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5Z" />
+      <path d="M3 21l18-18" />
+    </svg>
+  );
+}
+
+// Bocadillo de chat, para la pestaña "Chats". Sustituye al emoji 💬 de la
+// pestaña: el emoji cambia de forma en cada sistema y en algunos Android sale
+// como cuadro vacío.
+export function ChatIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-4 3.5V5.5Z" />
+    </svg>
+  );
+}
+
+// Grupo de personas, para la pestaña "Grupal". Sustituye al emoji 👥.
+export function UsersIcon({ size = 22 }) {
+  return (
+    <svg {...base} width={size} height={size} aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <path d="M16 5.4a3.2 3.2 0 0 1 0 5.2" />
+      <path d="M17 13.6a5.5 5.5 0 0 1 3.5 5.4" />
+    </svg>
+  );
+}
+

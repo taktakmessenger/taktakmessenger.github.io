@@ -9,12 +9,13 @@ import { formatDuration } from '../lib/voiceNote';
 import { resolveViewerLanguage, normalizeLanguage, languageNativeName } from '../lib/translate';
 import TranslateButton from './TranslateButton';
 import TranslateIcon from './TranslateIcon';
-import { BackIcon, PhoneIcon, VideoIcon, AttachIcon, SendIcon, CameraIcon, EmojiIcon, LocationIcon, ContactIcon, PollIcon, EventIcon } from './ChatIcons';
+import { BackIcon, PhoneIcon, VideoIcon, AttachIcon, SendIcon, CameraIcon, EmojiIcon, LocationIcon, ContactIcon, PollIcon, EventIcon, ChatIcon, UsersIcon } from './ChatIcons';
 import AttachMenu from './AttachMenu';
 import { translateBatch } from '../lib/translateClient';
 import VoiceTranscript from './VoiceTranscript';
 import Dialer from './Dialer';
 import VoiceRecorder from './VoiceRecorder';
+import WhaTakaEmblem from './WhaTakaEmblem';
 
 function initials(person) {
   const name = person?.displayName || person?.username || '?';
@@ -1241,7 +1242,10 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
     return (
       <div className="messages">
         <div className="messages-head">
-          <h2>📞 WhaTaka</h2>
+          <h2 className="whataka-title">
+            <WhaTakaEmblem size={26} />
+            WhaTaka
+          </h2>
         </div>
         <div className="whataka-tabs">
           <button
@@ -1249,17 +1253,17 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
             className="whataka-tab"
             onClick={() => setMode('chats')}
           >
-            💬 Chats
+            <ChatIcon size={18} /> Chats
           </button>
           <button type="button" className="whataka-tab active" aria-current="page">
-            📞 Llamar
+            <PhoneIcon size={18} /> Llamar
           </button>
           <button
             type="button"
             className="whataka-tab"
             onClick={() => setGroupOpen(true)}
           >
-            👥 Grupal
+            <UsersIcon size={18} /> Grupal
           </button>
         </div>
         <Dialer onCall={onCall} onOpenChat={openChatWith} />
@@ -1279,7 +1283,10 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
   return (
     <div className="messages">
       <div className="messages-head">
-        <h2>💬 WhaTaka</h2>
+        <h2 className="whataka-title">
+          <WhaTakaEmblem size={26} />
+          WhaTaka
+        </h2>
         <button
           type="button"
           className="btn-primary btn-new-chat"
@@ -1292,17 +1299,17 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
 
       <div className="whataka-tabs">
         <button type="button" className="whataka-tab active" aria-current="page">
-          💬 Chats
+          <ChatIcon size={18} /> Chats
         </button>
         <button type="button" className="whataka-tab" onClick={() => setMode('dial')}>
-          📞 Llamar
+          <PhoneIcon size={18} /> Llamar
         </button>
         <button
           type="button"
           className="whataka-tab"
           onClick={() => setGroupOpen(true)}
         >
-          👥 Grupal
+          <UsersIcon size={18} /> Grupal
         </button>
       </div>
 

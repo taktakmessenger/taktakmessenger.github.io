@@ -1320,6 +1320,20 @@
   margin: 0;
 }
 
+/* Cabecera de WhaTaka: el emblema del mango púrpura junto al nombre. El mango
+   es la marca de la sección y sustituye a los emojis 💬/📞, que cambiaban de
+   forma en cada sistema. */
+.whataka-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.whataka-title svg {
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px var(--glow-purple));
+}
+
 .btn-new-chat {
   width: 42px;
   height: 42px;
@@ -2530,6 +2544,16 @@
   color: var(--muted);
 }
 
+/* Reloj de la llamada, como el de WhatsApp: cuenta desde que se descuelga.
+   Cifras tabulares para que el número no baile al cambiar de segundo. */
+.call-info .call-timer {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
 /* Aviso informativo: se distingue del error por el color, no por el tamaño, para
    que quede claro que la llamada sigue en pie. */
 .call-info .notice {
@@ -2590,6 +2614,18 @@
   color: var(--text);
   background: var(--surface-2);
   backdrop-filter: blur(8px);
+  transition: transform 0.12s ease, background 0.18s ease;
+}
+
+/* Los botones de llamada llevan ahora iconos SVG en lugar de emojis. Se
+   alinean al centro del botón y responden al toque con un pequeño encogido,
+   como los de WhatsApp. */
+.call-btn svg {
+  display: block;
+}
+
+.call-btn:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 /* En un móvil la pantalla de llamada no debe llevar márgenes anchos: cada
@@ -4234,6 +4270,10 @@
 
 .whataka-tab {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.55rem 0.75rem;
   border: none;
   border-radius: 999px;
@@ -4242,6 +4282,10 @@
   font-weight: 700;
   font-size: 0.85rem;
   transition: color 0.18s ease, background 0.18s ease;
+}
+
+.whataka-tab svg {
+  flex-shrink: 0;
 }
 
 .whataka-tab.active {
