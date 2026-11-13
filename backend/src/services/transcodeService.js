@@ -129,6 +129,20 @@ function watermarkFilter(fontFile, textFile, lines, width, height) {
   );
 }
 
+// Opciones que mantienen el pico de memoria de libx264 lo más bajo posible: el
+// plan gratuito de Render tiene 512 MB y un transcode con los ajustes por
+// defecto se acerca a los 200 MB, que junto al resto de la app provoca
+// `oomKilled`. `veryfast`, un solo hilo y un lookahead corto sin B-frames bajan
+// ese pico a ~120 MB. El lookahead y los B-frames son lo que más RAM pide.
+const TRANSCODE_MEMORY_OPTIONS = [
+  '-preset',
+  'veryfast',
+  '-threads',
+  '1',
+  '-x264-params',
+  'rc-lookahead=10:sync-lookahead=0:bframes=0:ref=1',
+];
+
 // Opciones que borran todo rastro en los metadatos. `bitexact` evita además que
 // el muxer escriba su propia firma, así que no queda ni el nombre del archivo
 // original ni la herramienta con la que se procesó.
@@ -355,7 +369,11 @@ function transcodeVariant(inputPath, outDir, rendition, fontFile, brandFile, lin
         }
 
         const outputOptions = [
-          '-preset fast',
+          // El plan gratuito de Render da 512 MB y cada ffmpeg se lleva su
+          // parte. `veryfast`, un solo hilo y un lookahead corto bajan el pico
+          // de ~200 MB a ~120 MB, que es lo que deja hueco para el resto de la
+          // app. El lookahead y los B-frames son lo que más RAM pide a libx264.
+          ...TRANSCODE_MEMORY_OPTIONS,
           // A fixed GOP with scene-cut detection off keeps every segment
           // independently seekable, which is what makes scrubbing work.
           '-g 48',
@@ -442,4 +460,5 @@ module.exports = {
   brandText,
   watermarkFilter,
   CLEAN_METADATA_OPTIONS,
+  TRANSCODE_MEMORY_OPTIONS,
 };

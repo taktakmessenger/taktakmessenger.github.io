@@ -4,7 +4,7 @@
 // tests de la API no deben depender de que ffmpeg esté instalado.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { brandText, watermarkFilter, CLEAN_METADATA_OPTIONS } = require('../src/services/transcodeService');
+const { brandText, watermarkFilter, CLEAN_METADATA_OPTIONS, TRANSCODE_MEMORY_OPTIONS } = require('../src/services/transcodeService');
 
 test('la marca lleva el @usuario y el nombre TAK TAK', () => {
   assert.equal(brandText('ana'), '@ana\nTAK TAK\n');
@@ -38,6 +38,18 @@ test('el filtro de la marca la ancla abajo a la izquierda y lee de un fichero', 
   assert.match(filter, /x=\d+/);
   assert.match(filter, /y=h-th-\d+/);
 });
+
+test('el transcode pide a ffmpeg un perfil de bajo consumo de memoria', () => {
+  // El plan gratuito de Render (512 MB) mata el proceso si un transcode se pasa
+  // de RAM, así que estas opciones no son cosméticas: son lo que evita el
+  // `oomKilled` que deja los vídeos sin HLS (pantalla negra).
+  const opts = TRANSCODE_MEMORY_OPTIONS.join(' ');
+  assert.match(opts, /-preset veryfast/);
+  assert.match(opts, /-threads 1/);
+  assert.match(opts, /rc-lookahead=10/);
+  assert.match(opts, /bframes=0/);
+});
+
 
 test('la placa es casi opaca para poder tapar la marca que traiga el vídeo', () => {
   // Una placa translúcida deja ver a través el logo ajeno, que es justo lo que

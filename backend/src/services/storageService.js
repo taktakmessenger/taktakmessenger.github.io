@@ -129,9 +129,16 @@ async function getFileToTemp(key, destPath) {
 // Devuelve el objeto como stream, sin tocar disco. Se usa para servir una
 // descarga a través de nuestra propia API: así el navegador la pide al mismo
 // origen y no depende de que el bucket mande cabeceras CORS.
-async function getObjectStream(key) {
+//
+// `range` llega tal cual desde la cabecera HTTP del cliente ("bytes=0-1023").
+// Sin reenviarlo, R2 devuelve el objeto entero y el navegador pierde el salto
+// dentro del vídeo: en un MP4 cuyo índice (`moov`) va al final, el reproductor
+// necesita pedir esa cola para poder arrancar, y sin rangos se queda en negro.
+async function getObjectStream(key, range) {
   const { GetObjectCommand } = require('@aws-sdk/client-s3');
-  return getClient().send(new GetObjectCommand({ Bucket: env.r2.bucket, Key: key }));
+  const input = { Bucket: env.r2.bucket, Key: key };
+  if (range) input.Range = range;
+  return getClient().send(new GetObjectCommand(input));
 }
 
 // Borra todo lo que cuelga de un prefijo. Se usa al eliminar un vídeo, para no

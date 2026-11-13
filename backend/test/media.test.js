@@ -77,6 +77,55 @@ test('el proxy sirve un segmento del bucket desde el propio dominio', async () =
   assert.equal(res.body.toString(), 'hello');
 });
 
+test('el proxy reenvía el Range al bucket y responde 206 con Content-Range', async () => {
+  const originalConfigured = storageService.isConfigured;
+  const originalStream = storageService.getObjectStream;
+  let seenRange;
+  storageService.isConfigured = () => true;
+  storageService.getObjectStream = async (_key, range) => {
+    seenRange = range;
+    return {
+      ContentLength: 4,
+      ContentRange: 'bytes 0-3/100',
+      Body: Readable.from(Buffer.from('troz')),
+    };
+  };
+
+  const res = await request(buildApp())
+    .get('/media/abc/original.mp4')
+    .set('Range', 'bytes=0-3');
+
+  storageService.isConfigured = originalConfigured;
+  storageService.getObjectStream = originalStream;
+
+  // Sin reenviar el rango, R2 devuelve el fichero entero y el navegador no
+  // puede saltar dentro del vídeo (lo que deja en negro un MP4 sin faststart).
+  assert.equal(seenRange, 'bytes=0-3');
+  assert.equal(res.status, 206);
+  assert.equal(res.headers['content-range'], 'bytes 0-3/100');
+  assert.equal(res.body.toString(), 'troz');
+});
+
+test('el proxy responde 200 si el cliente no pide un rango', async () => {
+  const originalConfigured = storageService.isConfigured;
+  const originalStream = storageService.getObjectStream;
+  storageService.isConfigured = () => true;
+  storageService.getObjectStream = async () => ({
+    ContentLength: 5,
+    Body: Readable.from(Buffer.from('hello')),
+  });
+
+  const res = await request(buildApp()).get('/media/abc/original.mp4');
+
+  storageService.isConfigured = originalConfigured;
+  storageService.getObjectStream = originalStream;
+
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['accept-ranges'], 'bytes');
+});
+
+
+
 test('el proxy rechaza una extensión fuera de la lista', async () => {
   const original = storageService.isConfigured;
   storageService.isConfigured = () => true;

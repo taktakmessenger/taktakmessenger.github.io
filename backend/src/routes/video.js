@@ -17,6 +17,7 @@ const newsService = require('../services/newsService');
 const commentService = require('../services/commentService');
 const notificationService = require('../services/notificationService');
 const { auth, optionalAuth, requireAdmin } = require('../middleware/auth');
+const transcodeQueue = require('../services/transcodeQueueService');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
 
@@ -50,90 +51,9 @@ const upload = multer({
   },
 });
 
-// Kicks off the HLS ladder without blocking the response. A failure is stored
-// on the video so the creator can see it instead of the upload silently
-// staying as a plain file.
-//
-// `username` es el @usuario que se estampa en la marca de TAK TAK. Se pasa
-// aparte del vídeo porque el marcador lo tiene en la sesión y así el reproceso
-// no necesita otra consulta a la base.
-function startTranscode(video, inputPath, username) {
-  // The client-declared duration is a hint; measuring the file is the only way
-  // to be sure, and analytics divides by it.
-  transcodeService
-    .probeDuration(inputPath)
-    .then((duration) => {
-      if (duration) {
-        return Video.updateOne({ _id: video._id }, { duration });
-      }
-      return null;
-    })
-    .catch(() => {});
-
-  // El original se publica en el bucket antes de transcodificar: es lo que
-  // convierte `videoUrl` en una URL permanente. Va aquí, en segundo plano, y no
-  // en la respuesta de la subida, porque subir un fichero de cientos de megas
-  // tardaría más que el tiempo de espera del proxy y la petición se cortaría.
-  // Mientras tanto el vídeo ya se ve por la ruta local.
-  const originalKey = path.basename(inputPath);
-  if (storageService.isConfigured()) {
-    storageService
-      .putFile(inputPath, originalKey)
-      .then((url) => Video.updateOne({ _id: video._id }, { videoUrl: url }))
-      .catch((err) => console.error('[storage] no se pudo publicar el original:', err.message));
-  }
-
-  transcodeService
-    .resolveMusicUrl(video)
-    .then((musicUrl) =>
-      transcodeService.processVideoToHLS(
-        inputPath,
-        env.uploadsDir,
-        video._id.toString(),
-        username,
-        musicUrl
-      )
-    )
-    .then(async (result) => {
-      if (!result) {
-        // `null` significa "no hay ffmpeg o está apagado", no "algo se rompió".
-        // Antes se guardaba `failed`, y la app mostraba "⚠️ No se pudo optimizar"
-        // en cada vídeo aunque el original se reprodujera perfectamente: el
-        // creador creía que la subida había fallado. `none` es la verdad.
-        await Video.updateOne({ _id: video._id }, { transcodeStatus: 'none' });
-        return;
-      }
-
-      let { playlistUrl, thumbnailUrl } = result;
-
-      // La escalera HLS también vive en el bucket: si se quedara en el disco
-      // efímero, el vídeo se vería bien hoy y daría 404 tras el próximo
-      // despliegue, que es justo el fallo que esto evita.
-      if (storageService.isConfigured()) {
-        const renditionsDir = path.join(env.uploadsDir, video._id.toString());
-        await storageService.putDirectory(renditionsDir, video._id.toString());
-        playlistUrl = storageService.publicUrl(`${video._id}/index.m3u8`);
-        thumbnailUrl = storageService.publicUrl(`${video._id}/thumbnail.jpg`);
-      }
-
-      await Video.updateOne(
-        { _id: video._id },
-        {
-          hlsUrl: playlistUrl,
-          thumbnailUrl,
-          transcodeStatus: 'ready',
-          transcodeError: null,
-        }
-      );
-    })
-    .catch(async (err) => {
-      console.error('[transcode] fallo:', err.message);
-      await Video.updateOne(
-        { _id: video._id },
-        { transcodeStatus: 'failed', transcodeError: err.message }
-      ).catch(() => {});
-    });
-}
+// La conversión en sí vive en `transcodeQueueService`: aquí solo se encola,
+// para que subir, reprocesar uno y reprocesar los que faltan compartan el mismo
+// carril de un solo trabajo a la vez.
 
 const createRules = [
   body('title').trim().notEmpty().withMessage('El título es requerido').isLength({ max: 100 }),
@@ -349,7 +269,7 @@ router.post(
     // arrastra el nombre que el creador tenía al iniciar sesión, así que tras un
     // cambio de nombre el vídeo quedaría sellado con el anterior.
     const me = await User.findById(req.user.userId).select('username');
-    startTranscode(video, req.file.path, me?.username || req.user.username);
+    transcodeQueue.enqueue(video, req.file.path, me?.username || req.user.username);
 
     res.status(201).json({ video });
   })
@@ -673,7 +593,7 @@ router.post(
     // La marca lleva el @usuario del creador, no el de quien reprocesa: un
     // admin puede reprocesar el vídeo de otra persona y la autoría no cambia.
     const owner = await User.findById(video.creator).select('username');
-    startTranscode(video, inputPath, owner?.username);
+    transcodeQueue.enqueue(video, inputPath, owner?.username);
 
     res.status(202).json({ queued: true, transcodeStatus: 'processing' });
   })
@@ -724,7 +644,7 @@ router.post(
 
       await Video.updateOne({ _id: video._id }, { transcodeStatus: 'processing' });
       const owner = await User.findById(video.creator).select('username');
-      startTranscode(video, inputPath, owner?.username);
+      transcodeQueue.enqueue(video, inputPath, owner?.username);
       queued += 1;
     }
 

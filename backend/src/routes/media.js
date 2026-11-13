@@ -47,16 +47,30 @@ router.get(
 
     let object;
     try {
-      object = await storageService.getObjectStream(key);
+      // Se reenvía el `Range` del cliente al bucket: es lo que permite al
+      // reproductor saltar dentro del vídeo y, en un MP4 sin faststart (moov al
+      // final), pedir la cola del índice para poder arrancar.
+      object = await storageService.getObjectStream(key, req.headers.range);
     } catch (err) {
       // Un objeto ausente no es un fallo del servidor: se traduce a 404 para que
       // el reproductor no lo lea como una caída.
       if (err?.$metadata?.httpStatusCode === 404 || err?.name === 'NoSuchKey') {
         throw new HttpError(404, 'Recurso no encontrado');
       }
+      // Un rango imposible (fuera del tamaño) es un 416, no una caída.
+      if (err?.$metadata?.httpStatusCode === 416) {
+        throw new HttpError(416, 'Rango no satisfecho');
+      }
       throw new HttpError(502, 'No se pudo leer el almacenamiento de medios');
     }
 
+    // Un rango satisfecho llega con `ContentRange` y el `ContentLength`
+    // recortado: hay que responder 206 y `Content-Range` para que el navegador
+    // sepa que es un trozo y no el fichero entero.
+    if (object.ContentRange) {
+      res.status(206);
+      res.setHeader('Content-Range', object.ContentRange);
+    }
     if (object.ContentLength) {
       res.setHeader('Content-Length', String(object.ContentLength));
     }
