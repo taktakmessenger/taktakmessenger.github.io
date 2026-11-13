@@ -510,6 +510,18 @@ const env = {
     // ruta (`/bucket/clave`) y no en el subdominio.
     forcePathStyle: process.env.R2_FORCE_PATH_STYLE === 'true',
   },
+  // Buscador de música y vídeo con licencia libre (Openverse y Wikimedia
+  // Commons). Ninguna fuente pide clave: una clave más sería una variable que se
+  // olvida en el despliegue y deja la pantalla muerta sin avisar.
+  discover: {
+    // Tope del archivo que se descarga al importar. Se queda en el mismo orden
+    // que un vídeo subido a mano; sin tope, un enlace a un fichero enorme llena
+    // el disco del contenedor y tumba el servicio.
+    maxBytes: Number(process.env.DISCOVER_MAX_BYTES ?? 50 * 1024 * 1024),
+    // Corte de la descarga. Un origen que no responde no puede dejar la petición
+    // colgada hasta el timeout del proxy.
+    timeoutMs: Number(process.env.DISCOVER_TIMEOUT_MS ?? 20000),
+  },
   // Built frontend to serve from the same process. Empty means "API only", so
   // the development setup and the test suite are unaffected.
   publicDir: process.env.PUBLIC_DIR || null,

@@ -11,6 +11,7 @@ const env = require('../config/env');
 const transcodeService = require('../services/transcodeService');
 const storageService = require('../services/storageService');
 const { isAcceptedVideo } = require('../lib/videoUpload');
+const { toProxyUrl } = require('../lib/mediaUrl');
 const feedService = require('../services/feedService');
 const newsService = require('../services/newsService');
 const commentService = require('../services/commentService');
@@ -611,7 +612,9 @@ router.get(
     const isOwner = String(video.creator) === String(req.user?.userId);
     res.json({
       transcodeStatus: video.transcodeStatus,
-      hlsUrl: video.hlsUrl || null,
+      // Al proxy propio: el frontend guarda este valor y lo reproduce con
+      // hls.js, que necesita mismo origen porque el bucket no manda CORS.
+      hlsUrl: toProxyUrl(video.hlsUrl) || null,
       duration: video.duration ?? null,
       // El detalle del fallo es para el creador; a un tercero no le dice nada
       // útil y puede exponer rutas del servidor.

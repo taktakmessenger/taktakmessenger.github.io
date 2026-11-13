@@ -170,7 +170,17 @@ export default function Squads() {
 
       {active && (
         <div className="squad-feed">
-          <h3>Contenido de {active.squad.name}</h3>
+          <div className="screen-head">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setActive(null)}
+              aria-label="Volver"
+            >
+              ←
+            </button>
+            <h3>Contenido de {active.squad.name}</h3>
+          </div>
 
           <div className="voice-room">
             <div className="voice-room-head">

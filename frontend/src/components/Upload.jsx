@@ -15,7 +15,7 @@ const FILTERS = [
 const OPTIMIZE_POLL_MS = 3000;
 const OPTIMIZE_MAX_TRIES = 100; // ~5 minutos
 
-export default function Upload({ onUploaded }) {
+export default function Upload({ onUploaded, onBack }) {
   const videoRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -210,7 +210,12 @@ export default function Upload({ onUploaded }) {
 
   return (
     <div className="upload-card">
-      <h2>Crear contenido</h2>
+      <div className="screen-head">
+        <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+          ←
+        </button>
+        <h2>Crear contenido</h2>
+      </div>
 
       {optimizing ? (
         <OptimizePanel

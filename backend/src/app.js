@@ -31,9 +31,11 @@ const notificationRoutes = require('./routes/notifications');
 const postRoutes = require('./routes/posts');
 const listingRoutes = require('./routes/listings');
 const searchRoutes = require('./routes/search');
+const discoverRoutes = require('./routes/discover');
 const safetyRoutes = require('./routes/safety');
 const translateRoutes = require('./routes/translate');
 const pokerRoutes = require('./routes/poker');
+const mediaRoutes = require('./routes/media');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Orígenes externos que hay que permitir en la CSP: el host público del bucket
@@ -195,9 +197,15 @@ function createApp() {
   app.use('/api/posts', postRoutes);
   app.use('/api/listings', listingRoutes);
   app.use('/api/search', searchRoutes);
+  app.use('/api/discover', discoverRoutes);
   app.use('/api/safety', safetyRoutes);
   app.use('/api/translate', translateRoutes);
   app.use('/api/poker', pokerRoutes);
+
+  // Medios del bucket servidos desde el propio dominio. Va fuera de `/api` y
+  // antes del estático para que el proxy tenga prioridad; resuelve el bloqueo
+  // por CORS del bucket, que dejaba los vídeos HLS en negro.
+  app.use('/media', mediaRoutes);
 
   // Uploaded originals and their HLS renditions. Read-only.
   //

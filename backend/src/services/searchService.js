@@ -1,6 +1,7 @@
 const Video = require('../models/Video');
 const User = require('../models/User');
 const { fold, buildAccentInsensitiveRegex } = require('../lib/textSearch');
+const { toProxyUrl } = require('../lib/mediaUrl');
 
 // Cuántos resultados de cada tipo caben en una página. Un número corto y fijo
 // basta para una pantalla de búsqueda y evita que una consulta amplia (una
@@ -92,7 +93,7 @@ async function searchVideos(query, { limit = PAGE_SIZE, viewerId = null, canView
     description: video.description || null,
     thumbnailUrl: video.thumbnailUrl || null,
     videoUrl: video.videoUrl,
-    hlsUrl: video.hlsUrl || null,
+    hlsUrl: toProxyUrl(video.hlsUrl) || null,
     duration: video.duration || null,
     views: video.views || 0,
     likes: video.likes || 0,

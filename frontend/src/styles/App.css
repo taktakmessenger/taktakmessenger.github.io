@@ -4751,7 +4751,8 @@
   margin-bottom: 1rem;
 }
 
-.screen-head h2 {
+.screen-head h2,
+.screen-head h3 {
   margin: 0;
   font-size: 1.35rem;
 }
@@ -6702,6 +6703,60 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+}
+
+/* Resultado de fuera de TAK TAK (música o vídeo con licencia libre). Se lee
+   como una fila con su botón de traer a la derecha; en pantalla estrecha el
+   botón baja debajo para no aplastar el título. */
+.ext-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.ext-item-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.ext-item-body strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ext-item-body audio {
+  width: 100%;
+  margin-top: 0.3rem;
+}
+
+.ext-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex: 0 0 auto;
+  background: var(--surface-2);
+}
+
+.ext-item .btn-primary {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 420px) {
+  .ext-item {
+    flex-wrap: wrap;
+  }
+  .ext-item .btn-primary {
+    width: 100%;
+  }
 }
 
 .search-user-main {

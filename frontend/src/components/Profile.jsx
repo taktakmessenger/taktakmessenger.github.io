@@ -28,7 +28,7 @@ function VideoGrid({ videos, onOpen }) {
           ) : (
             <video
               className="profile-thumb-fallback"
-              src={v.hlsUrl || v.videoUrl}
+              src={v.videoUrl}
               muted
               playsInline
               preload="metadata"

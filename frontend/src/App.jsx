@@ -296,7 +296,7 @@ function Shell() {
 
     switch (view) {
       case 'upload':
-        return <Upload onUploaded={() => setView('feed')} />;
+        return <Upload onUploaded={() => setView('feed')} onBack={() => setView('feed')} />;
       case 'wallet':
         return <Wallet onBack={() => setView('settings')} onNavigate={setView} />;
       case 'tienda':
@@ -324,6 +324,7 @@ function Shell() {
         return (
           <Explore
             initialQuery={exploreQuery}
+            onBack={() => setView('feed')}
             onOpenProfile={(person) => {
               setProfileUsername(person?.username || null);
               setView('public-profile');
