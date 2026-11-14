@@ -41,6 +41,40 @@ export const KNOWN_CHAINS = {
   },
 };
 
+// Carteras compatibles con TakCoin (cualquier cartera EVM sirve: el token vive
+// en Polygon). `deepLink` abre ESTA misma web dentro de la app de la cartera,
+// que es la única forma de conectar en móvil (no hay extensiones). Los esquemas
+// son los oficiales de cada cartera; si cambian, solo hay que tocar aquí.
+export const WALLETS = [
+  {
+    id: 'metamask',
+    name: 'MetaMask',
+    emoji: '🦊',
+    installUrl: 'https://metamask.io/download/',
+    deepLink: (host, path) => `https://metamask.app.link/dapp/${host}${path}`,
+  },
+  {
+    id: 'trust',
+    name: 'Trust Wallet',
+    emoji: '🛡️',
+    installUrl: 'https://trustwallet.com/download',
+    // coin_id 966 = Polygon en el catálogo de Trust.
+    deepLink: (host, path) =>
+      `https://link.trustwallet.com/open_url?coin_id=966&url=${encodeURIComponent(`https://${host}${path}`)}`,
+  },
+  {
+    id: 'coinbase',
+    name: 'Coinbase Wallet',
+    emoji: '🔵',
+    installUrl: 'https://www.coinbase.com/wallet/downloads',
+    deepLink: (host, path) =>
+      `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(`https://${host}${path}`)}`,
+  },
+];
+
+// Ruta a la que vuelven los enlaces directos: la tienda, donde está el minado.
+const STORE_PATH = '/?view=tienda';
+
 // ABI mínimo: solo lo que usa la app. Menos superficie, menos que pueda cambiar
 // por accidente al sincronizar con el artifact completo.
 export const TAKCOIN_ABI = [
@@ -53,10 +87,6 @@ export const TAKCOIN_ABI = [
   'function claimMiningReward(bytes32,uint256,uint256,uint256,uint256,uint256,uint256,bytes)',
 ];
 
-export function hasWallet() {
-  return typeof window !== 'undefined' && Boolean(window.ethereum);
-}
-
 /// Navegador de móvil. En escritorio la cartera se instala como extensión; en
 /// móvil hay que abrir la web DENTRO de la app de la cartera, porque el móvil no
 /// tiene extensiones y `window.ethereum` no existe hasta entonces. Se le puede
@@ -66,13 +96,73 @@ export function isMobile(userAgent) {
   return /android|iphone|ipad|ipod/i.test(ua || '');
 }
 
-/// Enlace directo para abrir esta misma web dentro del navegador de MetaMask
-/// (`metamask.app.link/dapp/<host><ruta>`). Se apunta a la tienda con
-/// `?view=tienda` para que, tras conectar, el usuario caiga donde estaba.
-export function metamaskDeepLink(host) {
+/// Enlace directo para abrir esta misma web dentro de la app de una cartera.
+/// Se apunta a la tienda (`?view=tienda`) para que, tras conectar, el usuario
+/// caiga donde estaba. Se puede forzar host/path para probarlo sin navegador.
+export function walletDeepLink(walletId, host, path = STORE_PATH) {
+  const wallet = WALLETS.find((w) => w.id === walletId);
+  if (!wallet) return null;
   const h = host ?? (typeof window !== 'undefined' ? window.location.host : '');
-  if (!h) return 'https://metamask.app.link';
-  return `https://metamask.app.link/dapp/${h}/?view=tienda`;
+  if (!h) return wallet.installUrl;
+  return wallet.deepLink(h, path);
+}
+
+/// Compatibilidad: enlace directo de MetaMask (el más usado).
+export function metamaskDeepLink(host) {
+  return walletDeepLink('metamask', host);
+}
+
+// Cartera elegida por el usuario cuando tiene varias instaladas. Si no hay
+// ninguna elegida se usa la que inyecta el navegador (`window.ethereum`), que
+// es el comportamiento de siempre.
+let activeProvider = null;
+
+/// Proveedor con el que opera la app. Prioriza la cartera que el usuario eligió
+/// (detección EIP-6963) y, si no hay, la inyectada de toda la vida.
+export function provider() {
+  if (activeProvider) return activeProvider;
+  return typeof window !== 'undefined' ? window.ethereum : undefined;
+}
+
+export function setActiveProvider(p) {
+  activeProvider = p || null;
+}
+
+/// Carteras disponibles en ESTE navegador. Escucha los anuncios EIP-6963 (así se
+/// descubren varias extensiones a la vez) y cae a `window.ethereum` si ninguna
+/// anuncia. Devuelve una lista de `{ id, name, icon, provider }`.
+export function detectWallets(timeoutMs = 300) {
+  if (typeof window === 'undefined') return Promise.resolve([]);
+  const found = new Map();
+  const onAnnounce = (event) => {
+    const detail = event?.detail;
+    if (detail?.info?.uuid && detail.provider) {
+      found.set(detail.info.uuid, {
+        id: detail.info.uuid,
+        name: detail.info.name || 'Cartera',
+        icon: detail.info.icon || '',
+        provider: detail.provider,
+      });
+    }
+  };
+  window.addEventListener('eip6963:announceProvider', onAnnounce);
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      window.removeEventListener('eip6963:announceProvider', onAnnounce);
+      const list = [...found.values()];
+      if (list.length === 0 && window.ethereum) {
+        list.push({ id: 'injected', name: 'Cartera del navegador', icon: '', provider: window.ethereum });
+      }
+      resolve(list);
+    }, timeoutMs);
+  });
+}
+
+/// ¿Hay alguna cartera con la que conectar? Vale tanto la inyectada como una
+/// anunciada por EIP-6963 (que no tiene por qué estar en `window.ethereum`).
+export function hasWallet() {
+  return Boolean(provider());
 }
 
 /// Cuenta ya autorizada en este navegador, sin abrir ninguna ventana.
@@ -80,23 +170,25 @@ export function metamaskDeepLink(host) {
 /// a este sitio. Sirve para que el panel siga "conectado" al recargar o al
 /// volver a la pantalla, en vez de pedir conectar otra vez.
 export async function getConnectedAccount() {
-  if (!hasWallet()) return null;
-  const provider = new BrowserProvider(window.ethereum);
-  const accounts = await provider.listAccounts();
+  const p = provider();
+  if (!p) return null;
+  const ethProvider = new BrowserProvider(p);
+  const accounts = await ethProvider.listAccounts();
   return accounts?.length ? accounts[0].address : null;
 }
 
 /// Avisa cuando el usuario cambia de cuenta o de red desde su cartera. Devuelve
 /// una función para dejar de escuchar.
 export function onWalletChange(handler) {
-  if (!hasWallet() || typeof window.ethereum.on !== 'function') return () => {};
+  const p = provider();
+  if (!p || typeof p.on !== 'function') return () => {};
   const onChange = () => handler();
-  window.ethereum.on('accountsChanged', onChange);
-  window.ethereum.on('chainChanged', onChange);
+  p.on('accountsChanged', onChange);
+  p.on('chainChanged', onChange);
   return () => {
-    if (typeof window.ethereum.removeListener === 'function') {
-      window.ethereum.removeListener('accountsChanged', onChange);
-      window.ethereum.removeListener('chainChanged', onChange);
+    if (typeof p.removeListener === 'function') {
+      p.removeListener('accountsChanged', onChange);
+      p.removeListener('chainChanged', onChange);
     }
   };
 }
@@ -104,29 +196,31 @@ export function onWalletChange(handler) {
 /// Pide acceso a la wallet y devuelve su proveedor. Lanza con un mensaje útil
 /// si no hay wallet instalada.
 export async function connectWallet() {
-  if (!hasWallet()) {
-    throw new Error('No hay ninguna cartera instalada. Abre la app en MetaMask o instala su extensión.');
+  const p = provider();
+  if (!p) {
+    throw new Error('No hay ninguna cartera instalada. Abre la app en tu cartera o instala una extensión.');
   }
-  const provider = new BrowserProvider(window.ethereum);
-  await provider.send('eth_requestAccounts', []);
-  return provider;
+  const ethProvider = new BrowserProvider(p);
+  await ethProvider.send('eth_requestAccounts', []);
+  return ethProvider;
 }
 
 /// Cambia a la red del token, añadiéndola si la wallet no la conoce. En un móvil
 /// el usuario confirma el cambio en su propia app de wallet.
 export async function ensureChain(chainId) {
   const target = KNOWN_CHAINS[chainId];
-  if (!target) return;
-  const provider = new BrowserProvider(window.ethereum);
-  const current = Number((await provider.getNetwork()).chainId);
+  const p = provider();
+  if (!target || !p) return;
+  const ethProvider = new BrowserProvider(p);
+  const current = Number((await ethProvider.getNetwork()).chainId);
   if (current === chainId) return;
   const hex = '0x' + chainId.toString(16);
   try {
-    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+    await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
   } catch (err) {
     // 4902 = la wallet no tiene esa red dada de alta; se añade y ya.
     if (err?.code === 4902) {
-      await window.ethereum.request({
+      await p.request({
         method: 'wallet_addEthereumChain',
         params: [{ chainId: hex, ...target }],
       });
@@ -139,9 +233,9 @@ export async function ensureChain(chainId) {
 /// Saldo de TKC del usuario, ya formateado a texto.
 export async function getTokenBalance(contractAddress) {
   if (!contractAddress) return null;
-  const provider = new BrowserProvider(window.ethereum);
-  const signer = await provider.getSigner();
-  const token = new Contract(contractAddress, TAKCOIN_ABI, provider);
+  const ethProvider = new BrowserProvider(provider());
+  const signer = await ethProvider.getSigner();
+  const token = new Contract(contractAddress, TAKCOIN_ABI, ethProvider);
   const [raw, decimals] = await Promise.all([token.balanceOf(signer.address), token.decimals()]);
   return formatUnits(raw, decimals);
 }
@@ -152,8 +246,8 @@ export async function getTokenBalance(contractAddress) {
 /// oráculo. El contrato vuelve a comprobar la firma antes de pagar: aunque este
 /// código mintiera, no pagaría sin una firma válida.
 export async function claimReward(contractAddress, voucher) {
-  const provider = new BrowserProvider(window.ethereum);
-  const signer = await provider.getSigner();
+  const ethProvider = new BrowserProvider(provider());
+  const signer = await ethProvider.getSigner();
   const token = new Contract(contractAddress, TAKCOIN_ABI, signer);
   const u = voucher.units;
   const tx = await token.claimMiningReward(
@@ -173,8 +267,9 @@ export async function claimReward(contractAddress, voucher) {
 /// Añade TKC a la lista de tokens de la wallet, para que el saldo se vea sin
 /// tener que importarlo a mano. Es una comodidad, no un paso obligatorio.
 export async function watchToken(contractAddress) {
-  if (!hasWallet() || !contractAddress) return false;
-  await window.ethereum.request({
+  const p = provider();
+  if (!p || !contractAddress) return false;
+  await p.request({
     method: 'wallet_watchAsset',
     params: { type: 'ERC20', options: { address: contractAddress, symbol: 'TKC', decimals: 18 } },
   });

@@ -4,7 +4,10 @@ import { copyToClipboard } from '../lib/share';
 import {
   hasWallet,
   isMobile,
-  metamaskDeepLink,
+  WALLETS,
+  walletDeepLink,
+  detectWallets,
+  setActiveProvider,
   connectWallet,
   getConnectedAccount,
   onWalletChange,
@@ -31,6 +34,9 @@ export default function TakCoinMining({ onMined }) {
   const [wallet, setWallet] = useState({ address: '', balance: '' });
   const [busy, setBusy] = useState('');
   const [copied, setCopied] = useState('');
+  // Carteras instaladas en ESTE navegador (detección EIP-6963). Vacío = no hay
+  // ninguna extensión, así que se ofrecen los enlaces directos de móvil.
+  const [installed, setInstalled] = useState([]);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -71,6 +77,24 @@ export default function TakCoinMining({ onMined }) {
     refreshWallet();
     return onWalletChange(refreshWallet);
   }, [refreshWallet]);
+
+  // Descubre qué carteras hay instaladas en este navegador (EIP-6963). Si hay
+  // varias, se muestran todas para que el usuario elija; si no hay ninguna, se
+  // ofrecen los enlaces directos para abrir la app dentro de la cartera.
+  useEffect(() => {
+    let alive = true;
+    detectWallets().then((list) => {
+      if (alive) setInstalled(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function connectWith(chosen) {
+    if (chosen) setActiveProvider(chosen.provider);
+    await connect();
+  }
 
   async function connect() {
     setState({ loading: false, error: '', notice: '' });
@@ -155,21 +179,67 @@ export default function TakCoinMining({ onMined }) {
       {state.error && <p className="error" role="alert">{state.error}</p>}
       {state.notice && <p className="notice" role="status">{state.notice}</p>}
 
-      {!hasWallet() && (
+      {!wallet.address && (
         <div className="store-closed" role="status">
           <strong>Conecta una cartera para cobrar</strong>
-          <small>
-            {isMobile()
-              ? 'En el móvil no hay extensiones: abre TakTak dentro de la app de MetaMask para conectar tu cartera.'
-              : 'Instala la extensión de MetaMask para conectar tu cartera.'}
-          </small>
-          <a
-            className="btn-primary"
-            href={isMobile() ? metamaskDeepLink() : 'https://metamask.io/download/'}
-            {...(isMobile() ? {} : { target: '_blank', rel: 'noreferrer' })}
-          >
-            🦊 {isMobile() ? 'Abrir en MetaMask' : 'Instalar MetaMask'}
-          </a>
+          {installed.length > 0 ? (
+            <>
+              <small>Elige con qué cartera quieres conectar:</small>
+              <div className="wallet-options">
+                {installed.map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => connectWith(w)}
+                    disabled={busy === 'connect'}
+                  >
+                    {w.icon ? (
+                      <img src={w.icon} alt="" width="18" height="18" />
+                    ) : (
+                      '👛'
+                    )}{' '}
+                    {busy === 'connect' ? 'Conectando…' : w.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : isMobile() ? (
+            <>
+              <small>
+                En el móvil no hay extensiones: abre TakTak dentro de la app de tu
+                cartera para conectar.
+              </small>
+              <div className="wallet-options">
+                {WALLETS.map((w) => (
+                  <a
+                    key={w.id}
+                    className="btn-primary"
+                    href={walletDeepLink(w.id)}
+                  >
+                    {w.emoji} {w.name}
+                  </a>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <small>Instala una cartera compatible con Polygon (TakCoin):</small>
+              <div className="wallet-options">
+                {WALLETS.map((w) => (
+                  <a
+                    key={w.id}
+                    className="btn-primary"
+                    href={w.installUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {w.emoji} {w.name}
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -201,13 +271,7 @@ export default function TakCoinMining({ onMined }) {
             {config.rewardPerVideo} TKC por vídeo (máx. {config.dailyVideoCap}/día)
           </small>
         </div>
-      ) : (
-        hasWallet() && (
-          <button type="button" className="btn-primary" onClick={connect} disabled={busy === 'connect'}>
-            {busy === 'connect' ? 'Conectando…' : '🔌 Conectar cartera'}
-          </button>
-        )
-      )}
+      ) : null}
     </div>
   );
 }

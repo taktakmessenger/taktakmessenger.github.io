@@ -5197,6 +5197,25 @@
   text-align: center;
 }
 
+/* Botones de cartera (una por wallet instalada o enlace directo). */
+.wallet-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.wallet-options .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+.wallet-options .btn-primary img {
+  border-radius: 4px;
+}
+
 .package-list {
   list-style: none;
   padding: 0;
