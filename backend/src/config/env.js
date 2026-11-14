@@ -359,6 +359,65 @@ function resolveWithdrawals() {
 
 const withdrawals = resolveWithdrawals();
 
+/**
+ * Minado on-chain de TakCoin (TKC).
+ *
+ * El relé firma "vales" con una clave secp256k1 (`reportSignerKey`). Esa clave
+ * es la única autoridad que el contrato reconoce para pagar recompensas, así que
+ * vive SOLO aquí, en el servidor, y nunca se registra ni se manda al cliente.
+ *
+ * Si falta la dirección del contrato o la clave del oráculo, el minado queda
+ * `configured: false` y los endpoints responden 503 en vez de prometer un cobro
+ * que no se puede firmar.
+ */
+function resolveMining() {
+  const contract = (process.env.MINING_CONTRACT || '').trim();
+  const reportSignerKey = process.env.REPORT_SIGNER_KEY || '';
+  const chainId = Number(process.env.CHAIN_ID ?? 80002);
+
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    throw new Error('CHAIN_ID must be a positive integer');
+  }
+
+  // Un tope de recompensa en wei de TKC, para que un informe no pueda pagar
+  // más de lo previsto aunque las unidades vengan infladas.
+  const maxReward = BigInt(process.env.MINING_MAX_REWARD_WEI || '100000000000000000000'); // 100 TKC
+
+  return {
+    contract,
+    reportSignerKey,
+    chainId,
+    // Endpoint RPC para operaciones del oráculo (quemar del fondo, leer estado).
+    // El minado del usuario NO lo usa: él firma con su propia wallet.
+    rpcUrl: process.env.RPC_URL || null,
+    // Segundos que vale un vale firmado. Corto a propósito: acota la ventana de
+    // un vale filtrado.
+    voucherTtlSeconds: Number(process.env.VOUCHER_TTL_SECONDS ?? 600),
+    // Tope diario de minado por cuenta, en TKC (unidades enteras). Evita que un
+    // script vacíe el fondo viendo vídeos en bucle.
+    dailyMiningCap: Number(process.env.MINING_DAILY_CAP ?? 100),
+    // Máximo de vídeos premiados al día por cuenta.
+    dailyVideoCap: Number(process.env.MINING_DAILY_VIDEOS ?? 20),
+    // TKC por vídeo visto al 90% o más.
+    rewardPerVideo: Number(process.env.MINING_REWARD_PER_VIDEO ?? 5),
+    // Mínimo de segundos vistos para que un vídeo cuente.
+    minWatchSeconds: Number(process.env.MINING_MIN_WATCH_SECONDS ?? 30),
+    // 1e15 wei = 0,001 TKC por punto de score. Debe coincidir con el contrato.
+    rewardFactor: BigInt(process.env.REWARD_FACTOR || '1000000000000000'),
+    // Pesos de minado: idénticos en contrato, backend y frontend.
+    weights: { relay: 5, store: 8, uptime: 1, call: 10, reputation: 3 },
+    maxReward,
+    get configured() {
+      return Boolean(this.contract && this.reportSignerKey);
+    },
+    get canBurn() {
+      return Boolean(this.contract && this.reportSignerKey && this.rpcUrl);
+    },
+  };
+}
+
+const mining = resolveMining();
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction,
@@ -568,6 +627,9 @@ const env = {
 
   // Billeteras cripto (USDT/BEP20): la del admin (40%) y la bóveda (60%).
   crypto: resolveCrypto(),
+
+  // Minado on-chain de TakCoin (TKC).
+  mining,
 
   // Asistente de revisión de pagos manuales.
   //

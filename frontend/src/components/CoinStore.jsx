@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 import WalletPay from './WalletPay';
+import TakCoinMining from './TakCoinMining';
 
 // Tienda de monedas.
 //
@@ -185,6 +186,8 @@ export default function CoinStore({ onBack, onPurchased }) {
         Al comprar aceptas que las monedas no son reembolsables una vez enviadas
         como regalo. La compra en sí sí se puede reembolsar si el pago falla.
       </p>
+
+      <TakCoinMining onMined={onPurchased} />
     </div>
   );
 }
