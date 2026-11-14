@@ -6,6 +6,8 @@ import {
   isMobile,
   metamaskDeepLink,
   connectWallet,
+  getConnectedAccount,
+  onWalletChange,
   ensureChain,
   getTokenBalance,
   claimReward,
@@ -44,6 +46,31 @@ export default function TakCoinMining({ onMined }) {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  // Refresca la cartera conectada (dirección + saldo). Se usa al arrancar, al
+  // reconectar y cuando el usuario cambia de cuenta o red en su cartera.
+  const refreshWallet = useCallback(async () => {
+    const address = await getConnectedAccount();
+    if (!address) {
+      setWallet({ address: '', balance: '' });
+      return;
+    }
+    let balance = '';
+    try {
+      if (config?.contract) balance = await getTokenBalance(config.contract);
+    } catch {
+      // Un saldo ilegible (red equivocada, RPC caído) no debe borrar la conexión.
+    }
+    setWallet({ address, balance });
+  }, [config]);
+
+  // Al montar la pantalla (o al volver de MetaMask con `?view=tienda`), si el
+  // usuario ya autorizó esta web antes, se muestra conectado sin pedir nada.
+  useEffect(() => {
+    if (!hasWallet()) return undefined;
+    refreshWallet();
+    return onWalletChange(refreshWallet);
+  }, [refreshWallet]);
 
   async function connect() {
     setState({ loading: false, error: '', notice: '' });

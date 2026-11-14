@@ -59,18 +59,46 @@ export function hasWallet() {
 
 /// Navegador de móvil. En escritorio la cartera se instala como extensión; en
 /// móvil hay que abrir la web DENTRO de la app de la cartera, porque el móvil no
-/// tiene extensiones y `window.ethereum` no existe hasta entonces.
-export function isMobile() {
-  if (typeof navigator === 'undefined') return false;
-  return /android|iphone|ipad|ipod/i.test(navigator.userAgent || '');
+/// tiene extensiones y `window.ethereum` no existe hasta entonces. Se le puede
+/// pasar un `userAgent` para probarla sin navegador.
+export function isMobile(userAgent) {
+  const ua = userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  return /android|iphone|ipad|ipod/i.test(ua || '');
 }
 
 /// Enlace directo para abrir esta misma web dentro del navegador de MetaMask
 /// (`metamask.app.link/dapp/<host><ruta>`). Se apunta a la tienda con
 /// `?view=tienda` para que, tras conectar, el usuario caiga donde estaba.
-export function metamaskDeepLink() {
-  if (typeof window === 'undefined') return 'https://metamask.app.link';
-  return `https://metamask.app.link/dapp/${window.location.host}/?view=tienda`;
+export function metamaskDeepLink(host) {
+  const h = host ?? (typeof window !== 'undefined' ? window.location.host : '');
+  if (!h) return 'https://metamask.app.link';
+  return `https://metamask.app.link/dapp/${h}/?view=tienda`;
+}
+
+/// Cuenta ya autorizada en este navegador, sin abrir ninguna ventana.
+/// `eth_accounts` no pide permiso: solo devuelve lo que el usuario ya concedió
+/// a este sitio. Sirve para que el panel siga "conectado" al recargar o al
+/// volver a la pantalla, en vez de pedir conectar otra vez.
+export async function getConnectedAccount() {
+  if (!hasWallet()) return null;
+  const provider = new BrowserProvider(window.ethereum);
+  const accounts = await provider.listAccounts();
+  return accounts?.length ? accounts[0].address : null;
+}
+
+/// Avisa cuando el usuario cambia de cuenta o de red desde su cartera. Devuelve
+/// una función para dejar de escuchar.
+export function onWalletChange(handler) {
+  if (!hasWallet() || typeof window.ethereum.on !== 'function') return () => {};
+  const onChange = () => handler();
+  window.ethereum.on('accountsChanged', onChange);
+  window.ethereum.on('chainChanged', onChange);
+  return () => {
+    if (typeof window.ethereum.removeListener === 'function') {
+      window.ethereum.removeListener('accountsChanged', onChange);
+      window.ethereum.removeListener('chainChanged', onChange);
+    }
+  };
 }
 
 /// Pide acceso a la wallet y devuelve su proveedor. Lanza con un mensaje útil
