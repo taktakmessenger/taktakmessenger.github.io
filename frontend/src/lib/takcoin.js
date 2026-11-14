@@ -10,6 +10,10 @@ import { BrowserProvider, Contract, formatUnits, parseUnits } from 'ethers';
 
 // Redes donde se puede desplegar TKC. Los parámetros de `wallet_addEthereumChain`
 // tienen que ser exactos: si falta uno, la wallet rechaza la petición.
+//
+// Los RPC son públicos y gratuitos. `rpc-amoy.polygon.technology` (el oficial)
+// devolvía respuestas vacías al comprobarlo, así que se usa el nodo público de
+// publicnode, que sí responde.
 export const KNOWN_CHAINS = {
   56: {
     chainName: 'BNB Smart Chain',
@@ -17,10 +21,16 @@ export const KNOWN_CHAINS = {
     rpcUrls: ['https://bsc-dataseed.binance.org'],
     blockExplorerUrls: ['https://bscscan.com'],
   },
+  97: {
+    chainName: 'BNB Smart Chain (pruebas)',
+    nativeCurrency: { name: 'tBNB', symbol: 'tBNB', decimals: 18 },
+    rpcUrls: ['https://bsc-testnet.publicnode.com'],
+    blockExplorerUrls: ['https://testnet.bscscan.com'],
+  },
   80002: {
     chainName: 'Polygon Amoy (pruebas)',
     nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-    rpcUrls: ['https://rpc-amoy.polygon.technology'],
+    rpcUrls: ['https://polygon-amoy-bor-rpc.publicnode.com'],
     blockExplorerUrls: ['https://amoy.polygonscan.com'],
   },
 };

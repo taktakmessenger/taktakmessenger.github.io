@@ -95,7 +95,9 @@ function cspDirectives(storageOrigins = []) {
       // y la app lee el contrato a través de estos endpoints. Sin ellos, la CSP
       // bloquearía la lectura del saldo y el cobro del minado.
       'https://bsc-dataseed.binance.org',
-      'https://rpc-amoy.polygon.technology',
+      'https://bsc-testnet.publicnode.com',
+      'https://polygon-amoy-bor-rpc.publicnode.com',
+      'https://polygon-amoy.drpc.org',
       'wss:',
     ],
     workerSrc: ["'self'", 'blob:'],
