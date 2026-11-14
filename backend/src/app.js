@@ -36,6 +36,7 @@ const safetyRoutes = require('./routes/safety');
 const translateRoutes = require('./routes/translate');
 const pokerRoutes = require('./routes/poker');
 const mediaRoutes = require('./routes/media');
+const miningRoutes = require('./routes/mining');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // Orígenes externos que hay que permitir en la CSP: el host público del bucket
@@ -90,6 +91,11 @@ function cspDirectives(storageOrigins = []) {
       // Los segmentos HLS y las descargas del bucket se piden por XHR/fetch,
       // así que el host externo también va aquí.
       ...storageOrigins,
+      // Nodos RPC para el minado de TakCoin (TKC): la cartera del usuario firma
+      // y la app lee el contrato a través de estos endpoints. Sin ellos, la CSP
+      // bloquearía la lectura del saldo y el cobro del minado.
+      'https://bsc-dataseed.binance.org',
+      'https://rpc-amoy.polygon.technology',
       'wss:',
     ],
     workerSrc: ["'self'", 'blob:'],
@@ -201,6 +207,7 @@ function createApp() {
   app.use('/api/safety', safetyRoutes);
   app.use('/api/translate', translateRoutes);
   app.use('/api/poker', pokerRoutes);
+  app.use('/api/mining', miningRoutes);
 
   // Medios del bucket servidos desde el propio dominio. Va fuera de `/api` y
   // antes del estático para que el proxy tenga prioridad; resuelve el bloqueo

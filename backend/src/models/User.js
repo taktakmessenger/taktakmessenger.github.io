@@ -98,6 +98,20 @@ const userSchema = new mongoose.Schema(
       bonusC: { type: Number, default: 0, min: 0 },
       ttcR: { type: Number, default: 0, min: 0 },
     },
+    // Minado de TakCoin (TKC) por ver vídeos. Las monedas minadas son
+    // PROMOCIONALES: viven en `wallet.bonusC` y nunca son retirables, así que el
+    // minado no puede convertirse en dinero. Aquí solo se lleva la contabilidad
+    // de control (tope diario y anti-repetición), no un saldo aparte.
+    mining: {
+      // Fecha (YYYY-MM-DD, UTC) a la que corresponden los contadores de abajo.
+      day: { type: String, default: null },
+      // TKC minados hoy (unidades enteras). Se compara con `dailyMiningCap`.
+      minedToday: { type: Number, default: 0, min: 0 },
+      // Vídeos premiados hoy. Se compara con `dailyVideoCap`.
+      videosToday: { type: Number, default: 0, min: 0 },
+      // Ids de vídeo ya premiados hoy: un vídeo solo paga una vez al día.
+      rewardedVideos: { type: [String], default: [] },
+    },
     stats: {
       totalLikes: { type: Number, default: 0 },
       totalViews: { type: Number, default: 0 },
