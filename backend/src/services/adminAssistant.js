@@ -466,7 +466,7 @@ const TOOLS = [
             enum: ['pending', 'approved', 'rejected'],
             description: 'Filtra por estado de la orden. Opcional.',
           },
-          metodo: { type: 'string', description: 'Filtra por método de pago (p. ej. usdt-bep20). Opcional.' },
+          metodo: { type: 'string', description: 'Filtra por método de pago (p. ej. tkc-polygon). Opcional.' },
           desde: { type: 'string', description: 'Fecha ISO; solo órdenes desde ese momento. Opcional.' },
           hasta: { type: 'string', description: 'Fecha ISO; solo órdenes hasta ese momento. Opcional.' },
           limite: { type: 'number', description: 'Máximo de órdenes a devolver (por defecto 20, tope 100).' },

@@ -243,6 +243,47 @@ test('aprobar acredita las monedas exactamente una vez', async () => {
   }
 });
 
+test('una orden pagada en TakCoin acredita regalo, no monedas retirables', async () => {
+  // El TKC se regala minando: si una compra pagada con él acreditara monedas
+  // pagadas (canjeables por Diamantes → dinero real), cualquiera podría minar
+  // gratis, "comprar" y retirar. La orden debe abonar `bonusC`, no `ttcC`.
+  const restore = withManualMethods([
+    { id: 'tkc-polygon', label: 'TakCoin (Polygon)', asset: 'TKC', network: 'POLYGON', payTo: '0xb8ae095350e8b141204b4bd61894be08efed54fc', isTakCoin: true },
+  ]);
+  try {
+    const agent = app();
+    const user = await registerUser(agent);
+    const created = await agent
+      .post('/api/payments/manual/orders')
+      .set('Authorization', `Bearer ${user.token}`)
+      .send({ packageId: 'starter', method: 'tkc-polygon', reference: 'TKC-123456' });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.order.takcoin, true);
+
+    const { token } = await makeAdmin('boss_tkc');
+    const approved = await agent
+      .post(`/api/admin/manual-orders/${created.body.order._id}/approve`)
+      .set('Authorization', `Bearer ${token}`);
+    assert.equal(approved.status, 200);
+    assert.equal(approved.body.coins, 500);
+
+    // El asiento NO es `purchase` (dinero real) sino `purchase_bonus`.
+    assert.equal(await Transaction.countDocuments({ type: 'purchase' }), 0);
+    const entry = await Transaction.findOne({ type: 'purchase_bonus' });
+    assert.equal(entry.amount, 500);
+    assert.equal(entry.externalId, `manual_${created.body.order._id}`);
+
+    // Y el saldo retirable (ttcC) no sube: el regalo no se convierte en dinero.
+    const wallet = await agent
+      .get('/api/wallet')
+      .set('Authorization', `Bearer ${user.token}`);
+    assert.equal(wallet.body.coins, 0, 'no hay monedas pagadas');
+    assert.equal(wallet.body.bonusCoins, 600, '100 de bienvenida + 500 de regalo');
+  } finally {
+    restore();
+  }
+});
+
 test('rechazar una orden no acredita nada', async () => {
   const restore = withManualMethods();
   try {

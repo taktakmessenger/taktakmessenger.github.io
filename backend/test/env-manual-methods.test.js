@@ -109,3 +109,21 @@ test('un método normal no trae moneda ni red', () => {
   assert.equal(env.manualPaymentMethods[0].asset, '');
   assert.equal(env.manualPaymentMethods[0].network, '');
 });
+
+test('un método en TakCoin (TKC) se marca como tal', () => {
+  const env = loadEnv(JSON.stringify([
+    { id: 'tkc-polygon', label: 'TakCoin (Polygon)', asset: 'TKC', network: 'POLYGON', payTo: '0xb8ae095350e8b141204b4bd61894be08efed54fc' },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].asset, 'TKC');
+  assert.equal(env.manualPaymentMethods[0].network, 'POLYGON');
+  assert.equal(env.manualPaymentMethods[0].isTakCoin, true);
+});
+
+test('un método que no es TakCoin no se marca', () => {
+  const env = loadEnv(JSON.stringify([
+    { id: 'usdt', label: 'USDT', asset: 'USDT', network: 'BEP20', payTo: '0xa5104da3580c390ce8d0e76c6aaafb0d66f3fa04' },
+  ]));
+
+  assert.equal(env.manualPaymentMethods[0].isTakCoin, false);
+});

@@ -178,8 +178,8 @@ function assertPackagesCoverPayout(packages) {
  * El operador declara, en `MANUAL_PAYMENT_METHODS`, dónde cobra y con qué
  * etiqueta. Es JSON para poder añadir un método sin tocar código:
  *
- *   [{"id":"usdt-bep20","label":"USDT (BNB Smart Chain)","asset":"USDT",
- *     "network":"BEP20","payTo":"0x...","details":"Envía USDT por BEP20 y pega el hash."}]
+ *   [{"id":"tkc-polygon","label":"TakCoin (Polygon)","asset":"TKC",
+ *     "network":"POLYGON","payTo":"0x...","details":"Envía TKC por Polygon y pega el hash."}]
  *
  * `id` es lo que se guarda en la orden; `label` es lo que ve el usuario; `details`
  * son las instrucciones de pago que se le muestran y `link` es un enlace directo
@@ -191,8 +191,12 @@ function assertPackagesCoverPayout(packages) {
  * Un método puede además ser una **billetera cripto** declarando `asset` (p. ej.
  * "USDT") y `network` (p. ej. "TRC20"). En ese caso `payTo` es la dirección de
  * la wallet y la tienda la ofrece con su código QR y la red bien visible, porque
- * enviar USDT por la red equivocada pierde el dinero. El cobro sigue siendo
+ * enviar una moneda por la red equivocada pierde el dinero. El cobro sigue siendo
  * manual: el usuario paga desde su wallet y pega el hash de la transacción.
+ *
+ * Si `asset` es TakCoin (`TKC`), el método se marca con `isTakCoin` y las
+ * compras que lo usen acreditan monedas de REGALO (no retirables): el TKC se
+ * regala minando, así que no puede canjearse por dinero real.
  */
 function resolveManualPaymentMethods() {
   if (!process.env.MANUAL_PAYMENT_METHODS) return [];
@@ -252,6 +256,10 @@ function resolvePaymentLink(link) {
 
 /**
  * Billeteras cripto del sistema (por defecto USDT en BNB Smart Chain / BEP20).
+ *
+ * Esto rige los RETIROS: el usuario cobra sus Diamantes en USDT de verdad, así
+ * que la red y el contrato son los del dinero real. La tienda cobra en TakCoin
+ * (TKC) por su cuenta, en `MANUAL_PAYMENT_METHODS`.
  *
  * Hay dos direcciones, y la separación no es cosmética:
  *
