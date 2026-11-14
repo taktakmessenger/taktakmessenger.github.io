@@ -5216,6 +5216,23 @@
   border-radius: 4px;
 }
 
+/* Nota para importar TKC a mano en la cartera. */
+.takcoin-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-strong);
+  background: var(--surface);
+}
+
+.takcoin-manual small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .package-list {
   list-style: none;
   padding: 0;

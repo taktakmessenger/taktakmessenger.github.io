@@ -117,6 +117,9 @@ export default function TakCoinMining({ onMined }) {
     setState((s) => ({ ...s, error: '', notice: '' }));
     setBusy('claim');
     try {
+      // Reafirma la red antes de firmar: si el usuario se cambió a otra red
+      // entre conectar y cobrar, la transacción iría a la red equivocada.
+      if (config?.chainId) await ensureChain(config.chainId);
       const { data: voucher } = await api.post('/mining/voucher', { address: wallet.address });
       const { hash } = await claimReward(config.contract, voucher);
       // Se registra en el servidor solo después de que la transacción se
@@ -141,6 +144,13 @@ export default function TakCoinMining({ onMined }) {
     if (!ok) return;
     setCopied('addr');
     setTimeout(() => setCopied((c) => (c === 'addr' ? '' : c)), 2000);
+  }
+
+  async function copyContract() {
+    const ok = await copyToClipboard(config.contract);
+    if (!ok) return;
+    setCopied('contract');
+    setTimeout(() => setCopied((c) => (c === 'contract' ? '' : c)), 2000);
   }
 
   async function addToken() {
@@ -265,6 +275,25 @@ export default function TakCoinMining({ onMined }) {
             <button type="button" className="btn-ghost" onClick={addToken} disabled={busy === 'watch'}>
               Añadir TKC a la cartera
             </button>
+          </div>
+          <div className="takcoin-manual" role="note">
+            <strong>¿No ves tus TKC en MetaMask?</strong>
+            <small>
+              Añádelos a mano: en MetaMask abre la pestaña <strong>Tokens</strong> →
+              <strong> Importar token</strong>, elige la red <strong>Polygon</strong> y pega
+              la dirección del contrato.
+            </small>
+            <div className="takcoin-address">
+              <code className="takcoin-address-value">{config.contract}</code>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={copyContract}
+                aria-label="Copiar dirección del contrato"
+              >
+                {copied === 'contract' ? '✅ Copiado' : '📋 Copiar'}
+              </button>
+            </div>
           </div>
           <small className="package-rate">
             Red: {CHAIN_LABEL[config.chainId] || `chainId ${config.chainId}`} ·{' '}

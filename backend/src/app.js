@@ -91,9 +91,11 @@ function cspDirectives(storageOrigins = []) {
       // Los segmentos HLS y las descargas del bucket se piden por XHR/fetch,
       // así que el host externo también va aquí.
       ...storageOrigins,
-      // Nodos RPC para el minado de TakCoin (TKC): la cartera del usuario firma
-      // y la app lee el contrato a través de estos endpoints. Sin ellos, la CSP
-      // bloquearía la lectura del saldo y el cobro del minado.
+      // Nodos RPC para el minado de TakCoin (TKC). TKC vive en Polygon (chainId
+      // 137), así que el nodo principal es el de Polygon; los demás quedan por si
+      // se despliega el token en otra red. Sin ellos la CSP bloquearía cualquier
+      // lectura directa del contrato.
+      'https://polygon-bor-rpc.publicnode.com',
       'https://bsc-dataseed.binance.org',
       'https://bsc-testnet.publicnode.com',
       'https://polygon-amoy-bor-rpc.publicnode.com',

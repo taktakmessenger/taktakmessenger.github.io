@@ -206,7 +206,9 @@ export async function connectWallet() {
 }
 
 /// Cambia a la red del token, añadiéndola si la wallet no la conoce. En un móvil
-/// el usuario confirma el cambio en su propia app de wallet.
+/// el usuario confirma el cambio en su propia app de wallet. Al terminar
+/// comprueba que el cambio surtió efecto: si el usuario lo cancela o la cartera
+/// se queda en otra red, lanza en vez de operar contra la red equivocada.
 export async function ensureChain(chainId) {
   const target = KNOWN_CHAINS[chainId];
   const p = provider();
@@ -227,6 +229,12 @@ export async function ensureChain(chainId) {
     } else {
       throw err;
     }
+  }
+  const after = Number((await new BrowserProvider(p).getNetwork()).chainId);
+  if (after !== chainId) {
+    throw new Error(
+      `La cartera sigue en otra red (chainId ${after}). Cambia a ${target.chainName} para continuar.`
+    );
   }
 }
 
