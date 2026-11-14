@@ -51,18 +51,14 @@ services:
       # Firma de los JWT. Render genera un valor aleatorio y lo mantiene.
       - key: JWT_SECRET
         generateValue: true
-      # La web y la API comparten origen, así que CORS y los enlaces absolutos
-      # que se envían por correo apuntan a la propia URL del servicio.
+      # La web y la API comparten origen, así que CORS apunta a la propia URL
+      # del servicio. Se fija el dominio propio (no `RENDER_EXTERNAL_URL`): ese
+      # último es `taktak-y7k2.onrender.com` y se colaba en los enlaces de
+      # referidos y de correo, que deben salir siempre con `taktak.vip`.
       - key: CORS_ORIGIN
-        fromService:
-          name: taktak
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://taktak.vip
       - key: APP_URL
-        fromService:
-          name: taktak
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://taktak.vip
       # ffmpeg sí está en la imagen. La transcodificación se deja ACTIVADA
       # porque sin ella el vídeo se sirve tal cual y un original de iPhone
       # (H.265/HEVC) o de Android reciente (AV1) se ve en negro en la mayoría de
