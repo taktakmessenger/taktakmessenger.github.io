@@ -19,7 +19,7 @@ import {
 // Si el servidor no tiene configurado el contrato o la clave del oráculo, el
 // panel lo dice y no ofrece botones que no funcionarían.
 
-const CHAIN_LABEL = { 56: 'BNB Smart Chain', 80002: 'Polygon Amoy (pruebas)' };
+const CHAIN_LABEL = { 56: 'BNB Smart Chain', 137: 'Polygon', 80002: 'Polygon Amoy (pruebas)' };
 
 export default function TakCoinMining({ onMined }) {
   const [config, setConfig] = useState(null);

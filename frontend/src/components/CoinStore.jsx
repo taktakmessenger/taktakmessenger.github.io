@@ -9,7 +9,7 @@ import TakCoinMining from './TakCoinMining';
 // catálogo estuviera en el cliente, el precio que ve el usuario y el que se
 // cobra podrían separarse, y el que manda es el del servidor.
 //
-// El cobro es SOLO por billetera cripto (USDT en BNB Smart Chain). No hay
+// El cobro es SOLO por billetera cripto (TakCoin). No hay
 // pasarelas ni métodos antiguos: una sola vía, sin cuenta de empresa, sin
 // webhooks y sin intermediarios. El usuario paga desde su wallet y pega el hash;
 // el sistema lo comprueba.
@@ -23,7 +23,7 @@ function isWallet(m) {
 export default function CoinStore({ onBack, onPurchased }) {
   const [packages, setPackages] = useState([]);
   const [providers, setProviders] = useState({ manual: false });
-  // Métodos de cobro: solo billeteras cripto (USDT). El cobro con pasarelas y
+  // Métodos de cobro: solo billeteras cripto (TakCoin). El cobro con pasarelas y
   // los métodos antiguos se retiraron a propósito: una sola vía de pago, sin
   // cuentas de empresa ni intermediarios.
   const [wallets, setWallets] = useState([]);

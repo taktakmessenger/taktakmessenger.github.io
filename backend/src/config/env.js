@@ -217,6 +217,11 @@ function resolveManualPaymentMethods() {
     }
     seen.add(method.id);
     const asset = method.asset ? String(method.asset).trim().slice(0, 20) : '';
+    // TakCoin (TKC) se marca aparte porque su cobro NO es dinero real: los TKC
+    // se regalan (minado). Si una compra pagada en TKC acreditara monedas
+    // retirables, cualquiera podría minar gratis, "comprar" y retirar dinero de
+    // verdad: una fuga. Marcándolo aquí, el abono va a monedas de regalo.
+    const isTakCoin = /^(tkc|takcoin)$/i.test(asset);
     return {
       id: String(method.id).slice(0, 40),
       label: String(method.label).slice(0, 60),
@@ -230,6 +235,7 @@ function resolveManualPaymentMethods() {
       // dice nada. Si falta una, se trata como método normal y no como wallet.
       asset,
       network: asset && method.network ? String(method.network).trim().slice(0, 20) : '',
+      isTakCoin,
     };
   });
 }

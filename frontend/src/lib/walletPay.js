@@ -10,12 +10,15 @@ import QRCode from 'qrcode';
 // esquemas BIP-21 que MetaMask, Trust, Rainbow y compañía reconocen al escanear
 // y rellenan la dirección y el importe solos. Se elige por la red declarada.
 //
-// Los decimales van con la red y no son un detalle: USDT tiene 6 en Ethereum y
-// en Tron, pero 18 en BNB Smart Chain. Poner 6 en BEP20 codificaría un importe
-// un billón de veces menor y la wallet enviaría una miseria.
+// Los decimales van con la red y no son un detalle: un mismo token puede tener
+// 6 decimales en una red y 18 en otra. Poner los que no son codificaría un
+// importe equivocado y la wallet enviaría una miseria. TakCoin (TKC) usa 18.
 const NETWORK_INFO = {
-  ERC20: { scheme: 'ethereum', decimals: 6 },
-  ETH: { scheme: 'ethereum', decimals: 6 },
+  POLYGON: { scheme: 'ethereum', decimals: 18 },
+  MATIC: { scheme: 'ethereum', decimals: 18 },
+  AMOY: { scheme: 'ethereum', decimals: 18 },
+  ERC20: { scheme: 'ethereum', decimals: 18 },
+  ETH: { scheme: 'ethereum', decimals: 18 },
   BEP20: { scheme: 'ethereum', decimals: 18 },
   BSC: { scheme: 'ethereum', decimals: 18 },
   TRC20: { scheme: 'tron', decimals: 6 },
