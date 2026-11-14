@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
+import { copyToClipboard } from '../lib/share';
 import {
   hasWallet,
   connectWallet,
@@ -25,6 +26,7 @@ export default function TakCoinMining({ onMined }) {
   const [state, setState] = useState({ loading: true, error: '', notice: '' });
   const [wallet, setWallet] = useState({ address: '', balance: '' });
   const [busy, setBusy] = useState('');
+  const [copied, setCopied] = useState('');
 
   const loadConfig = useCallback(async () => {
     try {
@@ -81,6 +83,13 @@ export default function TakCoinMining({ onMined }) {
     }
   }
 
+  async function copyAddress() {
+    const ok = await copyToClipboard(wallet.address);
+    if (!ok) return;
+    setCopied('addr');
+    setTimeout(() => setCopied((c) => (c === 'addr' ? '' : c)), 2000);
+  }
+
   async function addToken() {
     setBusy('watch');
     try {
@@ -125,9 +134,18 @@ export default function TakCoinMining({ onMined }) {
 
       {wallet.address ? (
         <div className="takcoin-wallet">
-          <p>
-            Cartera: <code>{wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}</code>
-          </p>
+          <p>Tu cartera</p>
+          <div className="takcoin-address">
+            <code className="takcoin-address-value">{wallet.address}</code>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={copyAddress}
+              aria-label="Copiar dirección de la cartera"
+            >
+              {copied === 'addr' ? '✅ Copiada' : '📋 Copiar'}
+            </button>
+          </div>
           <p>Saldo TKC: <strong>{wallet.balance || '0'}</strong></p>
           <div className="package-actions">
             <button type="button" className="btn-primary" onClick={claim} disabled={busy === 'claim'}>
