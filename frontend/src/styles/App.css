@@ -8673,3 +8673,27 @@
   color: inherit;
   font-size: 0.85rem;
 }
+
+/* Cartera de TakCoin en el panel de minería: la dirección completa se muestra
+   entera (no cortada) y se parte por donde haga falta para que no desborde en
+   pantallas pequeñas. El botón de copiar queda siempre visible a la derecha. */
+.takcoin-address {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+
+.takcoin-address-value {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
