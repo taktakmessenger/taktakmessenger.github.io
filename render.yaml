@@ -113,11 +113,14 @@ services:
         sync: false
       # Cobro manual. Va con valor y no como secreto porque son los datos de pago
       # que se le muestran al usuario, no credenciales.
-      # Cobro SOLO con billetera cripto (USDT en BNB Smart Chain / BEP20).
+      # Cobro SOLO con billetera cripto (TakCoin / TKC en Polygon).
       # `asset`+`network` hacen que la tienda lo pinte como billetera con QR; la
-      # dirección es la BÓVEDA, que recibe el 60% de los usuarios.
+      # dirección es la del admin, que es quien recibe el TKC de las compras.
+      # El backend detecta `asset: TKC` y acredita monedas de REGALO (no
+      # retirables): el TKC se regala minando, así que pagar con él no puede dar
+      # monedas canjeables por dinero real (si no, sería una fuga).
       - key: MANUAL_PAYMENT_METHODS
-        value: '[{"id":"usdt-bep20","label":"USDT (BNB Smart Chain)","asset":"USDT","network":"BEP20","payTo":"0xa5104da3580c390ce8d0e76c6aaafb0d66f3fa04","details":"Envía USDT por la red BNB Smart Chain (BEP20) a esta dirección y pega el hash de la transacción."}]'
+        value: '[{"id":"tkc-polygon","label":"TakCoin (Polygon)","asset":"TKC","network":"POLYGON","payTo":"0xb8ae095350e8b141204b4bd61894be08efed54fc","details":"Envía TakCoin (TKC) por la red Polygon a esta dirección y pega el hash de la transacción."}]'
       # Billeteras del sistema: la del admin (40%) y la bóveda (60%).
       - key: CRYPTO_NETWORK
         value: BEP20
