@@ -3,6 +3,8 @@ import api from '../api/client';
 import { copyToClipboard } from '../lib/share';
 import {
   hasWallet,
+  isMobile,
+  metamaskDeepLink,
   connectWallet,
   ensureChain,
   getTokenBalance,
@@ -127,9 +129,21 @@ export default function TakCoinMining({ onMined }) {
       {state.notice && <p className="notice" role="status">{state.notice}</p>}
 
       {!hasWallet() && (
-        <p className="error" role="alert">
-          Abre la app en MetaMask o instala su extensión para cobrar.
-        </p>
+        <div className="store-closed" role="status">
+          <strong>Conecta una cartera para cobrar</strong>
+          <small>
+            {isMobile()
+              ? 'En el móvil no hay extensiones: abre TakTak dentro de la app de MetaMask para conectar tu cartera.'
+              : 'Instala la extensión de MetaMask para conectar tu cartera.'}
+          </small>
+          <a
+            className="btn-primary"
+            href={isMobile() ? metamaskDeepLink() : 'https://metamask.io/download/'}
+            {...(isMobile() ? {} : { target: '_blank', rel: 'noreferrer' })}
+          >
+            🦊 {isMobile() ? 'Abrir en MetaMask' : 'Instalar MetaMask'}
+          </a>
+        </div>
       )}
 
       {wallet.address ? (
@@ -161,9 +175,11 @@ export default function TakCoinMining({ onMined }) {
           </small>
         </div>
       ) : (
-        <button type="button" className="btn-primary" onClick={connect} disabled={busy === 'connect' || !hasWallet()}>
-          {busy === 'connect' ? 'Conectando…' : '🔌 Conectar cartera'}
-        </button>
+        hasWallet() && (
+          <button type="button" className="btn-primary" onClick={connect} disabled={busy === 'connect'}>
+            {busy === 'connect' ? 'Conectando…' : '🔌 Conectar cartera'}
+          </button>
+        )
       )}
     </div>
   );

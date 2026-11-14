@@ -5189,6 +5189,14 @@
   line-height: 1.4;
 }
 
+.store-closed a.btn-primary {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 0.6rem;
+  text-decoration: none;
+  text-align: center;
+}
+
 .package-list {
   list-style: none;
   padding: 0;

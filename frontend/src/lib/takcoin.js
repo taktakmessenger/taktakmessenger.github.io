@@ -57,6 +57,22 @@ export function hasWallet() {
   return typeof window !== 'undefined' && Boolean(window.ethereum);
 }
 
+/// Navegador de móvil. En escritorio la cartera se instala como extensión; en
+/// móvil hay que abrir la web DENTRO de la app de la cartera, porque el móvil no
+/// tiene extensiones y `window.ethereum` no existe hasta entonces.
+export function isMobile() {
+  if (typeof navigator === 'undefined') return false;
+  return /android|iphone|ipad|ipod/i.test(navigator.userAgent || '');
+}
+
+/// Enlace directo para abrir esta misma web dentro del navegador de MetaMask
+/// (`metamask.app.link/dapp/<host><ruta>`). Se apunta a la tienda con
+/// `?view=tienda` para que, tras conectar, el usuario caiga donde estaba.
+export function metamaskDeepLink() {
+  if (typeof window === 'undefined') return 'https://metamask.app.link';
+  return `https://metamask.app.link/dapp/${window.location.host}/?view=tienda`;
+}
+
 /// Pide acceso a la wallet y devuelve su proveedor. Lanza con un mensaje útil
 /// si no hay wallet instalada.
 export async function connectWallet() {

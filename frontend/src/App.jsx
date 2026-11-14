@@ -195,6 +195,9 @@ function Shell() {
     if (target === 'activity') setView('activity');
     if (target === 'wall') setView('wall');
     if (target === 'squads') setView('squads');
+    // Vuelta desde la app de MetaMask (móvil): el enlace directo apunta a la
+    // tienda para que el usuario, ya con cartera inyectada, caiga donde estaba.
+    if (target === 'tienda') setView('tienda');
     // Vuelta de la verificación de edad: Didit redirige aquí al terminar. La
     // pantalla de verificación refresca el estado al montarse, así que basta
     // con abrirla.
