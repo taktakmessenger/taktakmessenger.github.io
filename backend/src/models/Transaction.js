@@ -15,6 +15,10 @@ const transactionSchema = new mongoose.Schema(
         'gift_bonus',
         'withdraw',
         'purchase',
+        // Compra pagada con TakCoin (TKC): no es dinero real (los TKC se
+        // regalan minando), así que acredita monedas de regalo. Se apunta aparte
+        // de `purchase` para que "cuánto entró" nunca cuente TKC como ingreso.
+        'purchase_bonus',
         // Ingreso bruto de una venta de monedas. Guarda lo que pagó el
         // comprador; el reparto 40/60 va en `details`. Es la cifra de la que
         // salen "cuánto entró" y "cuánto es de la plataforma".

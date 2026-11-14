@@ -27,6 +27,12 @@ export const KNOWN_CHAINS = {
     rpcUrls: ['https://bsc-testnet.publicnode.com'],
     blockExplorerUrls: ['https://testnet.bscscan.com'],
   },
+  137: {
+    chainName: 'Polygon',
+    nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+    rpcUrls: ['https://polygon-bor-rpc.publicnode.com'],
+    blockExplorerUrls: ['https://polygonscan.com'],
+  },
   80002: {
     chainName: 'Polygon Amoy (pruebas)',
     nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },

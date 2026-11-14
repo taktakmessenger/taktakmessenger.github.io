@@ -1,5 +1,6 @@
 const ManualOrder = require('../models/ManualOrder');
 const Transaction = require('../models/Transaction');
+const User = require('../models/User');
 const env = require('../config/env');
 const paymentService = require('./paymentService');
 const vaultService = require('./vaultService');
@@ -49,6 +50,7 @@ async function createOrder({ userId, packageId, methodId, reference, note }) {
     coins: pkg.coins,
     priceUsd: pkg.priceUsd,
     method: method.id,
+    takcoin: Boolean(method.isTakCoin),
     reference,
     note,
   });
@@ -284,6 +286,55 @@ async function approveOrder({ orderId, adminId, auto = false, note }) {
   if (!order) throw new HttpError(404, 'Orden no encontrada');
   if (order.status !== 'pending') {
     throw new HttpError(409, 'La orden ya fue revisada');
+  }
+
+  // Una compra pagada en TakCoin (TKC) no es dinero real: los TKC se regalan
+  // (minado). Si se acreditara como monedas pagadas, cualquiera podría minar
+  // gratis, "comprar" y convertir a Diamantes retirables: una fuga de dinero
+  // real. Por eso estas órdenes abonan monedas de REGALO (`wallet.bonusC`), que
+  // se gastan en regalos pero nunca se retiran.
+  if (order.takcoin) {
+    const orderExternalId = `manual_${order._id}`;
+    let bonusTransaction;
+    try {
+      bonusTransaction = await Transaction.create({
+        from: order.user,
+        amount: order.coins,
+        type: 'purchase_bonus',
+        ttcType: 'ttcC',
+        packageId: order.packageId,
+        externalId: orderExternalId,
+        amountPaid: order.priceUsd,
+        currency: 'USD',
+        method: 'manual',
+        details: `Orden ${order._id} (TakCoin)`,
+        status: 'completed',
+      });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
+    const credited = Boolean(bonusTransaction);
+    if (credited) {
+      await User.findByIdAndUpdate(order.user, { $inc: { 'wallet.bonusC': order.coins } });
+    }
+
+    const updated = await ManualOrder.findByIdAndUpdate(
+      order._id,
+      {
+        status: 'approved',
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+        reviewNote: note
+          ? String(note).slice(0, 300)
+          : auto
+            ? 'Aprobada automáticamente por el asistente'
+            : undefined,
+        transaction: bonusTransaction?._id,
+      },
+      { new: true }
+    ).populate('user', 'username email');
+
+    return { order: updated, credited, coins: order.coins };
   }
 
   const result = await paymentService.creditPurchase({

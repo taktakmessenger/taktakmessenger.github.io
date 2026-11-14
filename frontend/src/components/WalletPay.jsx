@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { copyToClipboard } from '../lib/share';
 import { walletQrDataUrl, walletUri } from '../lib/walletPay';
 
-// Pago con billetera cripto (USDT).
+// Pago con billetera cripto (TakCoin).
 //
 // Se ofrece PRIMERO, antes que cualquier otra vía, porque es la que cobra sin
 // intermediarios: no hay pasarela que retenga el dinero ni comisión que se lo
@@ -10,8 +10,8 @@ import { walletQrDataUrl, walletUri } from '../lib/walletPay';
 // desde su wallet y pega el hash de la transacción para que se compruebe.
 //
 // Lo que la pantalla tiene que dejar claro, por encima de todo, es la RED. Un
-// USDT enviado por la red equivocada se pierde y no hay vuelta atrás, así que la
-// red va en grande y en su propio recuadro, no como letra pequeña.
+// TakCoin enviado por la red equivocada se pierde y no hay vuelta atrás, así que
+// la red va en grande y en su propio recuadro, no como letra pequeña.
 
 export default function WalletPay({ method, priceUsd, reference, onReference, onSubmit, busy }) {
   const [qr, setQr] = useState('');
