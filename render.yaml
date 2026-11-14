@@ -154,6 +154,19 @@ services:
       # Aprobación automática: déjalo en false hasta que confíes en el asistente.
       - key: MANUAL_AUTO_APPROVE
         value: false
+      # Minado on-chain de TakCoin en POLYGON (red real, chainId 137).
+      # El contrato ya está desplegado; el servidor firma los vales con la clave
+      # del oráculo (REPORT_SIGNER_KEY), que va como secreto porque quien la lea
+      # puede acuñar. Sin ella el minado queda apagado (503) y no promete pagos
+      # que no puede firmar.
+      - key: MINING_CONTRACT
+        value: '0x4DD6765637b039BeBCCda609c98529a43F7108f8'
+      - key: CHAIN_ID
+        value: '137'
+      - key: RPC_URL
+        value: 'https://polygon-bor-rpc.publicnode.com'
+      - key: REPORT_SIGNER_KEY
+        sync: false
 
   # --- Keep-alive (OPCIONAL, DE PAGO) ---------------------------------------
   # Comentado a propósito: los background workers no tienen plan gratuito, así
