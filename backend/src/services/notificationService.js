@@ -284,12 +284,11 @@ async function announceTournament({ event, actorId, exclude = [] }) {
             title: 'POKERTAK',
             body: `Nuevo torneo: ${event.title}`,
             tag: `activity-tournament-${event._id}`,
-            data: { url: '/?view=squads', type: 'tournament', eventId: String(event._id) },
+            data: { url: '/?view=poker', type: 'tournament', eventId: String(event._id) },
           })
           .catch(() => {});
       }
     }
-    void payload;
     return created.length;
   } catch (err) {
     console.error('[NOTIF] No se pudo anunciar el torneo:', err.message);

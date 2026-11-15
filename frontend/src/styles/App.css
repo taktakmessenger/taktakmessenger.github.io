@@ -6562,9 +6562,30 @@
   pointer-events: auto;
 }
 
-.home-search {
-  position: absolute;
+/* Barra superior: la campana y la lupa, fuera de la barra inferior.
+   Va por encima del contenido, sin ocupar alto (flota), para no empujar el feed
+   ni las cabeceras de las demás pantallas. */
+.app-topbar {
+  position: fixed;
+  top: calc(0.6rem + env(safe-area-inset-top, 0px));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.app-topbar--right {
+  right: 0.75rem;
+}
+
+.app-topbar--left {
   left: 0.75rem;
+}
+
+.app-topbar-btn {
+  position: relative;
+  pointer-events: auto;
   display: grid;
   place-items: center;
   width: 38px;
@@ -6576,6 +6597,11 @@
   color: #fff;
   font-size: 1.05rem;
   cursor: pointer;
+}
+
+.app-topbar-btn.active {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .home-switch {
@@ -8740,4 +8766,139 @@
   line-height: 1.35;
   overflow-wrap: anywhere;
   word-break: break-all;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* POKERTAK: pestaña propia y vestíbulo                               */
+/* ------------------------------------------------------------------ */
+/* El emblema del juego (el queso con la semilla de mango) en la barra: se pinta
+   en SVG y sustituye al icono de texto de la pestaña. */
+.tabbar-poker-logo {
+  width: 24px;
+  height: 24px;
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.ptak-lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.25rem;
+}
+
+.ptak-lobby-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ptak-lobby-title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.ptak-lobby-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ptak-lobby-h {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.ptak-lobby-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* La mesa es una tarjeta con fondo de fieltro: el vestíbulo se lee como la
+   antesala de una sala de póker, no como una lista de ajustes. */
+.ptak-lobby-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at top left, rgba(26, 107, 82, 0.55), transparent 70%),
+    var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.ptak-lobby-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ptak-lobby-mine {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #3a2600;
+  background: linear-gradient(180deg, #ffd94a, #f0a91b);
+}
+
+.ptak-lobby-owner {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.ptak-lobby-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ptak-lobby .ptak-btn.primary {
+  align-self: flex-start;
+}
+
+/* Bote en el centro del tapete: una ficha dorada con el importe, para que se
+   lea de un vistazo sin ir a la cabecera. */
+.ptak-center-pot {
+  margin-top: 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #3a2600;
+  background: linear-gradient(180deg, #ffe98a, #f0a91b);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* Atajos de subida: una fila de botones con los tamaños típicos (mínimo, medio
+   bote, bote, all-in). Se separan del deslizador para no confundirse con él. */
+.ptak-raise-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.ptak-raise-presets .ptak-btn {
+  flex: 1;
+  min-width: 56px;
+  padding: 6px 8px;
+  font-size: 13px;
+  border-color: rgba(255, 217, 74, 0.4);
+}
+
+.ptak-raise-presets .ptak-btn.on {
+  background: rgba(255, 217, 74, 0.22);
+  border-color: #ffd94a;
+  color: #ffe98a;
 }

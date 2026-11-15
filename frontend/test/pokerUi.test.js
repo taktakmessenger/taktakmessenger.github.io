@@ -6,6 +6,7 @@ import {
   seatScale,
   formatCoins,
   legalActions,
+  raisePresets,
   ownSeat,
   phaseLabel,
   actionLabel,
@@ -128,4 +129,36 @@ test('la fase y la acción tienen rótulo en castellano', () => {
   assert.equal(phaseLabel('showdown'), 'Showdown');
   assert.equal(actionLabel('raise', 60), 'Sube a 60');
   assert.equal(actionLabel('fold'), 'Se retira');
+});
+
+test('los atajos de subida son importes legales y ordenados', () => {
+  const state = {
+    phase: 'flop', turnSeat: 0, currentBet: 20, minRaise: 20, bigBlind: 10, pot: 100,
+    seats: [{ seat: 0, userId: 'a', folded: false, allIn: false, stack: 500, bet: 0 }],
+  };
+  const presets = raisePresets(state, 0);
+  assert.ok(presets.length >= 2);
+  // Todos dentro del rango legal: no se puede subir por debajo del mínimo ni por
+  // encima de la pila.
+  const min = state.currentBet + state.minRaise; // 40
+  const max = 500;
+  for (const v of presets) {
+    assert.ok(v >= min && v <= max, `${v} fuera de [${min}, ${max}]`);
+    assert.equal(v % state.bigBlind, 0, `${v} no es múltiplo de la ciega grande`);
+  }
+  // Ordenados de menor a mayor y sin repetidos.
+  assert.deepEqual(presets, [...new Set(presets)].sort((a, b) => a - b));
+  // El último es el all-in (la pila entera).
+  assert.equal(presets[presets.length - 1], max);
+});
+
+test('sin poder subir no hay atajos', () => {
+  // Un jugador retirado o con la pila ya dentro no puede subir.
+  const folded = {
+    phase: 'flop', currentBet: 0, bigBlind: 10, pot: 0,
+    seats: [{ seat: 0, userId: 'a', folded: true, allIn: false, stack: 100, bet: 0 }],
+  };
+  assert.deepEqual(raisePresets(folded, 0), []);
+  // Sin estado tampoco.
+  assert.deepEqual(raisePresets(null, 0), []);
 });

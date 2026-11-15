@@ -184,6 +184,42 @@ export function legalActions(state, seat) {
   };
 }
 
+/**
+ * Atajos de subida, al estilo de las mesas grandes: el mínimo legal, medio bote,
+ * el bote entero y el all-in. Se recortan al rango legal y se redondean a la
+ * ciega grande para que los importes sean "de mesa" (10, 20, 30…), no cifras
+ * sueltas. Devuelve una lista sin repetidos; vacía si no se puede subir.
+ */
+export function raisePresets(state, seat) {
+  const self = state?.seats?.[seat];
+  if (!state || !self || self.empty || self.folded || self.allIn) return [];
+  const step = Math.max(1, Number(state.bigBlind) || 10);
+  const bet = Number(self.bet) || 0;
+  const stack = Number(self.stack) || 0;
+  const currentBet = Number(state.currentBet) || 0;
+  const maxRaiseTo = bet + stack;
+  const rawMin = currentBet > 0
+    ? currentBet + (Number(state.minRaise) || Number(state.bigBlind) || 0)
+    : (Number(state.bigBlind) || 0);
+  const minRaiseTo = Math.min(rawMin, maxRaiseTo);
+  if (maxRaiseTo <= minRaiseTo && maxRaiseTo <= currentBet) return [];
+
+  const toCall = Math.max(0, currentBet - bet);
+  const pot = Number(state.pot) || 0;
+  const round = (v) => {
+    const snapped = Math.round(v / step) * step;
+    return Math.max(minRaiseTo, Math.min(maxRaiseTo, snapped));
+  };
+
+  const wanted = [minRaiseTo, round((pot + toCall) / 2), round(pot + toCall), maxRaiseTo];
+  const presets = [];
+  for (const value of wanted) {
+    if (value < minRaiseTo || value > maxRaiseTo) continue;
+    if (!presets.includes(value)) presets.push(value);
+  }
+  return presets;
+}
+
 // El asiento del jugador propio dentro del estado, o -1 si no está sentado.
 export function ownSeat(state, userId) {
   if (!state || userId == null) return -1;
