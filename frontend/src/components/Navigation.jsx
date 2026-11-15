@@ -105,7 +105,9 @@ export default function Navigation({ currentView, setCurrentView }) {
               tab.icon
             )}
           </span>
-          <span className="tabbar-label">{tab.label}</span>
+          <span className={`tabbar-label${tab.poker ? ' tabbar-label-poker' : ''}`}>
+            {tab.label}
+          </span>
           {tab.id === 'messages' && unread > 0 && (
             <span className="nav-badge" aria-label={`${unread} sin leer`}>
               {unread > 9 ? '9+' : unread}

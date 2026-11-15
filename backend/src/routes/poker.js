@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const pokerEventService = require('../services/pokerEventService');
+const env = require('../config/env');
 const Squad = require('../models/Squad');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
@@ -19,6 +20,10 @@ router.use(auth);
 // La mesa de POKERTAK vive en la sala del creator (el anfitrión reparte), así
 // que el vestíbulo enseña las salas públicas abiertas. Es lo que permite jugar
 // desde la pestaña propia del juego y no solo desde dentro de un directo.
+//
+// Además va la mesa de PRÁCTICAS: una mesa de la casa, siempre abierta, contra
+// bots y con fichas de juguete, para aprender sin arriesgar monedas. Se anuncia
+// aparte porque no es un creator: se entra por el socket `practice:join`.
 router.get(
   '/tables',
   asyncHandler(async (req, res) => {
@@ -43,7 +48,15 @@ router.get(
         : null,
     }));
 
-    res.json({ tables });
+    const practice = {
+      buyIn: env.poker.practice.buyIn,
+      seats: env.poker.practice.seats,
+      bots: env.poker.practice.botCount,
+      smallBlind: env.poker.smallBlind,
+      bigBlind: env.poker.bigBlind,
+    };
+
+    res.json({ tables, practice });
   })
 );
 

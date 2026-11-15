@@ -137,8 +137,8 @@ function Seat({ player, position, isTurn, isSelf, isWinner, face, isButton, seat
  * de juego, solo se pinta y se mandan acciones. El centro de la mesa lleva el
  * nombre POKERTAK, el eslogan y el logo del queso con la semilla de mango.
  */
-export default function PokerTable({ slug, onClose }) {
-  const { emit, socket } = useSocket();
+export default function PokerTable({ slug, onClose, practice = false }) {
+  const { emit, socket, connected } = useSocket();
   const { user } = useAuth();
   // La sala de voz del directo ya está abierta: los jugadores ven y oyen por
   // ella. La mesa reutiliza esos mismos streams para las caras, sin abrir otra
@@ -150,6 +150,11 @@ export default function PokerTable({ slug, onClose }) {
     remoteVideoStreamsRef,
     camOff,
     streamTick,
+    active: voiceActive,
+    join: joinVoice,
+    stageOpen,
+    setBarHidden,
+    suppressStage,
   } = useVoiceRoom();
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
@@ -188,7 +193,8 @@ export default function PokerTable({ slug, onClose }) {
   }, [menuOpen]);
 
   // Al abrir la mesa se pide el estado. Al cerrar, se avisa al servidor para que
-  // devuelva las fichas al monedero.
+  // devuelva las fichas al monedero. En la mesa de prácticas se entra por el
+  // socket `practice:join` (fichas de juguete, sin monedero ni cámara).
   useEffect(() => {
     if (!socket) return undefined;
     const onState = (s) => { setState(s); setError(''); };
@@ -197,16 +203,51 @@ export default function PokerTable({ slug, onClose }) {
     socket.on('poker:state', onState);
     socket.on('poker:error', onError);
     socket.on('poker:closed', onClosed);
-    emit('poker:open', { slug });
+    if (practice) emit('practice:join', {});
+    else emit('poker:open', { slug });
     return () => {
       socket.off('poker:state', onState);
       socket.off('poker:error', onError);
       socket.off('poker:closed', onClosed);
       // Al desmontar (cerrar la ventana) se sale de la mesa para que las fichas
       // vuelvan al monedero y no queden dentro de una mesa en memoria.
-      emit('poker:leave', {});
+      if (practice) emit('practice:leave', {});
+      else emit('poker:leave', {});
     };
-  }, [socket, slug, emit]);
+  }, [socket, slug, emit, practice]);
+
+  // La mesa pinta la cara de cada jugador con el vídeo de la sala de voz: la
+  // tuya sale del stream local y la de los demás del mapa de vídeo de la sala.
+  // Si se entra por la pestaña POKERTAK o por el vestíbulo todavía no hay sala
+  // abierta (solo la hay si venías del directo), así que la mesa la abre ella
+  // misma, sin la rejilla del directo encima. Sin esto, las caras salían vacías.
+  useEffect(() => {
+    // La mesa de prácticas no abre sala de voz: se juega contra bots, sin
+    // cámara ni micrófono. Así no se pide ningún permiso para aprender.
+    if (practice) return;
+    // Ya estamos en la sala de esta mesa (veníamos del directo): no se toca.
+    if (voiceActive && voiceRoomInfo?.slug === slug) return;
+    // Al entrar por la pestaña o el vestíbulo el socket puede no estar
+    // conectado todavía; `join` abortaría en silencio y la mesa se quedaría sin
+    // sala (caras vacías). Se espera a la conexión y se vuelve a intentar.
+    if (!connected) return;
+    joinVoice({ slug, name: slug, openStage: false });
+  }, [connected, voiceActive, voiceRoomInfo?.slug, slug, joinVoice, practice]);
+
+  // La pantalla del directo (rejilla tipo TikTok) se cierra mientras la mesa
+  // ocupa el móvil, y la barra flotante se esconde con ella. Solo hace falta
+  // cuando la mesa se abre por su cuenta (pestaña o vestíbulo): si se viene del
+  // directo, la mesa vive DENTRO de esa pantalla y apagarla la desmontaría.
+  const cameFromStageRef = useRef(stageOpen);
+  useEffect(() => {
+    if (cameFromStageRef.current) return undefined;
+    suppressStage(true);
+    setBarHidden(true);
+    return () => {
+      suppressStage(false);
+      setBarHidden(false);
+    };
+  }, [suppressStage, setBarHidden]);
 
   const mySeat = ownSeat(state, user?.id);
   const actions = useMemo(() => legalActions(state, mySeat), [state, mySeat]);
@@ -305,7 +346,7 @@ export default function PokerTable({ slug, onClose }) {
   function send(action, amount) {
     setBusy(true);
     setError('');
-    emit('poker:act', { action, amount });
+    emit(practice ? 'practice:act' : 'poker:act', { action, amount });
     // El estado que llegue desbloquea; no se espera respuesta del emit.
     setTimeout(() => setBusy(false), 400);
   }
@@ -326,7 +367,6 @@ export default function PokerTable({ slug, onClose }) {
     <div className="ptak-overlay" role="dialog" aria-modal="true" aria-label="Mesa de POKERTAK">
       <header className="ptak-head">
         <div className="ptak-head-title">
-          <PokerTakLogo size={34} />
           <strong className="ptak-name">POKERTAK</strong>
         </div>
         {/* Estado en una fila que no desborda: fase, bote y un menú. En pantalla
@@ -385,7 +425,6 @@ export default function PokerTable({ slug, onClose }) {
             cartas comunitarias. El repartidor es Asistak: cuida la mesa y lleva
             las cartas, como se pidió. */}
         <div className="ptak-center">
-          <PokerTakLogo size={64} className="ptak-center-logo" />
           <h2 className="ptak-center-name">POKERTAK</h2>
           <p className="ptak-center-tagline">Somos la PEPA DEL QUIERO</p>
           {/* Bote en el centro del tapete, como en las mesas de siempre: es el
@@ -447,10 +486,14 @@ export default function PokerTable({ slug, onClose }) {
 
       <footer className="ptak-controls">
         {mySeat === -1 ? (
-          <div className="ptak-buyin">
-            <TournamentPanel slug={slug} />
-            <SitButtons emit={emit} slug={slug} state={state} busy={busy} setBusy={setBusy} setError={setError} />
-          </div>
+          practice ? (
+            <p className="ptak-wait">Entrando a la mesa de prácticas…</p>
+          ) : (
+            <div className="ptak-buyin">
+              <TournamentPanel slug={slug} />
+              <SitButtons emit={emit} slug={slug} state={state} busy={busy} setBusy={setBusy} setError={setError} />
+            </div>
+          )
         ) : (
           <>
             {/* Asistak reparte: entre manos, el anfitrión pide la siguiente y la

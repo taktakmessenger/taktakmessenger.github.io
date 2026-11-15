@@ -17,6 +17,7 @@ export default function VoiceRoomBar() {
     muted,
     camOff,
     stageOpen,
+    barHidden,
     leave,
     toggleMute,
     toggleCamera,
@@ -25,8 +26,9 @@ export default function VoiceRoomBar() {
   const { user } = useAuth();
 
   // Con la vista a pantalla completa abierta, la barra no se pinta: el directo
-  // ya tiene sus propios controles y dos juegos a la vez confundirían.
-  if (!room || stageOpen) return null;
+  // ya tiene sus propios controles y dos juegos a la vez confundirían. Tampoco
+  // se pinta encima de la mesa de POKERTAK, que pide ocultarla (`barHidden`).
+  if (!room || stageOpen || barHidden) return null;
 
   const others = peers.filter((p) => String(p.id) !== String(user?.id));
   const speaking = others.length + 1;

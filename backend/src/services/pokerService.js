@@ -13,10 +13,19 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const { PokerTable } = require('../games/poker/pokerTable');
+const { decideBotAction } = require('../games/poker/bot');
 const wallet = require('./walletService');
 
 // Mesas abiertas: `tableId -> PokerTable`. El id es el del anfitrión.
 const tables = new Map();
+
+// La mesa de prácticas no es de nadie: es una mesa de la casa, siempre abierta,
+// donde se juega contra bots con fichas de juguete. Se identifica con este
+// anfitrión fijo para reutilizar toda la maquinaria de la mesa normal (estado,
+// turnos, reparto automático) sin tocar el monedero.
+const PRACTICE_HOST = 'practice';
+const PRACTICE_BOT_PREFIX = 'bot:';
+const PRACTICE_BOT_NAMES = ['Ana', 'Bruno', 'Carla', 'Dani', 'Eva', 'Fran'];
 
 // Cuánto se ha recaudado en cada mesa y quién debe recibirlo. La comisión no se
 // paga mano a mano (serían cientos de micro-transacciones): se acumula y se
@@ -39,6 +48,7 @@ function tableIdFor(hostId) {
 }
 
 function getOrCreateTable(hostId) {
+  if (isPractice(hostId)) return getOrCreatePracticeTable();
   const id = tableIdFor(hostId);
   let table = tables.get(id);
   if (!table) {
@@ -62,6 +72,108 @@ function getTable(hostId) {
   return tables.get(tableIdFor(hostId)) || null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Mesa de prácticas: bots, sin monedero                              */
+/* ------------------------------------------------------------------ */
+
+function isPractice(hostId) {
+  return String(hostId) === PRACTICE_HOST;
+}
+
+function isBotId(userId) {
+  return String(userId).startsWith(PRACTICE_BOT_PREFIX);
+}
+
+// Mesa de prácticas: fichas de juguete, sin comisión y con bots ya sentados.
+function getOrCreatePracticeTable() {
+  let table = tables.get(tableIdFor(PRACTICE_HOST));
+  if (table) return table;
+  const cfg = env.poker.practice;
+  table = new PokerTable({
+    id: tableIdFor(PRACTICE_HOST),
+    maxSeats: cfg.seats,
+    smallBlind: env.poker.smallBlind,
+    bigBlind: env.poker.bigBlind,
+    minBuyIn: cfg.buyIn,
+    maxBuyIn: cfg.buyIn,
+    rakeRate: 0,
+  });
+  table.hostId = PRACTICE_HOST;
+  tables.set(tableIdFor(PRACTICE_HOST), table);
+  for (let i = 0; i < cfg.botCount; i += 1) {
+    table.sitDown(`${PRACTICE_BOT_PREFIX}${i}`, PRACTICE_BOT_NAMES[i % PRACTICE_BOT_NAMES.length], cfg.botStack);
+  }
+  return table;
+}
+
+// Sienta a una persona en la mesa de prácticas. No cobra nada: las fichas son
+// de juguete y se van con él al levantarse.
+function sitDownPractice(userId, username) {
+  const table = getOrCreatePracticeTable();
+  if (table.seatOf(userId) !== -1) return table;
+  const open = table.seats.findIndex((s) => s === null);
+  if (open === -1) throw new Error('La mesa de prácticas está llena');
+  table.sitDown(userId, username, env.poker.practice.buyIn);
+  return table;
+}
+
+function standUpPractice(userId) {
+  const table = getTable(PRACTICE_HOST);
+  if (!table) return;
+  if (table.seatOf(userId) === -1) return;
+  table.standUp(userId);
+  // Sin ninguna persona sentada, la mesa se tira: si no, los bots seguirían
+  // con sus fichas y la próxima visita encontraría la partida a medias.
+  if (!table.players().some((p) => !isBotId(p.userId))) {
+    cancelAutoDeal(PRACTICE_HOST);
+    tables.delete(tableIdFor(PRACTICE_HOST));
+  }
+}
+
+// ¿Le toca a un bot? Solo en su turno, con la mano en juego y sin haberse
+// retirado. Se comprueba antes de cada jugada porque el turno cambia solo con
+// las acciones de los demás.
+function botToAct(hostId) {
+  const table = getTable(hostId);
+  if (!table) return null;
+  if (table.phase === 'waiting' || table.phase === 'showdown') return null;
+  const seat = table.turnSeat;
+  if (seat == null) return null;
+  const player = table.seats[seat];
+  if (!player || !isBotId(player.userId)) return null;
+  if (player.folded || player.allIn) return null;
+  return seat;
+}
+
+/**
+ * Juega el turno de un bot y devuelve el número de acciones aplicadas, para que
+ * quien llama pueda seguir emitiendo estado. El bot decide con la misma
+ * información que un jugador de la mesa (su mano y lo que se ve), así que se
+ * reutiliza `table.act`.
+ */
+function playBotTurn(hostId) {
+  const seat = botToAct(hostId);
+  if (seat == null) return 0;
+  const table = getTable(hostId);
+  const decision = decideBotAction(table, seat);
+  table.act(table.seats[seat].userId, decision.action, decision.amount);
+  return 1;
+}
+
+// Los bots del turno actual, uno por uno. Se limita el número de pasos por si un
+// bot jugara sin que el turno avance: nunca debe colgar el bucle del servidor.
+function playBotTurns(hostId, maxSteps = 12) {
+  let steps = 0;
+  while (steps < maxSteps && playBotTurn(hostId) > 0) steps += 1;
+  return steps;
+}
+
+function practiceTable() {
+  return getTable(PRACTICE_HOST);
+}
+
+/* ------------------------------------------------------------------ */
+
 // La comisión es un 1% fijo de cada bote, en todas las manos.
 function rakeRateFor() {
   return env.poker.rake;
@@ -74,7 +186,8 @@ function rakeRateFor() {
  */
 function startHand(hostId) {
   const table = getOrCreateTable(hostId);
-  table.rakeRate = rakeRateFor();
+  // La mesa de prácticas no cobra comisión: es para aprender, no para recaudar.
+  table.rakeRate = isPractice(hostId) ? 0 : rakeRateFor();
   return table.startHand();
 }
 
@@ -87,7 +200,12 @@ function canAutoDeal(hostId) {
   const table = getTable(hostId);
   if (!table) return false;
   if (table.phase !== 'waiting' && table.phase !== 'showdown') return false;
-  return table.players().filter((p) => p.stack > 0).length >= 2;
+  const withChips = table.players().filter((p) => p.stack > 0);
+  if (withChips.length < 2) return false;
+  // La mesa de prácticas solo baraja cuando hay una persona sentada: si no, los
+  // bots se repartirían manos entre ellos sin nadie mirando.
+  if (isPractice(hostId) && !withChips.some((p) => !isBotId(p.userId))) return false;
+  return true;
 }
 
 /**
@@ -202,6 +320,8 @@ function accrueRake(hostId, rake) {
  * en memoria hasta que haya uno.
  */
 async function settleRake(hostId) {
+  // La mesa de prácticas no recauda: no hay comisión que liquidar.
+  if (isPractice(hostId)) return null;
   const id = tableIdFor(hostId);
   const acc = rakeAccrual.get(id);
   if (!acc || (acc.paid <= 0 && acc.bonus <= 0)) return null;
@@ -253,6 +373,14 @@ async function closeTable(hostId) {
   const table = getTable(hostId);
   if (!table) return { settled: null, refunded: [] };
 
+  // La mesa de prácticas no devuelve nada al monedero: las fichas eran de
+  // juguete. Se tira la mesa y listo.
+  if (isPractice(hostId)) {
+    cancelAutoDeal(hostId);
+    tables.delete(tableIdFor(hostId));
+    return { settled: null, refunded: [] };
+  }
+
   const settled = await settleRake(hostId).catch(() => null);
   const refunded = [];
   for (const player of table.players()) {
@@ -299,5 +427,16 @@ module.exports = {
   closeTable,
   stats,
   tableIdFor,
+  // Mesa de prácticas (bots, sin monedero).
+  PRACTICE_HOST,
+  isPractice,
+  isBotId,
+  getOrCreatePracticeTable,
+  sitDownPractice,
+  standUpPractice,
+  botToAct,
+  playBotTurn,
+  playBotTurns,
+  practiceTable,
   _reset,
 };

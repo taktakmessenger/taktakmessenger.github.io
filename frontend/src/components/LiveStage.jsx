@@ -67,6 +67,7 @@ export default function LiveStage() {
     muted,
     camOff,
     stageOpen,
+    stageSuppressed,
     streamTick,
     leave,
     toggleMute,
@@ -121,7 +122,9 @@ export default function LiveStage() {
     return orderParticipants(all, hostId);
   }, [peers, hostId, user, muted, camOff, streamTick, selfParticipates]);
 
-  if (!room || !stageOpen) return null;
+  // El directo se calla mientras otra pantalla ocupa el móvil (la mesa), pero no
+  // se desmonta: el audio remoto vive en sus elementos y desmontarlo lo cortaría.
+  if (!room || !stageOpen || stageSuppressed) return null;
 
   const selfId = String(user?.id);
 

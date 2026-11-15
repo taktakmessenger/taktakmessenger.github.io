@@ -14,9 +14,13 @@ import { formatCoins } from '../lib/pokerUi';
 export default function PokerLobby({ onBack }) {
   const [tables, setTables] = useState([]);
   const [events, setEvents] = useState([]);
+  const [practice, setPractice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [openSlug, setOpenSlug] = useState(null);
+  // Mesa de prácticas: se abre con `practice` en vez de un slug. Es una mesa de
+  // la casa contra bots, sin monedero, para aprender sin arriesgar monedas.
+  const [practiceOpen, setPracticeOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -27,6 +31,7 @@ export default function PokerLobby({ onBack }) {
         api.get('/poker/events').catch(() => ({ data: { events: [] } })),
       ]);
       setTables(t.data.tables || []);
+      setPractice(t.data.practice || null);
       setEvents(e.data.events || []);
     } catch (err) {
       setError(err.message || 'No se pudieron cargar las mesas');
@@ -39,6 +44,9 @@ export default function PokerLobby({ onBack }) {
 
   // Al abrir una mesa se ocupa la pantalla entera: la mesa se juega a pantalla
   // completa, como en el directo.
+  if (practiceOpen) {
+    return <PokerTable practice onClose={() => setPracticeOpen(false)} />;
+  }
   if (openSlug) {
     return <PokerTable slug={openSlug} onClose={() => setOpenSlug(null)} />;
   }
@@ -88,6 +96,29 @@ export default function PokerLobby({ onBack }) {
           </ul>
         </section>
       )}
+
+      <section className="ptak-lobby-section" aria-label="Mesa de prácticas">
+        <h3 className="ptak-lobby-h">🎓 Mesa de prácticas</h3>
+        <ul className="ptak-lobby-list">
+          <li className="ptak-lobby-card ptak-practice-card">
+            <div className="ptak-lobby-card-head">
+              <strong>Aprende a jugar</strong>
+              <span className="ptak-practice-badge">Bots · sin monedas</span>
+            </div>
+            <p className="ptak-lobby-owner">
+              Juega contra {practice?.bots ?? 3} bots con fichas de juguete. No se
+              gasta ni se gana nada: es para practicar y aprender las manos.
+            </p>
+            <button
+              type="button"
+              className="ptak-btn primary"
+              onClick={() => setPracticeOpen(true)}
+            >
+              Entrar a practicar
+            </button>
+          </li>
+        </ul>
+      </section>
 
       <section className="ptak-lobby-section" aria-label="Mesas abiertas">
         <h3 className="ptak-lobby-h">♠️ Mesas abiertas</h3>

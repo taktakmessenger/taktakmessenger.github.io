@@ -455,29 +455,33 @@ export default function CallOverlay() {
             )}
           </div>
         )}
-
-        {/* Control de volumen de la voz que se oye. Existe porque en una llamada
-            por navegador el sonido remoto es un MediaStream y en varios móviles
-            los botones del teléfono no lo alcanzan: sin este control, la única
-            forma de bajar el volumen sería colgar. Solo con la llamada en curso;
-            durante el timbrado no hay voz que regular. */}
-        {isActive && (
-          <div className="call-volume">
-            <span aria-hidden="true">
-              {volume === 0 ? <VolumeOffIcon size={18} /> : <VolumeIcon size={18} />}
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={volume}
-              onChange={(e) => changeVolume(e.target.value)}
-              aria-label="Volumen de la llamada"
-            />
-          </div>
-        )}
       </div>
+
+      {/* Control de volumen de la voz que se oye. Existe porque en una llamada
+          por navegador el sonido remoto es un MediaStream y en varios móviles
+          los botones del teléfono no lo alcanzan: sin este control, la única
+          forma de bajar el volumen sería colgar. Solo con la llamada en curso;
+          durante el timbrado no hay voz que regular.
+          Va FUERA del escenario (no flotando sobre él): dentro quedaba anclado
+          a `bottom` y, en móvil, se montaba encima del nombre y del estado de la
+          llamada. Aquí ocupa su propia fila, encima de los botones, y no tapa
+          nada. */}
+      {isActive && (
+        <div className="call-volume">
+          <span aria-hidden="true">
+            {volume === 0 ? <VolumeOffIcon size={18} /> : <VolumeIcon size={18} />}
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
+            onChange={(e) => changeVolume(e.target.value)}
+            aria-label="Volumen de la llamada"
+          />
+        </div>
+      )}
 
       <div className="call-actions">
         {isIncoming ? (

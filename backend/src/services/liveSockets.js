@@ -45,6 +45,10 @@ function pokerRoom(roomName) {
   return `poker:${roomName}`;
 }
 
+// Nombre fijo de la sala de la mesa de prácticas: no es de ningún creator, es
+// la mesa abierta de la casa donde se juega contra bots.
+const PRACTICE_ROOM = 'practice';
+
 // Quién está conectado a cada sala de voz: `voiceRoom -> Map(userId -> user)`.
 // Se lleva en memoria porque una sala es efímera: si el proceso cae, no hay
 // audio que conservar, solo participantes que vuelven a entrar. Guardar el
@@ -1118,11 +1122,18 @@ function initLiveSockets(server) {
           return socket.emit('voice:error', { error: 'Debes ser miembro del creator' });
         }
 
-        // Una sola sala por socket: si estaba en otra, sale primero para no
+        // Una sola sala por socket: si estaba en OTRA, sale primero para no
         // quedar conectado a dos sitios a la vez (y con el micrófono abierto).
-        if (socket.data.voiceRoom) leaveVoiceRoom(io, socket);
-
+        // Si ya está en ESTA sala, no se sale: el reingreso (StrictMode monta
+        // los efectos dos veces, y la mesa reabre la sala al entrar por su
+        // pestaña) disparaba `voice:left`, el cliente hacía `cleanup()` y paraba
+        // su cámara, y el efecto de la mesa volvía a entrar: un bucle que dejaba
+        // las caras vacías. Reingresar en la misma sala es inofensivo: se
+        // reemite el estado y listo.
         const room = squad.voiceRoom;
+        if (socket.data.voiceRoom && socket.data.voiceRoom !== room) {
+          leaveVoiceRoom(io, socket);
+        }
 
         // El anfitrión del directo es el dueño del TAK Creator. Se fija la
         // primera vez que se abre la sala y se mantiene aunque él salga y
@@ -1512,6 +1523,70 @@ function initLiveSockets(server) {
       }
     });
 
+    // ------------------------------------------------------------------
+    // POKERTAK de prácticas: bots, sin monedero ni cámara
+    // ------------------------------------------------------------------
+    //
+    // La mesa de prácticas es de la casa (no de un creator), siempre abierta y
+    // con bots sentados. Las fichas son de juguete: no se cobra entrada ni se
+    // devuelve nada. Reutiliza el mismo motor y el mismo `poker:state`, así que
+    // el cliente pinta la mesa igual que la de verdad.
+
+    // Emite el estado de la mesa de prácticas a los que están sentados y hace
+    // jugar a los bots que tengan el turno. Se llama tras cada cambio (entrar,
+    // actuar, repartir) para que los bots contesten en el momento.
+    async function tickPractice() {
+      poker.playBotTurns(poker.PRACTICE_HOST);
+      const table = poker.practiceTable();
+      if (table) {
+        const sockets = await io.in(pokerRoom(PRACTICE_ROOM)).fetchSockets();
+        for (const s of sockets) {
+          s.emit('poker:state', table.publicState(s.data.user?.id || null));
+        }
+      }
+      // La mesa se reparte sola entre manos; al barajar, los bots vuelven a
+      // jugar (el turno puede caerles a ellos).
+      poker.scheduleAutoDeal(poker.PRACTICE_HOST, () => {
+        tickPractice().catch(() => {});
+      });
+    }
+
+    socket.on('practice:join', async () => {
+      if (!me) return;
+      try {
+        const table = poker.sitDownPractice(me.id, me.username);
+        socket.data.practiceRoom = true;
+        socket.join(pokerRoom(PRACTICE_ROOM));
+        socket.emit('poker:state', table.publicState(me.id));
+        await tickPractice();
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'No se pudo entrar a la mesa de prácticas' });
+      }
+    });
+
+    socket.on('practice:act', async ({ action, amount } = {}) => {
+      if (!me || !socket.data.practiceRoom) return;
+      try {
+        const table = poker.practiceTable();
+        if (!table) return socket.emit('poker:error', { error: 'No hay mesa abierta' });
+        table.act(me.id, action, amount);
+        await tickPractice();
+      } catch (err) {
+        socket.emit('poker:error', { error: err.message || 'Acción no válida' });
+      }
+    });
+
+    socket.on('practice:leave', async () => {
+      if (!me || !socket.data.practiceRoom) return;
+      try {
+        poker.standUpPractice(me.id);
+        socket.leave(pokerRoom(PRACTICE_ROOM));
+        socket.data.practiceRoom = false;
+      } catch {
+        // Salir nunca debe romper nada: la mesa es de juguete.
+      }
+    });
+
     // Cerrar la sala: liquida la comisión al administrador y devuelve las fichas
     // a todos. Es lo que pasa al cerrar el directo o la sala de juegos. Solo
     // puede cerrarla el anfitrión: si lo pudiera hacer cualquier jugador sentado,
@@ -1548,6 +1623,11 @@ function initLiveSockets(server) {
           .standUp(hostId, me.id)
           .then(() => broadcastTable(room, hostId))
           .catch(() => {});
+      }
+      // Mesa de prácticas: al irse se levanta de la silla (las fichas eran de
+      // juguete, así que no hay nada que devolver al monedero).
+      if (me && socket.data.practiceRoom) {
+        poker.standUpPractice(me.id);
       }
     });
 

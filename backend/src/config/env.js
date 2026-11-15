@@ -556,6 +556,15 @@ const env = {
     // no por mano. El reparto por defecto (40/30/20) y esta tarifa (10%) suman
     // el 100%: lo que no va a un puesto es lo que se queda la casa.
     eventRake: Number(process.env.POKER_EVENT_RAKE ?? 0.1),
+    // Mesa de prácticas: se juega contra bots con fichas de juguete, sin tocar
+    // el monedero. Es para aprender sin arriesgar monedas, así que la entrada
+    // es fija y generosa y la comisión es cero.
+    practice: {
+      seats: Number(process.env.POKER_PRACTICE_SEATS ?? 6),
+      buyIn: Number(process.env.POKER_PRACTICE_BUYIN ?? 1000),
+      botCount: Number(process.env.POKER_PRACTICE_BOTS ?? 3),
+      botStack: Number(process.env.POKER_PRACTICE_BOT_STACK ?? 1000),
+    },
   },
 
   // Where uploaded originals and their HLS renditions are written. Served

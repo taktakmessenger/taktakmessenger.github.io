@@ -2562,15 +2562,14 @@
   max-width: 16rem;
 }
 
-/* Control de volumen de la voz remota. Se separa de la info para que no parezca
-   parte del texto del estado, y se limita el ancho para que el deslizador no
-   cruce toda la pantalla. */
+/* Control de volumen de la llamada. Va en su propia fila, entre el escenario y
+   los botones: antes flotaba anclado abajo dentro del escenario y en móvil
+   tapaba el nombre y el estado. Sin `position:absolute` ya no se solapa. */
 .call-volume {
-  position: absolute;
-  bottom: 4.6rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin: 0.35rem auto 0;
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
@@ -2580,6 +2579,7 @@
 
 .call-volume input[type='range'] {
   width: 9rem;
+  max-width: 55vw;
   accent-color: var(--primary);
 }
 
@@ -3813,15 +3813,17 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8vh 24px 9vh;
+  text-align: center;
   background:
-    radial-gradient(760px 520px at 50% 38%, rgba(176, 75, 251, 0.28), transparent 62%),
-    radial-gradient(600px 460px at 82% 78%, rgba(255, 45, 141, 0.2), transparent 60%),
-    radial-gradient(560px 420px at 16% 84%, rgba(0, 247, 212, 0.16), transparent 60%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 60%, var(--bg) 100%);
+    radial-gradient(720px 540px at 2% -4%, rgba(150, 20, 120, 0.5), transparent 60%),
+    radial-gradient(660px 500px at 104% 0%, rgba(40, 92, 128, 0.42), transparent 58%),
+    radial-gradient(700px 560px at 50% 56%, rgba(110, 40, 150, 0.26), transparent 66%),
+    linear-gradient(180deg, #1a0c2a 0%, #1a1030 45%, #0b0f24 100%);
   opacity: 1;
   transition: opacity 0.55s ease, visibility 0.55s ease;
 }
@@ -3832,72 +3834,71 @@
   pointer-events: none;
 }
 
-.splash-glow {
-  position: absolute;
-  width: min(70vw, 420px);
-  height: min(70vw, 420px);
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 45, 141, 0.3), transparent 66%);
-  filter: blur(38px);
-  animation: splash-pulse 2.6s ease-in-out infinite;
+.splash-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .splash-logo {
-  position: relative;
   display: grid;
   place-items: center;
-  width: 148px;
-  height: 148px;
-  border-radius: 34px;
-  border: 1px solid var(--border-strong);
-  background: rgba(13, 10, 26, 0.72);
-  backdrop-filter: blur(16px) saturate(160%);
-  box-shadow: 0 24px 70px -24px var(--glow-purple);
+  width: 132px;
+  height: 132px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: #000;
+  overflow: hidden;
+  box-shadow:
+    0 20px 60px -24px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 0 34px -6px rgba(40, 224, 208, 0.28);
   animation: splash-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.splash-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .splash-word {
-  position: relative;
-  margin: 1.1rem 0 0;
-  font-size: clamp(2.3rem, 9vw, 3.4rem);
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  background: linear-gradient(120deg, var(--accent), var(--primary) 45%, var(--pink));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 22px var(--glow-purple));
+  margin: 1rem 0 0;
+  font-size: clamp(2rem, 8vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #e5398d;
   animation: splash-rise 0.75s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.splash-tagline {
-  position: relative;
-  margin: 0;
-  color: var(--muted);
+.splash-subtitle {
+  margin: 0.5rem auto 0;
+  max-width: 300px;
+  color: #e5d3e8;
   font-size: 0.92rem;
-  letter-spacing: 0.06em;
-  animation: splash-rise 0.75s 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  line-height: 1.45;
+  animation: splash-rise 0.75s 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.splash-dots {
-  position: relative;
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 1.6rem;
+.splash-photo {
+  display: grid;
+  place-items: center;
+  animation: splash-rise 0.75s 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.splash-dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--pink), var(--primary));
-  animation: splash-bounce 1.15s ease-in-out infinite;
+.splash-photo img {
+  width: min(62vw, 260px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 24px 48px rgba(255, 158, 0, 0.22));
 }
-.splash-dots span:nth-child(2) {
-  animation-delay: 0.16s;
-}
-.splash-dots span:nth-child(3) {
-  animation-delay: 0.32s;
+
+.splash-tagline {
+  margin: 0;
+  color: #e5398d;
+  font-size: 1.05rem;
+  font-weight: 700;
+  animation: splash-rise 0.75s 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes splash-rise {
@@ -4765,6 +4766,16 @@
   line-height: 1.05;
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+/* "POKERTAK" es una sola palabra y, con el tamaño general, no cabía en el ancho
+   del botón: la K caía sola a un segundo renglón. Va más pequeña y sin salto,
+   que es como se lee de un vistazo. */
+.tabbar-label-poker {
+  font-size: 0.46rem;
+  letter-spacing: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 /* El botón central (Subir) va destacado como en TikTok. */
@@ -7874,10 +7885,6 @@
   pointer-events: none;
 }
 
-.ptak-center-logo {
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
-}
-
 .ptak-center-name {
   margin: 2px 0 0;
   font-size: 22px;
@@ -8344,10 +8351,6 @@
   }
   .ptak-center {
     width: 62%;
-  }
-  .ptak-center-logo {
-    width: 44px;
-    height: 44px;
   }
   .ptak-center-name {
     font-size: 16px;
@@ -8857,6 +8860,25 @@
   margin: 0;
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+/* Mesa de prácticas: se distingue de las mesas reales con un borde propio, para
+   que quede claro que ahí no se juegan monedas. */
+.ptak-practice-card {
+  background:
+    radial-gradient(ellipse at top left, rgba(74, 60, 160, 0.5), transparent 70%),
+    var(--surface-2);
+  border-color: rgba(150, 120, 255, 0.45);
+}
+
+.ptak-practice-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #eae3ff;
+  background: rgba(120, 90, 230, 0.35);
+  border: 1px solid rgba(150, 120, 255, 0.5);
 }
 
 .ptak-lobby-empty {

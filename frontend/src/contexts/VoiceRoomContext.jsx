@@ -64,6 +64,10 @@ export function VoiceRoomProvider({ children }) {
   // que deja la barra flotante. La sala y el audio siguen igual en los dos
   // estados; solo cambia lo que se pinta.
   const [stageOpen, setStageOpen] = useState(false);
+  // La barra flotante del directo se oculta mientras una pantalla se apropia
+  // del móvil (la mesa de POKERTAK). Sin esto, la barra se pintaría encima de
+  // los botones de la mesa y taparía las acciones de juego.
+  const [barHidden, setBarHidden] = useState(false);
   // Se incrementa cuando entra un stream remoto nuevo, para que los elementos
   // de audio y vídeo vuelvan a enganchar su `srcObject`.
   const [streamTick, setStreamTick] = useState(0);
@@ -80,10 +84,22 @@ export function VoiceRoomProvider({ children }) {
   const pendingCandidatesRef = useRef(new Map()); // peerId -> RTCIceCandidateInit[]
   const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
   const roomRef = useRef(null);
+  // Sala hacia la que hay un `join` en vuelo (entre que se pide el permiso de
+  // cámara y llega `voice:joined`). Evita que dos montajes del efecto (React
+  // StrictMode) pidan dos veces la cámara y se pisen los streams.
+  const joiningRef = useRef(null);
   const modeRef = useRef(null);
   const mutedRef = useRef(false);
   const camOffRef = useRef(false);
   const spectateRef = useRef(false);
+  // Se pide abrir la pantalla del directo al entrar (por defecto) o no (la mesa
+  // de POKERTAK entra a la sala solo por la cámara y el audio).
+  const stageOpenRef = useRef(true);
+  // Mientras una pantalla se apropia del móvil (la mesa), el directo no se
+  // pinta encima. El ref aguanta respuestas tardías del servidor; el estado es
+  // lo que decide el render, para no depender del orden de los eventos.
+  const stageSuppressedRef = useRef(false);
+  const [stageSuppressed, setStageSuppressed] = useState(false);
   const connectedRef = useRef(connected);
   connectedRef.current = connected;
 
@@ -126,6 +142,7 @@ export function VoiceRoomProvider({ children }) {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     roomRef.current = null;
+    joiningRef.current = null;
     modeRef.current = null;
     setRoom(null);
     setMode(null);
@@ -140,6 +157,9 @@ export function VoiceRoomProvider({ children }) {
     spectateRef.current = false;
     setSpectate(false);
     setStageOpen(false);
+    setBarHidden(false);
+    stageOpenRef.current = true;
+    stageSuppressedRef.current = false;
     setConnecting(false);
   }, []);
 
@@ -251,15 +271,20 @@ export function VoiceRoomProvider({ children }) {
   );
 
   const join = useCallback(
-    async ({ slug, name, mesh = false, spectate = false } = {}) => {
+    async ({ slug, name, mesh = false, spectate = false, openStage = true } = {}) => {
       if (!slug) return;
       if (!connectedRef.current) {
         setError('Sin conexión: espera un momento y vuelve a intentarlo');
         return;
       }
+      // Ya estamos en esta sala (o hay un `join` en vuelo hacia ella): no se
+      // repite. Sin esto, dos montajes del efecto pedían la cámara dos veces y
+      // el segundo stream pisaba al primero, dejando la cara en negro.
+      if (roomRef.current?.slug === slug || joiningRef.current === slug) return;
 
       setError('');
       setConnecting(true);
+      joiningRef.current = slug;
       // El gesto de pulsar "Entrar" es lo que desbloquea el audio del navegador.
       unlockAudio();
 
@@ -295,10 +320,18 @@ export function VoiceRoomProvider({ children }) {
             // El aviso se borra solo; no debe quedar tapando el directo.
             setTimeout(() => setError(''), 4000);
           }
+          // El stream local vive en un ref, así que no dispara render por sí
+          // solo. La mesa de POKERTAK pinta tu cara desde ese ref y, sin este
+          // aviso, se quedaba con el valor de antes de entrar (sin cámara).
+          setStreamTick((n) => n + 1);
         }
         roomRef.current = { slug, name };
+        // El vestíbulo de POKERTAK entra a la sala sin abrir la pantalla del
+        // directo: quiere la cámara y el audio, no la rejilla del directo.
+        stageOpenRef.current = openStage;
         emit('voice:join', { slug, mesh, spectate });
       } catch (err) {
+        joiningRef.current = null;
         setError(err?.message || mediaErrorMessage(err));
         cleanup();
       }
@@ -338,6 +371,15 @@ export function VoiceRoomProvider({ children }) {
   // el audio: solo cambia si se pinta la rejilla entera o la barra flotante.
   const toggleStage = useCallback(() => setStageOpen((open) => !open), []);
 
+  // Una pantalla (la mesa de POKERTAK) pide ocupar el móvil entera: se cierra el
+  // directo y se marca el ref para que la respuesta del servidor —que puede
+  // llegar después— no lo vuelva a abrir por encima.
+  const suppressStage = useCallback((on) => {
+    stageSuppressedRef.current = !!on;
+    setStageSuppressed(!!on);
+    if (on) setStageOpen(false);
+  }, []);
+
   // Señalización entrante.
   useEffect(() => {
     if (!user) return undefined;
@@ -366,8 +408,11 @@ export function VoiceRoomProvider({ children }) {
           setGuestLimit(Number.isFinite(limit) ? limit : null);
           setViewerCount(Number.isFinite(viewers) ? viewers : 0);
           // Entrar al directo lo abre a pantalla completa; desde ahí se puede
-          // minimizar a la barra para seguir en el feed.
-          setStageOpen(true);
+          // minimizar a la barra para seguir en el feed. La mesa de POKERTAK
+          // entra pidiendo lo contrario: quiere el vídeo y el audio, pero se
+          // queda ella sola en pantalla (nada de rejilla del directo encima).
+          // La mesa pide que el directo no se abra encima (`suppressStage`).
+          setStageOpen(stageSuppressedRef.current ? false : stageOpenRef.current);
 
           const others = existing
             .filter((p) => String(p.id) !== String(user.id))
@@ -515,9 +560,14 @@ export function VoiceRoomProvider({ children }) {
       error,
       streamTick,
       stageOpen,
+      setStageOpen,
+      suppressStage,
+      stageSuppressed,
+      barHidden,
       active: !!room,
       join,
       leave,
+      setBarHidden,
       toggleMute,
       toggleCamera,
       toggleStage,
@@ -539,8 +589,13 @@ export function VoiceRoomProvider({ children }) {
       error,
       streamTick,
       stageOpen,
+      setStageOpen,
+      suppressStage,
+      stageSuppressed,
+      barHidden,
       join,
       leave,
+      setBarHidden,
       toggleMute,
       toggleCamera,
       toggleStage,

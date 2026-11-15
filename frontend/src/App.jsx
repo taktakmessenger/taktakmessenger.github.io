@@ -417,9 +417,12 @@ function Shell() {
       {splashVisible && <Splash fading={splashFading} />}
 
       {/* La barra superior (campana + lupa) vive fuera de las vistas: son
-          acciones, no secciones, y así están a la vista desde cualquier
-          pantalla. En la portada no se dibuja porque aún no hay sesión. */}
-      {view !== 'acceso' && (
+          acciones, no secciones. Pero solo se pinta en la pantalla principal
+          (y en las que ella misma abre), no en cada pestaña: al montarse fija
+          en la esquina, tapaba los botones propios de otras pantallas (por
+          ejemplo el "＋" de TakTak Móvil) y bloqueaba la operación. En la
+          portada tampoco se dibuja porque aún no hay sesión. */}
+      {TOPBAR_VIEWS.has(view) && (
         <AppTopBar
           currentView={view}
           onOpenActivity={() => setView('activity')}
@@ -487,6 +490,11 @@ function Shell() {
     </div>
   );
 }
+
+// Pantallas donde se pinta la barra superior (campana + lupa). Se limita a la
+// portada y a las pantallas que se abren desde ella, para que no se cuele fija
+// encima de otras pestañas y bloquee sus botones.
+const TOPBAR_VIEWS = new Set(['feed', 'explore', 'activity']);
 
 export default function App() {
   return (
