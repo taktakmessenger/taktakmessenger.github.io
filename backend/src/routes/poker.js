@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const pokerEventService = require('../services/pokerEventService');
+const Squad = require('../models/Squad');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -12,6 +13,39 @@ const { asyncHandler, HttpError } = require('../utils/http');
 const router = express.Router();
 
 router.use(auth);
+
+// Vestíbulo: las mesas a las que se puede entrar sin pasar por un directo.
+//
+// La mesa de POKERTAK vive en la sala del creator (el anfitrión reparte), así
+// que el vestíbulo enseña las salas públicas abiertas. Es lo que permite jugar
+// desde la pestaña propia del juego y no solo desde dentro de un directo.
+router.get(
+  '/tables',
+  asyncHandler(async (req, res) => {
+    const squads = await Squad.find({ visibility: 'public', voiceRoom: { $nin: [null, ''] } })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('owner', 'username profile.displayName profile.avatar');
+
+    const tables = squads.map((squad) => ({
+      slug: squad.slug,
+      name: squad.name,
+      room: squad.voiceRoom,
+      members: (squad.members || []).length,
+      mine: String(squad.owner?._id) === String(req.user.userId),
+      owner: squad.owner
+        ? {
+          id: String(squad.owner._id),
+          username: squad.owner.username,
+          displayName: squad.owner.profile?.displayName || null,
+          avatar: squad.owner.profile?.avatar || null,
+        }
+        : null,
+    }));
+
+    res.json({ tables });
+  })
+);
 
 // Torneos abiertos a inscripción. Es lo que enseña la sala de juegos para saber
 // qué hay programado y apuntarse.

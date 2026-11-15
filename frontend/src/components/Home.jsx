@@ -26,21 +26,10 @@ export default function Home(props) {
 
   return (
     <div className="home">
-      {/* La lupa va pegada al selector y no en una esquina suelta: busca lo
-          mismo que él muestra (vídeos y publicaciones), así que comparten
-          renglón. Abre Explorar, que ya sabe buscar personas, vídeos y
-          etiquetas en una sola pantalla. */}
+      {/* El selector flota sobre el vídeo, centrado. La lupa ya no va aquí: subió
+          a la barra superior de la app, junto a la campana, y desde ahí busca
+          igual (abre Explorar). */}
       <div className="home-topbar">
-        <button
-          type="button"
-          className="home-search"
-          onClick={() => props.onSearch?.()}
-          aria-label="Buscar"
-          title="Buscar"
-        >
-          <span aria-hidden="true">🔎</span>
-        </button>
-
         <div className="home-switch" role="tablist" aria-label="Contenido de Inicio">
           <button
             type="button"

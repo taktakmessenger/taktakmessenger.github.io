@@ -5,6 +5,8 @@ import { CallProvider, useCall } from './contexts/CallContext';
 import { VoiceRoomProvider } from './contexts/VoiceRoomContext';
 import { GroupCallProvider } from './contexts/GroupCallContext';
 import Navigation from './components/Navigation';
+import AppTopBar from './components/AppTopBar';
+import PokerLobby from './components/PokerLobby';
 import Splash from './components/Splash';
 import Home from './components/Home';
 import Upload from './components/Upload';
@@ -34,6 +36,7 @@ import api from './api/client';
 import { getToken } from './lib/session';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
+import './styles/premium.css';
 
 // Sending a gift straight from the feed, priced by the server catalogue so the
 // client never chooses what a gift costs.
@@ -177,7 +180,7 @@ function Shell() {
   }, [splashFading]);
 
   // Anything other than the feed needs a session.
-  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda'].includes(view);
+  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'poker'].includes(view);
   // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
   // hasta que el flujo termina. Sin levantarlo aquí, el alta que acaba de crear
   // la sesión cerraría el formulario en el acto y se perdería la pantalla de
@@ -195,6 +198,8 @@ function Shell() {
     if (target === 'activity') setView('activity');
     if (target === 'wall') setView('wall');
     if (target === 'squads') setView('squads');
+    // Aviso de torneo: abre la pestaña del juego, que es donde se juega.
+    if (target === 'poker') setView('poker');
     // Vuelta desde la app de MetaMask (móvil): el enlace directo apunta a la
     // tienda para que el usuario, ya con cartera inyectada, caiga donde estaba.
     if (target === 'tienda') setView('tienda');
@@ -315,6 +320,10 @@ function Shell() {
         return <Settings onBack={() => setView('profile')} onNavigate={setView} />;
       case 'squads':
         return <Squads />;
+      case 'poker':
+        // El juego de Tak, con su propia pantalla: el vestíbulo enseña las mesas
+        // y los torneos, y desde ahí se entra a jugar.
+        return <PokerLobby onBack={() => setView('feed')} />;
       case 'wall':
         // Facetak es de lectura pública, como el feed: un visitante puede verlo.
         // Para publicar o comentar se le pide la sesión desde el propio Facetak.
@@ -371,7 +380,7 @@ function Shell() {
             onOpenVideo={() => setView('feed')}
             onOpenProfile={() => setView('profile')}
             onOpenWall={() => setView('wall')}
-            onOpenPoker={() => setView('squads')}
+            onOpenPoker={() => setView('poker')}
           />
         );
       case 'admin':
@@ -406,6 +415,20 @@ function Shell() {
           el queso): el dibujo que se ve al instante es el de index.html, que se
           retira aquí al montar, así que nunca se solapan dos. */}
       {splashVisible && <Splash fading={splashFading} />}
+
+      {/* La barra superior (campana + lupa) vive fuera de las vistas: son
+          acciones, no secciones, y así están a la vista desde cualquier
+          pantalla. En la portada no se dibuja porque aún no hay sesión. */}
+      {view !== 'acceso' && (
+        <AppTopBar
+          currentView={view}
+          onOpenActivity={() => setView('activity')}
+          onSearch={() => {
+            setExploreQuery('');
+            setView('explore');
+          }}
+        />
+      )}
 
       {/* La barra inferior no se muestra en la portada: no hay a dónde ir
           todavía y las pestañas ofrecerían pantallas que piden sesión. */}

@@ -172,3 +172,27 @@ test('crear un torneo deja un aviso a todas las cuentas', async () => {
   const luisRes = await app().get('/api/notifications').set(auth(luis.token));
   assert.ok(luisRes.body.notifications.some((n) => n.type === 'tournament'));
 });
+
+test('el vestíbulo enseña las mesas públicas y no las privadas', async () => {
+  const admin = await makeAdmin();
+  await makeSquad(admin, 'mesa-publica');
+  await Squad.create({
+    name: 'privada',
+    slug: 'mesa-privada',
+    owner: admin._id,
+    visibility: 'private',
+    voiceRoom: 'voice-privada',
+  });
+
+  const { token } = await registerUser(app(), { username: 'jugador2' });
+  const res = await app().get('/api/poker/tables').set(auth(token));
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const slugs = res.body.tables.map((t) => t.slug);
+  assert.ok(slugs.includes('mesa-publica'), 'falta la mesa pública');
+  assert.ok(!slugs.includes('mesa-privada'), 'no debe salir la privada');
+});
+
+test('el vestíbulo exige sesión', async () => {
+  const res = await app().get('/api/poker/tables');
+  assert.equal(res.status, 401);
+});

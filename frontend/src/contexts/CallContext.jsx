@@ -11,6 +11,7 @@ import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { startRingtone, stopRingtone, unlockAudio } from '../lib/ringtone';
+import { pulseIcon } from '../lib/tapFx';
 import { applyAudioSession, clampVolume } from '../lib/sound';
 import { mediaErrorMessage } from '../lib/mediaErrors';
 import { translateText } from '../lib/translateClient';
@@ -208,6 +209,9 @@ export function CallProvider({ children }) {
     }
     if (status === 'incoming') {
       startRingtone('incoming', user?.callRingtoneId);
+      // Y el icono del teléfono vibra, igual que el tono: la llamada se nota
+      // aunque la pantalla esté en segundo plano.
+      pulseIcon('📞');
       return;
     }
     if (status === 'ringing') {

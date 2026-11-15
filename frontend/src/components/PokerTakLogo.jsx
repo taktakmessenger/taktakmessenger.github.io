@@ -1,16 +1,25 @@
 // Logo de POKERTAK: un trozo de queso con una semilla de mango dorada saliendo
-// de dentro. Va en SVG para que se vea nítido en cualquier tamaño y para que la
-// semilla pueda asomar por un corte del queso (por eso se dibuja después del
-// queso y se recorta con el contorno del corte).
-export default function PokerTakLogo({ size = 72, className = '' }) {
-  return (
+// de dentro, y dos cartas (as de picas y rey de corazones) delante, como una
+// mano repartida. Va en SVG para que se vea nítido en cualquier tamaño.
+//
+// Con `interactive` el emblema se puede tocar: las cartas se levantan y el dedo
+// enciende los fuegos artificiales. En ese caso se envuelve en un botón, para
+// que también funcione con el teclado y los lectores de pantalla.
+export default function PokerTakLogo({
+  size = 72,
+  className = '',
+  interactive = false,
+  playing = false,
+  onCards,
+}) {
+  const svg = (
     <svg
-      className={className}
+      className={`ptak-logo-svg${playing ? ' playing' : ''}`}
       width={size}
       height={size}
       viewBox="0 0 100 100"
       role="img"
-      aria-label="POKERTAK: un trozo de queso con una semilla de mango dorada"
+      aria-label="POKERTAK: un trozo de queso con una semilla de mango dorada y dos cartas"
     >
       <defs>
         <linearGradient id="ptak-cheese" x1="0" y1="0" x2="1" y2="1">
@@ -26,6 +35,10 @@ export default function PokerTakLogo({ size = 72, className = '' }) {
           <stop offset="0" stopColor="#fffbe0" stopOpacity="0.95" />
           <stop offset="1" stopColor="#fffbe0" stopOpacity="0" />
         </radialGradient>
+        <linearGradient id="ptak-card-face" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#e8ecff" />
+        </linearGradient>
       </defs>
 
       {/* Trozo de queso: cuña con la punta arriba a la izquierda. */}
@@ -54,6 +67,34 @@ export default function PokerTakLogo({ size = 72, className = '' }) {
       {/* Brillo dorado alrededor de la semilla. */}
       <path d="M76 20 l2.4 5.6 5.6 2.4 -5.6 2.4 -2.4 5.6 -2.4 -5.6 -5.6 -2.4 5.6 -2.4 z" fill="#ffe98a" />
       <path d="M30 18 l1.6 3.6 3.6 1.6 -3.6 1.6 -1.6 3.6 -1.6 -3.6 -3.6 -1.6 3.6 -1.6 z" fill="#ffe98a" opacity="0.9" />
+
+      {/* Las dos cartas de la casa, abanicadas delante del queso: as de picas y
+          rey de corazones. Se pueden tocar para encender los fuegos. */}
+      <g className="ptak-logo-cards">
+        <g transform="rotate(-16 40 78)">
+          <rect x="26" y="56" width="24" height="34" rx="3.5" fill="url(#ptak-card-face)" stroke="#b9c2e6" strokeWidth="1.4" />
+          <text x="31" y="69" fontFamily="Outfit, sans-serif" fontWeight="800" fontSize="12" fill="#1a2030">A</text>
+          <text x="31" y="80" fontFamily="sans-serif" fontSize="10" fill="#1a2030">♠</text>
+        </g>
+        <g transform="rotate(14 62 78)">
+          <rect x="50" y="56" width="24" height="34" rx="3.5" fill="url(#ptak-card-face)" stroke="#e6b9c2" strokeWidth="1.4" />
+          <text x="55" y="69" fontFamily="Outfit, sans-serif" fontWeight="800" fontSize="12" fill="#d81f4a">K</text>
+          <text x="55" y="80" fontFamily="sans-serif" fontSize="10" fill="#d81f4a">♥</text>
+        </g>
+      </g>
     </svg>
+  );
+
+  if (!interactive) return svg;
+
+  return (
+    <button
+      type="button"
+      className={`ptak-logo-btn${className ? ` ${className}` : ''}`}
+      onClick={onCards}
+      aria-label="Tocar las cartas para lanzar fuegos artificiales"
+    >
+      {svg}
+    </button>
   );
 }
