@@ -1,49 +1,47 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
-// Pantalla de bienvenida de TAK TAK. Es lo primero que se ve al abrir la app,
-// así que cumple dos funciones: presentar la marca y tapar el hueco mientras
-// AuthContext comprueba si la sesión guardada sigue siendo válida.
+// Pantalla de bienvenida de TAK TAK. Es lo primero que se ve al abrir la app:
+// presenta la marca (el queso con la semilla de mango dorada) y tapa el hueco
+// mientras AuthContext comprueba si la sesión guardada sigue siendo válida.
 //
-// El temporizador es un mínimo, no una espera fija: si la sesión tarda más, el
-// splash se queda; si ya está lista, desaparece en cuanto se cumple el mínimo.
-export default function Splash({ minDuration = 1100 }) {
-  const [hidden, setHidden] = useState(false);
-
+// Quien manda en el tiempo es App: aquí solo se pinta y se aplica el fundido
+// cuando `fading` llega en true, para que no se vaya antes de que la sesión
+// esté lista. El mismo dibujo existe también en el HTML (ver index.html), que
+// se ve al instante y evita el destello blanco del primer pintado; aquí se
+// retira ese duplicado en cuanto React monta.
+export default function Splash({ fading = false }) {
   useEffect(() => {
-    const timer = setTimeout(() => setHidden(true), minDuration);
-    return () => clearTimeout(timer);
-  }, [minDuration]);
+    document.getElementById('boot-splash')?.remove();
+  }, []);
 
   return (
-    <div className={`splash ${hidden ? 'splash--hidden' : ''}`} aria-hidden={hidden}>
-      <div className="splash-glow" />
+    <div className={`splash ${fading ? 'splash--hidden' : ''}`} aria-hidden={fading}>
+      <div className="splash-top">
+        <div className="splash-logo">
+          <img
+            src="./taktak-app-icon.png"
+            alt="TakTak"
+            width="96"
+            height="96"
+            decoding="async"
+          />
+        </div>
 
-      <div className="splash-logo">
-        <svg viewBox="0 0 64 64" width="92" height="92" role="img" aria-label="TAK TAK">
-          <defs>
-            <linearGradient id="splash-mark" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#ff2d8d" />
-              <stop offset="55%" stopColor="#b04bfb" />
-              <stop offset="100%" stopColor="#00f7d4" />
-            </linearGradient>
-          </defs>
-          <g fill="url(#splash-mark)">
-            <rect x="12" y="19" width="18" height="4.6" rx="2.3" />
-            <rect x="18.7" y="19" width="4.6" height="26" rx="2.3" />
-            <rect x="34" y="19" width="18" height="4.6" rx="2.3" />
-            <rect x="40.7" y="19" width="4.6" height="26" rx="2.3" />
-          </g>
-        </svg>
+        <h1 className="splash-word">TakTak</h1>
+        <p className="splash-subtitle">Vídeos cortos en vertical, minijuegos y creación con IA.</p>
       </div>
 
-      <h1 className="splash-word">TAK TAK</h1>
-      <p className="splash-tagline">Crea, regala, gana</p>
-
-      <div className="splash-dots" aria-hidden="true">
-        <span />
-        <span />
-        <span />
+      <div className="splash-photo">
+        <img
+          src="./pepa-inicio.png"
+          alt="Un trozo de queso con la pepa dorada"
+          width="260"
+          height="260"
+          decoding="async"
+        />
       </div>
+
+      <p className="splash-tagline">Somos la pepa del queso</p>
     </div>
   );
 }

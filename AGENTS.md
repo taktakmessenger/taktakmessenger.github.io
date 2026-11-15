@@ -273,8 +273,10 @@ docker exec taktak-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:
   la señalización (`call:invite`, `call:offer`, `call:answer`, `call:ice`,
   `call:accept`, `call:reject`, `call:end`). Con solo STUN configurado, una
   llamada funciona en la misma red pero se corta detrás de NAT estricto: para eso
-  hace falta un TURN (`VITE_TURN_URL`, `VITE_TURN_USERNAME`,
-  `VITE_TURN_CREDENTIAL`).
+  hace falta un TURN. Se configura **en el backend** (no en el frontend) con
+  `TURN_URL` (varias separadas por coma), `TURN_USERNAME` y `TURN_CREDENTIAL`, o
+  con `ICE_SERVERS_JSON` para el array completo. El cliente los pide a
+  `GET /api/calls/ice` (con sesión) y avisa con `hasTurn` cuando no hay ninguno.
 - El historial de llamadas reutiliza el hilo de mensajes. Una llamada es un
   `Message` con `kind: 'call'` y un subdocumento `call` (`kind`, `status`,
   `durationSeconds`). Así comparte orden, no leídos y paginación con el texto sin
@@ -327,9 +329,17 @@ Detalles que cuesta descubrir:
   `cty: 'twilio-fpa;v=1'`; sin él el SDK lo rechaza con un error poco claro.
 - El token de acceso necesita **API Key + secreto + TwiML App SID**, no solo el
   auth token. `voiceService.isConfigured()` exige los cuatro.
-- `navigator.contacts` solo existe en algunos navegadores móviles y exige
-  permiso. Se pide con un botón ("Importar"), nunca al montar: pedir los
-  contactos al abrir el marcador es invasivo y en escritorio la API no existe.
+- `navigator.contacts` solo existe en algunos navegadores móviles y **no tiene
+  permiso permanente**: cada `select()` abre el selector del sistema y exige un
+  gesto del usuario, que vuelve a elegir qué comparte (Chrome y MDN lo dicen:
+  el acceso es por uso). Por eso **no se puede leer la agenda "sola"** desde la
+  web. Lo que hace la app: la primera vez se pulsa «Importar»; los contactos
+  compartidos se cachean (`taktak_contacts_cache`) y **aparecen solos** al abrir
+  el marcador; el botón pasa a «Actualizar» para traer cambios recientes (con su
+  gesto). La lógica pura está en `frontend/src/lib/contacts.js` con tests en
+  `test/contacts.test.js`: `flattenContacts` aplana a una fila por teléfono y
+  `mergeContacts` fusiona con los manuales sin duplicar. El e2e
+  `test/e2e-dialer-contacts-autoload.mjs` simula la agenda y verifica el flujo.
 - La pulsación larga del 0 para escribir "+" necesita `onPointerDown/Up`, no
   `onClick` (que no distingue corta de larga), y `onContextMenu` con
   `preventDefault`, porque el menú contextual del móvil cancela la pulsación.
@@ -445,13 +455,34 @@ no está disponible". Con Web Push suena como WhatsApp: el servicio de push
   proveedor configurado, **falla cerrado**: `startVerification` lanza 503 en vez
   de dejar pasar. El proveedor `dev` (por defecto fuera de producción) **nunca
   auto-aprueba**: abre una sesión `pending` y solo un administrador la resuelve.
+- **Proveedor real: Didit** (`AGE_PROVIDER=didit`, `services/diditService.js`).
+  El flujo es hospedado: `POST /v3/session/` con `workflow_id` y `vendor_data`
+  (el id del usuario) devuelve una `url` a la que se manda al usuario; el
+  documento y la selfie los trata Didit, aquí solo se guarda `session_id` y
+  veredicto. Hacen falta `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` y
+  `DIDIT_WEBHOOK_SECRET`; sin la API key y el workflow, `start` lanza 503.
+  `DIDIT_API_BASE` permite apuntar los tests a un servidor falso.
+- Didit devuelve estados con espacios (`Approved`, `Declined`, `In Review`,
+  `Awaiting User`, `Expired`, `Abandoned`…). `diditService.mapStatus` traduce
+  solo `Approved`→`verified` y `Declined/Expired/Abandoned`→`rejected`; **todo
+  lo demás queda en `pending`**. Un mapeo optimista convertiría "In Review" en
+  acceso, así que cualquier estado desconocido se trata como pendiente.
+- El webhook (`POST /api/verification/didit/webhook`) va **antes** del `auth`
+  (lo llama Didit, no el navegador) y se autentica con la firma HMAC
+  (`X-Signature-V2` sobre el JSON canónico de claves ordenadas, o `X-Signature`
+  sobre el cuerpo crudo). Se rechaza si el `X-Timestamp` tiene más de 5 minutos,
+  para que un webhook capturado no se pueda reenviar. `verifyWebhook` **solo
+  añade `req.rawBody` al JSON de la app** (ya estaba puesto para Stripe).
+  `applyProviderVerdict` busca por `vendor_data` y **nunca degrada** una cuenta
+  ya `verified`.
 - **Declarar la fecha de nacimiento no verifica.** `PUT /api/verification/age/declaration`
   guarda `dateOfBirth` para la experiencia de edad, pero deja el estado como
   está. Si esa ruta tocase `ageVerification.status`, cualquiera se verificaría
   escribiendo una fecha. La fecha se rechaza si es futura.
-- **El único camino que el propio usuario puede usar para llegar a `verified` es
-  `POST /api/verification/age/refresh`**, que relee el veredicto del proveedor.
-  No lo escribas a mano en una ruta de usuario.
+- **Los dos caminos que pueden llevar a `verified`** son
+  `POST /api/verification/age/refresh` (relee el veredicto del proveedor) y el
+  webhook de Didit. Los dos escriben solo lo que decidió el proveedor. No
+  escribas `verified` a mano en una ruta de usuario.
 - El gating del contenido adulto es **404, no 403**, y se aplica en tres sitios
   (feed, listado y vídeo individual): un 403 confirmaría que el vídeo existe. El
   creador conserva acceso a su propia subida. La misma comprobación
@@ -1363,8 +1394,8 @@ siguiendo el mismo patrón que el botón de Google.
   `graph.facebook.com` y `www.facebook.com` (conexión); sin eso el botón falla
   en el navegador aunque el backend esté bien.
 - **El Graph API se puede apuntar a un servidor falso** con
-  `FACEBOOK_GRAPH_BASE`, igual que Stripe y PayPal, para probar la ruta de
-  extremo a extremo sin salir a internet.
+  `FACEBOOK_GRAPH_BASE`, igual que Stripe, para probar la ruta de extremo a
+  extremo sin salir a internet.
 
 Verificación: `backend/test/facebook.test.js` (cerrado sin configurar, token
 inválido, token de otra app, alta nueva, enlace con cuenta existente, providers)
@@ -1442,11 +1473,11 @@ señalización SFU con acuse de recibo, códec de vídeo, aislamiento entre sala
 limpieza al desconectar). La disposición de la rejilla se prueba aparte, sin
 navegador, en `frontend/test/liveGrid.test.js`.
 
-## Métodos de pago guardados (tarjeta y PayPal)
+## Métodos de pago guardados (tarjeta)
 
-El usuario registra su tarjeta y su cuenta de PayPal una vez y luego paga en un
-toque. Pantalla: `frontend/src/components/PaymentMethods.jsx`, vista
-`metodos-pago` en `App.jsx`, alcanzable desde Monedero y desde la tienda.
+El usuario registra su tarjeta una vez y luego paga en un toque. Pantalla:
+`frontend/src/components/PaymentMethods.jsx`, vista `metodos-pago` en `App.jsx`,
+alcanzable desde Monedero y desde la tienda.
 
 - **El número de tarjeta NUNCA entra en TAK TAK.** Stripe.js lo manda del
   navegador directo a Stripe con la clave publicable (`/api/payments/config` la
@@ -1454,17 +1485,14 @@ toque. Pantalla: `frontend/src/components/PaymentMethods.jsx`, vista
   últimos 4 y caducidad, y siempre leídos de Stripe
   (`stripeService.retrievePaymentMethod`), nunca del cliente. Guardar el número
   metería al proyecto en PCI-DSS y un vuelco daría tarjetas usables.
-- **PayPal guarda un `vault_id`**, no una tarjeta. Es un secreto de cobro: vive
-  en `PaymentMethod.providerRef`, que no se expone jamás (hay test).
 - **Cobrar y acreditar están separados.** `POST /methods/:id/pay` lanza el cargo
-  (`chargeStoredPaymentMethod` / `chargeStoredVault`) pero NO acredita monedas:
+  (`chargeStoredPaymentMethod`) pero NO acredita monedas:
   eso lo hace el webhook del proveedor. Acreditar en la respuesta regalaría
   monedas si el banco rechaza el cargo después.
 - **El importe sale del catálogo del servidor** (`env.coinPackages`), nunca del
   cliente, igual que en el checkout.
 - **Clave de idempotencia** por (usuario, método, paquete, minuto) en cabecera
-  (`Idempotency-Key` en Stripe, `PayPal-Request-Id` en PayPal): un doble clic no
-  cobra dos veces.
+  (`Idempotency-Key` en Stripe): un doble clic no cobra dos veces.
 - **Propiedad**: todas las consultas filtran por `user`; conocer el id de otro no
   permite ver, cobrar ni borrar (test de aislamiento).
 - **Baja**: primero se revoca en Mongo y luego se intenta desvincular del
@@ -1475,12 +1503,11 @@ toque. Pantalla: `frontend/src/components/PaymentMethods.jsx`, vista
   un cliente; sin él Stripe lo rechaza.
 
 Config (`backend/.env`): `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `STRIPE_API_BASE` (para tests), `PAYPAL_CLIENT_ID`,
-`PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_API_BASE`.
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_API_BASE` (para tests).
 
 Tests: `backend/test/payment-methods.test.js` contra un servidor falso real
-(`backend/test/fakeProviders.js`) que se levanta en localhost y al que se apuntan
-`stripeApiBase`/`paypalApiBase`. Es un HTTP de verdad, no un doble de funciones,
+(`backend/test/fakeProviders.js`) que se levanta en localhost y al que se apunta
+`stripeApiBase`. Es un HTTP de verdad, no un doble de funciones,
 así que ejercita form-encode, cabeceras y parseo. `stripeApiBase` se lee en cada
 llamada (`apiBase()`), no al cargar el módulo, para que el test pueda
 redirigirlo. Frontend: `frontend/test/stripe.test.js` sobre la lógica de

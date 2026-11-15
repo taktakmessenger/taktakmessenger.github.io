@@ -86,32 +86,66 @@ test('gift to self is rejected', async () => {
 
 test('withdraw debits TTC-R and records a pending transaction', async () => {
   const agent = app();
-  const sender = await registerUser(agent);
-  const recipient = await registerUser(agent);
-  await setWallet(sender.user.id, { ttcC: 100, bonusC: 0 });
-
-  await agent
-    .post('/api/wallet/gift')
-    .set('Authorization', `Bearer ${sender.token}`)
-    .send({ recipientId: recipient.user.id, amount: 100 });
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 200 });
 
   const res = await agent
     .post('/api/wallet/withdraw')
-    .set('Authorization', `Bearer ${recipient.token}`)
-    .send({ amount: 30, method: 'paypal', details: 'recipient@example.com' });
+    .set('Authorization', `Bearer ${user.token}`)
+    .send({ amount: 120, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678' });
 
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
 
   const wallet = await agent
     .get('/api/wallet')
-    .set('Authorization', `Bearer ${recipient.token}`);
-  assert.equal(wallet.body.ttcR, 30); // 60 credited, 30 withdrawn
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(wallet.body.ttcR, 80); // 200 minus the 120 withdrawn
 
   const txs = await agent
     .get('/api/wallet/transactions')
-    .set('Authorization', `Bearer ${recipient.token}`);
+    .set('Authorization', `Bearer ${user.token}`);
   const withdraw = txs.body.find((t) => t.type === 'withdraw');
   assert.equal(withdraw.status, 'pending');
+});
+
+test('a withdrawal below the minimum is rejected', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 200 });
+
+  const res = await agent
+    .post('/api/wallet/withdraw')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send({ amount: 10, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678' });
+
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /mínimo/i);
+});
+
+test('a withdrawal without payout details is rejected', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 200 });
+
+  const res = await agent
+    .post('/api/wallet/withdraw')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send({ amount: 120, method: 'crypto' });
+
+  assert.equal(res.status, 400);
+});
+
+test('an unknown payout method is rejected', async () => {
+  const agent = app();
+  const user = await registerUser(agent);
+  await setWallet(user.user.id, { ttcR: 200 });
+
+  const res = await agent
+    .post('/api/wallet/withdraw')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send({ amount: 120, method: 'bitcoin-atm', details: 'x' });
+
+  assert.equal(res.status, 400);
 });
 
 test('over-withdrawal is rejected', async () => {
@@ -121,7 +155,7 @@ test('over-withdrawal is rejected', async () => {
   const res = await agent
     .post('/api/wallet/withdraw')
     .set('Authorization', `Bearer ${user.token}`)
-    .send({ amount: 500, method: 'paypal' });
+    .send({ amount: 500, method: 'crypto', details: '0x1234567890abcdef1234567890abcdef12345678' });
 
   assert.equal(res.status, 400);
   assert.match(res.body.error, /insuficientes/i);

@@ -15,7 +15,7 @@ const FILTERS = [
 const OPTIMIZE_POLL_MS = 3000;
 const OPTIMIZE_MAX_TRIES = 100; // ~5 minutos
 
-export default function Upload({ onUploaded }) {
+export default function Upload({ onUploaded, onBack }) {
   const videoRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -34,6 +34,11 @@ export default function Upload({ onUploaded }) {
   const [sources, setSources] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Catálogo de música y pista elegida. El catálogo lo siembra el backend con
+  // pistas CC0; si falla la carga, la sección no se muestra y el vídeo se sube
+  // sin música en vez de bloquear la publicación.
+  const [sounds, setSounds] = useState([]);
+  const [sound, setSound] = useState('');
   // Tras publicar, se sigue el estado de la conversión hasta que termina.
   const [optimizing, setOptimizing] = useState(null); // { id, status, error }
   const pollRef = useRef(null);
@@ -45,6 +50,15 @@ export default function Upload({ onUploaded }) {
       .get('/videos/news-sources')
       .then(({ data }) => setSources(data.sources))
       .catch(() => setSources([]));
+  }, []);
+
+  // Catálogo de música para el vídeo (como TikTok). Un fallo de red deja la
+  // lista vacía y la sección oculta: no puede impedir publicar.
+  useEffect(() => {
+    api
+      .get('/sounds', { params: { limit: 30 } })
+      .then(({ data }) => setSounds(data.sounds || []))
+      .catch(() => setSounds([]));
   }, []);
 
   // Release the camera when the view unmounts, otherwise the light stays on.
@@ -68,7 +82,10 @@ export default function Upload({ onUploaded }) {
       tries += 1;
       try {
         const { data } = await api.get(`/videos/${id}/status`);
-        if (data.transcodeStatus === 'ready') {
+        // `none` es terminal: el servidor no tiene la optimización activada y
+        // sirve el original. Se trata como listo; si no, la pantalla se quedaría
+        // "optimizando" cinco minutos por algo que ya terminó.
+        if (data.transcodeStatus === 'ready' || data.transcodeStatus === 'none') {
           setOptimizing({ id, status: 'ready' });
           return;
         }
@@ -170,6 +187,7 @@ export default function Upload({ onUploaded }) {
       if (form.description) body.append('description', form.description);
       if (form.tags) body.append('tags', form.tags);
       body.append('isNSFW', String(isNSFW));
+      if (sound) body.append('sound', sound);
       if (newsSource) {
         body.append('newsSource', newsSource);
         body.append('sourceUrl', sourceUrl);
@@ -192,7 +210,12 @@ export default function Upload({ onUploaded }) {
 
   return (
     <div className="upload-card">
-      <h2>Crear contenido</h2>
+      <div className="screen-head">
+        <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+          ←
+        </button>
+        <h2>Crear contenido</h2>
+      </div>
 
       {optimizing ? (
         <OptimizePanel
@@ -221,6 +244,9 @@ export default function Upload({ onUploaded }) {
           update={update}
           isNSFW={isNSFW}
           setIsNSFW={setIsNSFW}
+          sounds={sounds}
+          sound={sound}
+          setSound={setSound}
           sources={sources}
           newsSource={newsSource}
           setNewsSource={setNewsSource}
@@ -331,6 +357,9 @@ function UploadForm({
   update,
   isNSFW,
   setIsNSFW,
+  sounds,
+  sound,
+  setSound,
   sources,
   newsSource,
   setNewsSource,
@@ -440,6 +469,31 @@ function UploadForm({
           value={form.tags}
           onChange={update('tags')}
         />
+
+        {sounds.length > 0 && (
+          <fieldset className="upload-sound">
+            <legend>🎵 Música (opcional)</legend>
+            <select value={sound} onChange={(e) => setSound(e.target.value)}>
+              <option value="">Sin música</option>
+              {sounds.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.title} — {s.artist}
+                </option>
+              ))}
+            </select>
+            {sound && (
+              <audio
+                className="sound-preview"
+                src={sounds.find((s) => s._id === sound)?.audioUrl}
+                controls
+                preload="none"
+              />
+            )}
+            <small className="muted">
+              La música se mezcla con el audio original al publicar.
+            </small>
+          </fieldset>
+        )}
 
         <label className="upload-toggle">
           <input

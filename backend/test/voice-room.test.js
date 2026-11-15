@@ -96,6 +96,37 @@ test('un miembro entra a la sala y el otro recibe el aviso', async () => {
   });
 });
 
+// Reingresar a la MISMA sala no debe sacar al socket: el cliente que reabre la
+// sala (la mesa de POKERTAK la abre al entrar por su pestaña, y StrictMode monta
+// los efectos dos veces) recibía un `voice:left` por el reingreso, hacía
+// `cleanup()` y paraba su propia cámara. El efecto volvía a entrar y el bucle
+// dejaba las caras del asiento en negro.
+test('reingresar a la misma sala no expulsa al socket ni avisa de salida', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const squad = await createSquad(agent, owner.token);
+
+  await withServer(async (url) => {
+    const a = await connect(url, owner.token);
+    try {
+      a.emit('voice:join', { slug: squad.slug, mesh: true });
+      await nextEvent(a, 'voice:joined');
+
+      // Segundo ingreso a la misma sala: no debe llegar `voice:left`.
+      let gotLeft = false;
+      a.on('voice:left', () => { gotLeft = true; });
+      a.emit('voice:join', { slug: squad.slug, mesh: true });
+      const rejoined = await nextEvent(a, 'voice:joined');
+      assert.equal(rejoined.room, squad.voiceRoom);
+
+      await new Promise((r) => setTimeout(r, 300));
+      assert.equal(gotLeft, false, 'reingresar a la misma sala no debe sacar al socket');
+    } finally {
+      a.close();
+    }
+  });
+});
+
 test('la señalización viaja entre pares de la misma sala', async () => {
   const agent = app();
   const owner = await registerUser(agent);

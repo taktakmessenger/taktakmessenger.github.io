@@ -3,7 +3,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { CallProvider, useCall } from './contexts/CallContext';
 import { VoiceRoomProvider } from './contexts/VoiceRoomContext';
+import { GroupCallProvider } from './contexts/GroupCallContext';
 import Navigation from './components/Navigation';
+import AppTopBar from './components/AppTopBar';
+import PokerLobby from './components/PokerLobby';
 import Splash from './components/Splash';
 import Home from './components/Home';
 import Upload from './components/Upload';
@@ -17,8 +20,8 @@ import Verification from './components/Verification';
 import AuthForm from './components/AuthForm';
 import Messages from './components/Messages';
 import CallOverlay from './components/CallOverlay';
+import GroupCallOverlay from './components/GroupCallOverlay';
 import Settings from './components/Settings';
-import PhoneLink from './components/PhoneLink';
 import NotificationPrompt from './components/NotificationPrompt';
 import ConnectionBanner from './components/ConnectionBanner';
 import VoiceRoomBar from './components/VoiceRoomBar';
@@ -29,12 +32,11 @@ import Explore from './components/Explore';
 import BlockedUsers from './components/BlockedUsers';
 import PublicProfile from './components/PublicProfile';
 import CoinStore from './components/CoinStore';
-import PaymentResult from './components/PaymentResult';
-import PaymentMethods from './components/PaymentMethods';
 import api from './api/client';
 import { getToken } from './lib/session';
 import { syncPushSubscription } from './services/push.js';
 import './styles/App.css';
+import './styles/premium.css';
 
 // Sending a gift straight from the feed, priced by the server catalogue so the
 // client never chooses what a gift costs.
@@ -142,18 +144,10 @@ function Shell() {
   // formulario, no llegaría a verse nunca. Se baja al terminar el flujo.
   const [authOpen, setAuthOpen] = useState(false);
   const [giftTarget, setGiftTarget] = useState(null);
-  const [paymentProvider, setPaymentProvider] = useState('stripe');
-  // Orden de PayPal que hay que confirmar al volver de la aprobación.
-  const [paypalLinkOrder, setPaypalLinkOrder] = useState(null);
   // Usuario con el que se quiere abrir un chat desde el feed. Se pasa a
   // Mensajes para que abra el hilo directamente en vez de dejar al usuario
   // buscándolo a mano en la bandeja.
   const [chatTarget, setChatTarget] = useState(null);
-  // Invitación a vincular el teléfono, una sola vez por cuenta. Muchas cuentas
-  // se crean por correo y quedan sin número: sin teléfono no se las puede llamar
-  // desde el marcador. Se muestra una vez y se recuerda el descarte para no
-  // insistir en cada inicio de sesión.
-  const [phonePrompt, setPhonePrompt] = useState(false);
   // Vídeo que hay que abrir al arrancar, cuando se llega por un enlace
   // compartido (`/?video=<id>`). Se pasa al feed, que lo coloca el primero.
   const [focusVideoId, setFocusVideoId] = useState(null);
@@ -165,15 +159,28 @@ function Shell() {
   const { user, loading } = useAuth();
   const { startCall } = useCall();
 
-  // Anything other than the feed needs a session.
-  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'pago-exito'].includes(view);
-
+  // Pantalla de bienvenida: se ve un mínimo de 5,5 s (con la marca y el eslogan
+  // ya en pantalla) y no se retira hasta que la sesión esté resuelta. Primero
+  // llega el fundido (`splashFading`) y, cuando termina, se desmonta. Si la
+  // comprobación de sesión tarda más de la cuenta, el splash se queda: nunca se
+  // ve la app a medias.
+  const SPLASH_MIN_MS = 5500;
+  const [splashMinDone, setSplashMinDone] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
   useEffect(() => {
-    if (!user || user.phoneVerified) return;
-    const seen = localStorage.getItem(`taktak_phone_prompt_${user.id}`);
-    if (!seen) setPhonePrompt(true);
-  }, [user]);
+    const t = setTimeout(() => setSplashMinDone(true), SPLASH_MIN_MS);
+    return () => clearTimeout(t);
+  }, []);
+  const splashVisible = !splashGone;
+  const splashFading = splashMinDone && !loading;
+  useEffect(() => {
+    if (!splashFading) return undefined;
+    const t = setTimeout(() => setSplashGone(true), 700);
+    return () => clearTimeout(t);
+  }, [splashFading]);
 
+  // Anything other than the feed needs a session.
+  const needsAuth = ['upload', 'wallet', 'profile', 'admin', 'squads', 'health', 'messages', 'verification', 'settings', 'activity', 'tienda', 'poker'].includes(view);
   // Pedir una vista protegida sin sesión abre el formulario y lo deja abierto
   // hasta que el flujo termina. Sin levantarlo aquí, el alta que acaba de crear
   // la sesión cerraría el formulario en el acto y se perdería la pantalla de
@@ -183,26 +190,23 @@ function Shell() {
   }, [needsAuth, user]);
 
   // Abrir una pantalla directamente cuando se llega desde fuera: el push de un
-  // aviso (`/?view=activity`) o la vuelta de una pasarela de pago
-  // (`/?view=pago-exito`). Se lee una sola vez, al arrancar: a partir de ahí
+  // aviso (`/?view=activity`). Se lee una sola vez, al arrancar: a partir de ahí
   // manda el estado, no la URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const target = params.get('view');
     if (target === 'activity') setView('activity');
     if (target === 'wall') setView('wall');
-    if (target === 'pago-exito') {
-      setPaymentProvider(params.get('provider') || 'stripe');
-      setView('pago-exito');
-    }
-    // Vuelta de la vinculación de PayPal: PayPal añade `token=<orden>` a la URL
-    // de retorno. Ese token es el id de la orden, y hay que confirmarlo para
-    // guardar el método. Se guarda aquí y la pantalla lo confirma al montarse.
-    if (params.get('link') === '1' && params.get('token')) {
-      setPaypalLinkOrder(params.get('token'));
-      setView('metodos-pago');
-    }
-    if (target === 'metodos-pago') setView('metodos-pago');
+    if (target === 'squads') setView('squads');
+    // Aviso de torneo: abre la pestaña del juego, que es donde se juega.
+    if (target === 'poker') setView('poker');
+    // Vuelta desde la app de MetaMask (móvil): el enlace directo apunta a la
+    // tienda para que el usuario, ya con cartera inyectada, caiga donde estaba.
+    if (target === 'tienda') setView('tienda');
+    // Vuelta de la verificación de edad: Didit redirige aquí al terminar. La
+    // pantalla de verificación refresca el estado al montarse, así que basta
+    // con abrirla.
+    if (target === 'verification') setView('verification');
     // Enlace compartido de un vídeo (`/?video=<id>`). Se guarda el id y se deja
     // el feed como vista: el feed lo abre él mismo al cargar. No se cambia la
     // URL después, para no ensuciar el historial del navegador.
@@ -212,11 +216,6 @@ function Shell() {
       setView('feed');
     }
   }, []);
-
-  function dismissPhonePrompt() {
-    if (user) localStorage.setItem(`taktak_phone_prompt_${user.id}`, '1');
-    setPhonePrompt(false);
-  }
 
   // Al haber sesión, se reenvía al servidor la suscripción push que este
   // navegador ya tuviera. El servidor guarda qué dispositivo pertenece a qué
@@ -268,10 +267,6 @@ function Shell() {
     [user]
   );
 
-  if (loading) {
-    return <Splash />;
-  }
-
   function renderView() {
     // Pedir una vista protegida sin sesión abre el formulario de acceso ya
     // desplegado: la portada de bienvenida es para la entrada a la app, no para
@@ -309,7 +304,7 @@ function Shell() {
 
     switch (view) {
       case 'upload':
-        return <Upload onUploaded={() => setView('feed')} />;
+        return <Upload onUploaded={() => setView('feed')} onBack={() => setView('feed')} />;
       case 'wallet':
         return <Wallet onBack={() => setView('settings')} onNavigate={setView} />;
       case 'tienda':
@@ -317,17 +312,6 @@ function Shell() {
           <CoinStore
             onBack={() => setView('wallet')}
             onPurchased={() => setView('wallet')}
-            onManageMethods={() => setView('metodos-pago')}
-          />
-        );
-      case 'pago-exito':
-        return <PaymentResult provider={paymentProvider} onDone={() => setView('wallet')} />;
-      case 'metodos-pago':
-        return (
-          <PaymentMethods
-            onBack={() => setView('wallet')}
-            paypalOrderId={paypalLinkOrder}
-            onPaypalConfirmed={() => setPaypalLinkOrder(null)}
           />
         );
       case 'profile':
@@ -336,6 +320,10 @@ function Shell() {
         return <Settings onBack={() => setView('profile')} onNavigate={setView} />;
       case 'squads':
         return <Squads />;
+      case 'poker':
+        // El juego de Tak, con su propia pantalla: el vestíbulo enseña las mesas
+        // y los torneos, y desde ahí se entra a jugar.
+        return <PokerLobby onBack={() => setView('feed')} />;
       case 'wall':
         // Facetak es de lectura pública, como el feed: un visitante puede verlo.
         // Para publicar o comentar se le pide la sesión desde el propio Facetak.
@@ -348,6 +336,7 @@ function Shell() {
         return (
           <Explore
             initialQuery={exploreQuery}
+            onBack={() => setView('feed')}
             onOpenProfile={(person) => {
               setProfileUsername(person?.username || null);
               setView('public-profile');
@@ -391,11 +380,12 @@ function Shell() {
             onOpenVideo={() => setView('feed')}
             onOpenProfile={() => setView('profile')}
             onOpenWall={() => setView('wall')}
+            onOpenPoker={() => setView('poker')}
           />
         );
       case 'admin':
         return user?.role === 'admin' ? (
-          <AdminPanel />
+          <AdminPanel onBack={() => setView('settings')} />
         ) : (
           <div className="centered">No tienes acceso al panel de administración.</div>
         );
@@ -420,6 +410,29 @@ function Shell() {
     <div className={`app ${view === 'feed' ? 'app-feed' : ''}`}>
       <main className="main-content">{renderView()}</main>
 
+      {/* La pantalla de bienvenida va por encima de todo hasta que termina su
+          tiempo mínimo y la sesión está lista. Es un solo splash (el morado con
+          el queso): el dibujo que se ve al instante es el de index.html, que se
+          retira aquí al montar, así que nunca se solapan dos. */}
+      {splashVisible && <Splash fading={splashFading} />}
+
+      {/* La barra superior (campana + lupa) vive fuera de las vistas: son
+          acciones, no secciones. Pero solo se pinta en la pantalla principal
+          (y en las que ella misma abre), no en cada pestaña: al montarse fija
+          en la esquina, tapaba los botones propios de otras pantallas (por
+          ejemplo el "＋" de TakTak Móvil) y bloqueaba la operación. En la
+          portada tampoco se dibuja porque aún no hay sesión. */}
+      {TOPBAR_VIEWS.has(view) && (
+        <AppTopBar
+          currentView={view}
+          onOpenActivity={() => setView('activity')}
+          onSearch={() => {
+            setExploreQuery('');
+            setView('explore');
+          }}
+        />
+      )}
+
       {/* La barra inferior no se muestra en la portada: no hay a dónde ir
           todavía y las pestañas ofrecerían pantallas que piden sesión. */}
       {view !== 'acceso' && <Navigation currentView={view} setCurrentView={setView} />}
@@ -440,6 +453,10 @@ function Shell() {
           debe verse sin cambiar de pestaña. */}
       <CallOverlay />
 
+      {/* La llamada grupal, por el mismo motivo: suena aunque estés en otra
+          pestaña. */}
+      <GroupCallOverlay />
+
       {/* La barra de la sala de voz también vive fuera de las vistas: si se
           desmontara al cambiar de pestaña, el audio remoto se cortaría. Es lo
           que permite seguir en el feed mientras hablas con tu creator. */}
@@ -455,27 +472,6 @@ function Shell() {
           de las vistas, para que la sala no se desmonte al navegar. Cuando se
           minimiza, la barra de arriba sigue mostrando el estado. */}
       {user && <LiveStage />}
-
-      {/* Se ofrece una sola vez tras entrar con correo o Google, porque esas
-          cuentas no tienen teléfono y sin él no se las puede llamar por número.
-          Es opcional y descartable: obligar a dar el teléfono para usar la app
-          espantaría a quien solo quiere ver vídeos.
-          En WhaTaka no se dibuja: es un modal que bloquea la pantalla entera, y
-          ahí vive el marcador, que es justo donde se llama a otra persona. Antes
-          tapaba el marcador y el selector de país, así que parecían muertos. Ya
-          se ofrece sobre el feed al entrar. */}
-      {phonePrompt && user && !user.phoneVerified && view !== 'messages' && (
-        <div className="modal" role="dialog" aria-modal="true">
-          <div className="modal-content">
-            <h3>¿Añades tu teléfono?</h3>
-            <PhoneLink
-              onDone={dismissPhonePrompt}
-              onSkip={dismissPhonePrompt}
-              skipLabel="Ahora no"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Aviso de conexión: si la señal en vivo se cae, se dice en pantalla en
           vez de dejar la app muda. El socket se recupera solo, así que el aviso
@@ -495,13 +491,20 @@ function Shell() {
   );
 }
 
+// Pantallas donde se pinta la barra superior (campana + lupa). Se limita a la
+// portada y a las pantallas que se abren desde ella, para que no se cuele fija
+// encima de otras pestañas y bloquee sus botones.
+const TOPBAR_VIEWS = new Set(['feed', 'explore', 'activity']);
+
 export default function App() {
   return (
     <AuthProvider>
       <SocketProvider>
         <CallProvider>
           <VoiceRoomProvider>
-            <Shell />
+            <GroupCallProvider>
+              <Shell />
+            </GroupCallProvider>
           </VoiceRoomProvider>
         </CallProvider>
       </SocketProvider>

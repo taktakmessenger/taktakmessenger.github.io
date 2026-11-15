@@ -318,7 +318,7 @@ async function typeSearch(page, term) {
     const User = require('/workspace/project/backend/src/models/User');
     const { signToken } = require('/workspace/project/backend/src/utils/tokens');
     const adminUser = await User.findOneAndUpdate(
-      { email: 'eliecerdepablos@gmail.com' },
+      { email: 'cobro@example.com' },
       { $setOnInsert: { username: `admin${SUFFIX}`, password: 'x'.repeat(20), role: 'admin' } },
       { new: true, upsert: true }
     );

@@ -27,13 +27,23 @@ export default function Verification({ onBack }) {
     try {
       const { data } = await api.get('/verification/age');
       setState(data);
+      return data;
     } catch (err) {
       setError(err.message);
+      return null;
     }
   }
 
   useEffect(() => {
-    load();
+    // Al montar, si hay una verificación en curso se consulta el veredicto una
+    // vez. Es lo que hace que, al volver de la página de Didit, el estado se
+    // actualice solo sin que el usuario pulse nada. El webhook es el camino
+    // normal; esto cubre el caso de que llegue un poco tarde.
+    load().then((data) => {
+      if (data?.status === 'pending') {
+        api.post('/verification/age/refresh').then(load).catch(() => {});
+      }
+    });
   }, []);
 
   async function start() {

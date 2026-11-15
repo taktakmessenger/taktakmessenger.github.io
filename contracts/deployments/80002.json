@@ -1,0 +1,11 @@
+{
+  "chainId": 80002,
+  "address": "0x4DD6765637b039BeBCCda609c98529a43F7108f8",
+  "reportSigner": "0x249e5B75918cC800473Af9E36FeEb4baC5126b9F",
+  "initialSupply": "100000000000000000000000000",
+  "halvingSeconds": "31536000",
+  "rewardFactor": "1000000000000000",
+  "deployer": "0x2AdE982ce6665F797709Bb16e4a1F5671733e005",
+  "txHash": "0xaba265c30c3b8a597d6cce7cdb8bab1fb67dafdc584ce81e4a6bd1d8218c9202",
+  "deployedAt": "2026-11-14T11:08:11.898Z"
+}

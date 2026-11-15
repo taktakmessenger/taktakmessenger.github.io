@@ -1,0 +1,306 @@
+import { useCallback, useEffect, useState } from 'react';
+import api from '../api/client';
+import { copyToClipboard } from '../lib/share';
+import {
+  hasWallet,
+  isMobile,
+  WALLETS,
+  walletDeepLink,
+  detectWallets,
+  setActiveProvider,
+  connectWallet,
+  getConnectedAccount,
+  onWalletChange,
+  ensureChain,
+  getTokenBalance,
+  claimReward,
+  watchToken,
+} from '../lib/takcoin';
+
+// Panel de minado de TakCoin (TKC).
+//
+// El minado se cobra on-chain: la app pide un vale firmado al backend y el
+// usuario lo cobra con su wallet. Las monedas minadas son promocionales (se
+// gastan en regalos, no se retiran), así que este panel nunca promete dinero.
+//
+// Si el servidor no tiene configurado el contrato o la clave del oráculo, el
+// panel lo dice y no ofrece botones que no funcionarían.
+
+const CHAIN_LABEL = { 56: 'BNB Smart Chain', 137: 'Polygon', 80002: 'Polygon Amoy (pruebas)' };
+
+export default function TakCoinMining({ onMined }) {
+  const [config, setConfig] = useState(null);
+  const [state, setState] = useState({ loading: true, error: '', notice: '' });
+  const [wallet, setWallet] = useState({ address: '', balance: '' });
+  const [busy, setBusy] = useState('');
+  const [copied, setCopied] = useState('');
+  // Carteras instaladas en ESTE navegador (detección EIP-6963). Vacío = no hay
+  // ninguna extensión, así que se ofrecen los enlaces directos de móvil.
+  const [installed, setInstalled] = useState([]);
+
+  const loadConfig = useCallback(async () => {
+    try {
+      const { data } = await api.get('/mining/config');
+      setConfig(data);
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+    } finally {
+      setState((s) => ({ ...s, loading: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  // Refresca la cartera conectada (dirección + saldo). Se usa al arrancar, al
+  // reconectar y cuando el usuario cambia de cuenta o red en su cartera.
+  const refreshWallet = useCallback(async () => {
+    const address = await getConnectedAccount();
+    if (!address) {
+      setWallet({ address: '', balance: '' });
+      return;
+    }
+    let balance = '';
+    try {
+      if (config?.contract) balance = await getTokenBalance(config.contract);
+    } catch {
+      // Un saldo ilegible (red equivocada, RPC caído) no debe borrar la conexión.
+    }
+    setWallet({ address, balance });
+  }, [config]);
+
+  // Al montar la pantalla (o al volver de MetaMask con `?view=tienda`), si el
+  // usuario ya autorizó esta web antes, se muestra conectado sin pedir nada.
+  useEffect(() => {
+    if (!hasWallet()) return undefined;
+    refreshWallet();
+    return onWalletChange(refreshWallet);
+  }, [refreshWallet]);
+
+  // Descubre qué carteras hay instaladas en este navegador (EIP-6963). Si hay
+  // varias, se muestran todas para que el usuario elija; si no hay ninguna, se
+  // ofrecen los enlaces directos para abrir la app dentro de la cartera.
+  useEffect(() => {
+    let alive = true;
+    detectWallets().then((list) => {
+      if (alive) setInstalled(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function connectWith(chosen) {
+    if (chosen) setActiveProvider(chosen.provider);
+    await connect();
+  }
+
+  async function connect() {
+    setState({ loading: false, error: '', notice: '' });
+    setBusy('connect');
+    try {
+      const provider = await connectWallet();
+      if (config?.chainId) await ensureChain(config.chainId);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+      const balance = config?.contract ? await getTokenBalance(config.contract) : '';
+      setWallet({ address, balance });
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function claim() {
+    setState((s) => ({ ...s, error: '', notice: '' }));
+    setBusy('claim');
+    try {
+      // Reafirma la red antes de firmar: si el usuario se cambió a otra red
+      // entre conectar y cobrar, la transacción iría a la red equivocada.
+      if (config?.chainId) await ensureChain(config.chainId);
+      const { data: voucher } = await api.post('/mining/voucher', { address: wallet.address });
+      const { hash } = await claimReward(config.contract, voucher);
+      // Se registra en el servidor solo después de que la transacción se
+      // liquide: así el saldo de la app y el TKC de la wallet cuadran.
+      await api.post('/mining/claimed', { coins: voucher.coins, videos: voucher.videos, txHash: hash });
+      const balance = await getTokenBalance(config.contract);
+      setWallet((w) => ({ ...w, balance }));
+      setState((s) => ({
+        ...s,
+        notice: `¡Cobrados ${voucher.coins} TKC! Ya puedes usarlos en regalos.`,
+      }));
+      onMined?.();
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function copyAddress() {
+    const ok = await copyToClipboard(wallet.address);
+    if (!ok) return;
+    setCopied('addr');
+    setTimeout(() => setCopied((c) => (c === 'addr' ? '' : c)), 2000);
+  }
+
+  async function copyContract() {
+    const ok = await copyToClipboard(config.contract);
+    if (!ok) return;
+    setCopied('contract');
+    setTimeout(() => setCopied((c) => (c === 'contract' ? '' : c)), 2000);
+  }
+
+  async function addToken() {
+    setBusy('watch');
+    try {
+      await watchToken(config.contract);
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  if (state.loading) return <p className="centered">Cargando minería…</p>;
+
+  if (!config?.configured) {
+    return (
+      <div className="store-closed" role="status">
+        <strong>Minería de TakCoin próximamente</strong>
+        <small>
+          El servidor todavía no tiene el contrato y la clave del oráculo. Cuando
+          estén, aquí aparecerá el botón para cobrar lo minado.
+        </small>
+      </div>
+    );
+  }
+
+  return (
+    <div className="takcoin-mining">
+      <p className="store-hint">
+        Gana <strong>TKC</strong> viendo vídeos y cobra en tu cartera. Los TKC
+        minados son <strong>monedas de regalo</strong>: sirven para enviar regalos,
+        no se pueden retirar como dinero.
+      </p>
+
+      {state.error && <p className="error" role="alert">{state.error}</p>}
+      {state.notice && <p className="notice" role="status">{state.notice}</p>}
+
+      {!wallet.address && (
+        <div className="store-closed" role="status">
+          <strong>Conecta una cartera para cobrar</strong>
+          {installed.length > 0 ? (
+            <>
+              <small>Elige con qué cartera quieres conectar:</small>
+              <div className="wallet-options">
+                {installed.map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => connectWith(w)}
+                    disabled={busy === 'connect'}
+                  >
+                    {w.icon ? (
+                      <img src={w.icon} alt="" width="18" height="18" />
+                    ) : (
+                      '👛'
+                    )}{' '}
+                    {busy === 'connect' ? 'Conectando…' : w.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : isMobile() ? (
+            <>
+              <small>
+                En el móvil no hay extensiones: abre TakTak dentro de la app de tu
+                cartera para conectar.
+              </small>
+              <div className="wallet-options">
+                {WALLETS.map((w) => (
+                  <a
+                    key={w.id}
+                    className="btn-primary"
+                    href={walletDeepLink(w.id)}
+                  >
+                    {w.emoji} {w.name}
+                  </a>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <small>Instala una cartera compatible con Polygon (TakCoin):</small>
+              <div className="wallet-options">
+                {WALLETS.map((w) => (
+                  <a
+                    key={w.id}
+                    className="btn-primary"
+                    href={w.installUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {w.emoji} {w.name}
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {wallet.address ? (
+        <div className="takcoin-wallet">
+          <p>Tu cartera</p>
+          <div className="takcoin-address">
+            <code className="takcoin-address-value">{wallet.address}</code>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={copyAddress}
+              aria-label="Copiar dirección de la cartera"
+            >
+              {copied === 'addr' ? '✅ Copiada' : '📋 Copiar'}
+            </button>
+          </div>
+          <p>Saldo TKC: <strong>{wallet.balance || '0'}</strong></p>
+          <div className="package-actions">
+            <button type="button" className="btn-primary" onClick={claim} disabled={busy === 'claim'}>
+              {busy === 'claim' ? 'Cobrando…' : '⛏️ Cobrar minado'}
+            </button>
+            <button type="button" className="btn-ghost" onClick={addToken} disabled={busy === 'watch'}>
+              Añadir TKC a la cartera
+            </button>
+          </div>
+          <div className="takcoin-manual" role="note">
+            <strong>¿No ves tus TKC en MetaMask?</strong>
+            <small>
+              Añádelos a mano: en MetaMask abre la pestaña <strong>Tokens</strong> →
+              <strong> Importar token</strong>, elige la red <strong>Polygon</strong> y pega
+              la dirección del contrato.
+            </small>
+            <div className="takcoin-address">
+              <code className="takcoin-address-value">{config.contract}</code>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={copyContract}
+                aria-label="Copiar dirección del contrato"
+              >
+                {copied === 'contract' ? '✅ Copiado' : '📋 Copiar'}
+              </button>
+            </div>
+          </div>
+          <small className="package-rate">
+            Red: {CHAIN_LABEL[config.chainId] || `chainId ${config.chainId}`} ·{' '}
+            {config.rewardPerVideo} TKC por vídeo (máx. {config.dailyVideoCap}/día)
+          </small>
+        </div>
+      ) : null}
+    </div>
+  );
+}

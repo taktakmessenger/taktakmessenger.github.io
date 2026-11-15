@@ -8,7 +8,7 @@ const { HttpError } = require('../utils/http');
 // entrar con la identidad de un tercero.
 //
 // La URL base se puede apuntar a un servidor falso en los tests, igual que
-// Stripe y PayPal: así se ejercita el mismo código (petición, cabeceras,
+// Stripe: así se ejercita el mismo código (petición, cabeceras,
 // parseo) en vez de sustituir la función por un doble.
 function graphBase() {
   return env.facebookGraphBase;

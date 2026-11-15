@@ -4,6 +4,7 @@ const WatchEvent = require('../models/WatchEvent');
 const User = require('../models/User');
 const env = require('../config/env');
 const { rerank } = require('./rankingService');
+const { toProxyUrl } = require('../lib/mediaUrl');
 
 // A watch only counts as a signal when the viewer stayed past a floor *and*
 // got through most of the clip. Using raw seconds alone would let a long video
@@ -96,7 +97,13 @@ async function getForYouFeed(userId, { limit = 10, page = 1, excludeVideoIds = [
 
   // `rankingBonus` is an internal scoring crutch. Strip it before the videos
   // leave the service so the API keeps exposing real engagement counts only.
-  return ranked.slice(0, safeLimit).map(({ rankingBonus, ...video }) => video);
+  // El HLS se reescribe al proxy propio: estos objetos vienen de `aggregate` y
+  // no pasan por el transform del modelo, así que sin esto el bucket sin CORS
+  // los dejaría en negro.
+  return ranked.slice(0, safeLimit).map(({ rankingBonus, ...video }) => ({
+    ...video,
+    hlsUrl: toProxyUrl(video.hlsUrl),
+  }));
 }
 
 // Tag overlap becomes an extra engagement-equivalent score. It is additive in

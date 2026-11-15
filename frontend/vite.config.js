@@ -39,6 +39,13 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY || 'http://localhost:4000',
         changeOrigin: true,
       },
+      // El HLS del bucket se sirve por el backend (`/media/*`) para esquivar el
+      // CORS de R2. Sin esta regla, el servidor de desarrollo respondería con
+      // index.html y el vídeo no cargaría en local.
+      '/media': {
+        target: process.env.VITE_API_PROXY || 'http://localhost:4000',
+        changeOrigin: true,
+      },
     },
   },
   preview: {

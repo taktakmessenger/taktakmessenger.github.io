@@ -25,6 +25,9 @@ logs/
 .vscode/
 *.swp
 
+# Memoria del agente (notas de trabajo, no parte de la aplicacion)
+.openhands/
+
 # Uploads (local dev only)
 backend/uploads/
 

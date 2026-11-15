@@ -86,6 +86,7 @@ router.patch(
     body('autoTranslate').optional().isBoolean(),
     body('callCaptions').optional().isBoolean(),
     body('callRingtone').optional().isBoolean(),
+    body('callRingtoneId').optional().isString().trim().isLength({ min: 1, max: 40 }),
   ],
   validate,
   asyncHandler(async (req, res) => {
@@ -97,6 +98,9 @@ router.patch(
     if (autoTranslate !== undefined) update.autoTranslate = autoTranslate;
     if (callCaptions !== undefined) update.callCaptions = callCaptions;
     if (callRingtone !== undefined) update.callRingtone = callRingtone;
+    // El id del repique se guarda tal cual: el catálogo vive en el cliente, así
+    // que aquí no se valida contra una lista que el backend no tiene.
+    if (req.body.callRingtoneId !== undefined) update.callRingtoneId = req.body.callRingtoneId;
 
     if (req.body.preferredLanguage !== undefined) {
       // Cadena vacía o null significa "sin preferencia": se guarda null en vez

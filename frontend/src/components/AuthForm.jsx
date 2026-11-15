@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
 import { loadProviders } from '../lib/providers';
-import { validateRegistration, validatePhoneRegistration, resendLabel, MIN_PASSWORD_LENGTH } from '../lib/authForm';
+import { validateRegistration, resendLabel, MIN_PASSWORD_LENGTH } from '../lib/authForm';
 
 // Loads Google Identity Services once, on demand. Doing it lazily keeps a
 // third-party script off the page for deployments that have no Google client
@@ -45,8 +45,8 @@ function GoogleButton({ clientId, onCredential }) {
         });
       })
       .catch(() => {
-        // The email and phone tabs still work, so a blocked Google script is
-        // not worth surfacing as an error.
+        // El alta por correo sigue funcionando, así que un script bloqueado no
+        // merece salir como error.
       });
 
     return () => {
@@ -151,6 +151,37 @@ function CodeInput({ value, onChange, disabled }) {
   );
 }
 
+// País + número para el registro por teléfono. Reutiliza el mismo aspecto que
+// el selector de la pantalla de vincular teléfono.
+function PhoneCountryFields({ countries, country, onCountry, phone, onPhone, disabled }) {
+  return (
+    <>
+      <select
+        value={country}
+        onChange={onCountry}
+        aria-label="País"
+        className="country-select"
+        disabled={disabled}
+      >
+        {countries.map((c) => (
+          <option key={c.code} value={c.code}>
+            {c.name} ({c.dialCode})
+          </option>
+        ))}
+      </select>
+      <input
+        type="tel"
+        placeholder="Número de teléfono"
+        value={phone}
+        onChange={onPhone}
+        autoComplete="tel"
+        disabled={disabled}
+        required
+      />
+    </>
+  );
+}
+
 // Shown only when the API returned the code because no provider could deliver
 // the message (development). Tapping it fills the field, so the user does not
 // have to transcribe six digits from the screen.
@@ -165,18 +196,6 @@ function DevCodeBox({ code, onUse }) {
         {code}
       </button>
     </div>
-  );
-}
-
-function CountrySelect({ countries, value, onChange }) {
-  return (
-    <select value={value} onChange={onChange} aria-label="País" className="country-select">
-      {countries.map((c) => (
-        <option key={c.code} value={c.code}>
-          {c.name} ({c.dialCode})
-        </option>
-      ))}
-    </select>
   );
 }
 
@@ -279,78 +298,73 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     resendVerification,
     loginWithGoogle,
     loginWithFacebook,
-    startPhoneSignup,
-    verifyPhoneSignup,
     forgotPassword,
     resetPassword,
+    startPhoneSignup,
+    verifyPhoneSignup,
   } = useAuth();
 
-  // view: 'welcome' | 'login' | 'register' | 'phone-code' | 'forgot' | 'reset'
+  // view: 'welcome' | 'login' | 'register' | 'forgot' | 'reset'
   //     | 'verify-email' | 'terms' | 'privacy'
+  //     | 'register-phone' | 'verify-phone'
   const [view, setView] = useState(initialView);
-  const [tab, setTab] = useState('email'); // login/register: email or phone
 
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '', ref: '' });
   const [identifier, setIdentifier] = useState('');
-  const [phone, setPhone] = useState('');
-  const [country, setCountry] = useState('MX');
-  const [countries, setCountries] = useState([]);
   const [providers, setProviders] = useState({
     google: false,
     googleClientId: null,
     facebook: false,
     facebookAppId: null,
-    sms: false,
   });
   const [code, setCode] = useState('');
   const [accepted, setAccepted] = useState(false);
+  // Registro por teléfono: país, número y el teléfono pendiente de verificar.
+  const [countries, setCountries] = useState([]);
+  const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState('CO');
+  const [pendingPhone, setPendingPhone] = useState({ phone: '', country: '' });
 
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [maskedPhone, setMaskedPhone] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
-  // Los datos de un alta por teléfono se guardan al pedir el código: al
-  // reenviar desde la pantalla del código ya no se sabe si era alta o entrada.
-  const [phoneSignup, setPhoneSignup] = useState(null);
   const [cooldown, setCooldown] = useState(0);
   // The code is only returned by the API when the message could not be sent
-  // (no SMTP/SMS provider, development). Shown on screen so the flow is
-  // usable; in production the field is always absent.
+  // (no SMTP provider, development). Shown on screen so the flow is usable; in
+  // production the field is always absent.
   const [devCode, setDevCode] = useState('');
+  // Si el correo no salió (sin SMTP), la pantalla no puede decir "enviamos un
+  // código": sería mandar al usuario a esperar un mensaje que no va a llegar.
+  const [emailFailed, setEmailFailed] = useState(false);
 
   // Which optional providers this deployment actually has, so buttons that
   // would only fail are hidden. Con reintentos: es la primera llamada de la
   // sesión y, tras un reinicio, el backend puede tardar en responder.
   useEffect(() => {
     let cancelled = false;
-    loadProviders(
-      // The UI is Spanish-only, so the country names are requested in Spanish
-      // rather than in the browser's language: a Spanish screen listing
-      // "Germany" and "United States" is worse than useless.
-      () => api.get('/auth/providers', { params: { locale: 'es' } }),
-      { shouldAbort: () => cancelled }
-    )
+    loadProviders(() => api.get('/auth/providers'), { shouldAbort: () => cancelled })
       .then((data) => {
         if (cancelled || !data) return;
-        setCountries(data.countries || []);
         setProviders(data);
+        if (Array.isArray(data.countries)) setCountries(data.countries);
       })
       .catch(() => {
-        if (!cancelled) setCountries([]);
+        // Sin respuesta se dejan los botones ocultos: es preferible a mostrar
+        // uno que solo fallaría.
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Default the picker to the browser's locale when we can infer it, instead
-  // of always starting on Mexico.
+  // Si se llega con un enlace de invitación (`/?ref=CODIGO`), el código se
+  // rellena solo en el alta. Así el invitado no tiene que copiarlo a mano: toca
+  // el enlace, se registra, y quien le invitó cobra cuando compre.
   useEffect(() => {
-    if (!countries.length) return;
-    const guess = navigator.language?.split('-')[1]?.toUpperCase();
-    if (guess && countries.some((c) => c.code === guess)) setCountry(guess);
-  }, [countries]);
+    const code = new URLSearchParams(window.location.search).get('ref');
+    if (code) setForm((prev) => ({ ...prev, ref: code.toUpperCase() }));
+  }, []);
 
   // Cuenta atrás del reenvío. Un temporizador que se limpia al desmontar, no un
   // `setInterval` que siga vivo cuando el formulario ya no está en pantalla.
@@ -367,18 +381,6 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     setDevCode('');
     setBusy(false);
     setView(next);
-  }, []);
-
-  // Switching provider keeps the current view. Calling reset() here would drag
-  // a user who is registering back to the login view, leaving the register
-  // form's phone tab blank.
-  const switchTab = useCallback((next) => {
-    setError('');
-    setNotice('');
-    setCode('');
-    setDevCode('');
-    setBusy(false);
-    setTab(next);
   }, []);
 
   function update(field) {
@@ -432,7 +434,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     }
 
     run(async () => {
-      const data = await register(form.username, form.email, form.password);
+      const data = await register(form.username, form.email, form.password, form.ref);
 
       setPendingEmail(form.email);
       setCooldown(RESEND_SECONDS);
@@ -441,9 +443,16 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       // mail could not be sent (no SMTP). Staying on the code screen is what
       // lets the user read it; navigating away would hide it forever.
       if (data?.verificationSent === false && data.verificationCode) {
+        setEmailFailed(true);
         setNotice('Cuenta creada. El envío de correo no está configurado en este servidor.');
         setDevCode(data.verificationCode);
+      } else if (data?.verificationSent === false) {
+        setEmailFailed(true);
+        setNotice(
+          'Cuenta creada. El envío de correo no está disponible todavía; tu cuenta ya funciona.'
+        );
       } else {
+        setEmailFailed(false);
         setNotice('Cuenta creada. Te enviamos un código a tu correo para verificarla.');
       }
 
@@ -459,132 +468,85 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
     });
   };
 
+  const handleRegisterPhone = (e) => {
+    e.preventDefault();
+    // Un teléfono sin usuario ni contraseña dejaría una cuenta a la que no se
+    // puede volver a entrar: el número solo sirve para el alta.
+    if (!form.username.trim()) {
+      setError('Escribe un nombre de usuario');
+      return;
+    }
+    if (!form.password || form.password.length < MIN_PASSWORD_LENGTH) {
+      setError(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+      return;
+    }
+    run(async () => {
+      setDevCode('');
+      const data = await startPhoneSignup({
+        phone,
+        country: phoneCountry,
+        username: form.username,
+        password: form.password,
+      });
+
+      // Un número ya registrado es un inicio de sesión, no un alta nueva.
+      if (data.existingAccount) {
+        setNotice('Ese número ya tiene cuenta. Entra con tu contraseña.');
+        setView('login');
+        return;
+      }
+
+      // Sin SMS el servidor ya creó la cuenta y devolvió la sesión: no hay
+      // código que esperar, así que se entra directamente.
+      if (data.token) {
+        onDone?.();
+        return;
+      }
+
+      setPendingPhone({ phone, country: phoneCountry });
+      setCode('');
+      setView('verify-phone');
+      setNotice(`Enviamos un código por SMS a ${data.phone || phone}.`);
+    });
+  };
+
+  const handleVerifyPhone = (e) => {
+    e.preventDefault();
+    run(async () => {
+      await verifyPhoneSignup({ ...pendingPhone, code });
+      onDone?.();
+    });
+  };
+
+  const handleResendPhone = () =>
+    run(async () => {
+      const data = await startPhoneSignup({
+        phone: pendingPhone.phone,
+        country: pendingPhone.country,
+        username: form.username,
+        password: form.password,
+      });
+      setCode('');
+      if (data.delivered === false && data.code) {
+        setDevCode(data.code);
+        setNotice('El envío de SMS no está configurado en este servidor.');
+      } else {
+        setNotice('Enviamos otro código. Puede tardar un minuto en llegar.');
+      }
+    });
+
   const handleResendEmail = () =>
     run(async () => {
       const data = await resendVerification(pendingEmail);
       setCooldown(RESEND_SECONDS);
       setCode('');
       if (data?.delivered === false) {
+        setEmailFailed(true);
         setNotice('El envío de correo no está configurado en este servidor.');
         if (data.code) setDevCode(data.code);
       } else {
+        setEmailFailed(false);
         setNotice('Te enviamos otro código. Puede tardar un minuto en llegar.');
-      }
-    });
-
-  const handlePhoneStart = (e) => {
-    e.preventDefault();
-
-    // El alta por teléfono pide los mismos datos que la de correo (sin correo),
-    // así que se valida igual antes de gastar un SMS.
-    if (view === 'register') {
-      const problem = validatePhoneRegistration({
-        username: form.username,
-        password: form.password,
-        confirm: form.confirm,
-        accepted,
-      });
-      if (problem) {
-        setError(problem);
-        return;
-      }
-    }
-    if (!phone.trim()) {
-      setError('Escribe tu número de teléfono');
-      return;
-    }
-    // En la entrada el teléfono va con contraseña: es lo que permite resolver
-    // la cuenta sin depender de un SMS.
-    if (view === 'login' && !form.password) {
-      setError('Escribe tu contraseña');
-      return;
-    }
-
-    run(async () => {
-      // A stale "ya tiene cuenta" notice from a previous attempt would sit next
-      // to a fresh result and contradict it.
-      setNotice('');
-      setDevCode('');
-
-      // Entrar con teléfono NO puede pasar por el alta. A una cuenta ya
-      // existente el alta le responde "ya tiene cuenta" sin mandar código, así
-      // que el usuario pulsaba "Enviar código" una y otra vez sin llegar nunca
-      // a un sitio donde escribir el código: un bucle sin salida. La entrada
-      // se resuelve con teléfono y contraseña, que es lo que sí inicia sesión.
-      if (view === 'login') {
-        await login(phone, form.password, country);
-        onDone?.();
-        return;
-      }
-
-      // In the register view the user picks their own name and password; in the
-      // login view the backend reuses the existing account, so both are omitted.
-      const data = await startPhoneSignup({
-        phone,
-        country,
-        username: view === 'register' ? form.username : undefined,
-        password: view === 'register' ? form.password : undefined,
-      });
-
-      // The number already has a verified account, so no code was sent: the
-      // backend short-circuits to a sign-in. Asking for a code here would leave
-      // the user staring at an empty box forever.
-      if (data.existingAccount) {
-        // Se cambia a la entrada con el número ya puesto: decir "ve a Iniciar
-        // sesión" obligaba a rehacer el camino a mano, y quien no supiera qué
-        // contraseña eligió se quedaba sin salida.
-        setNotice('Ese número ya tiene cuenta. Entra con tu contraseña para continuar.');
-        setView('login');
-        setTab('phone');
-        return;
-      }
-
-      // Se guardan para poder reenviar desde la pantalla del código: allí ya no
-      // se sabe si el usuario venía de un alta y perdería nombre y contraseña.
-      setPhoneSignup(
-        view === 'register' ? { username: form.username, password: form.password } : null
-      );
-      setMaskedPhone(data.phone);
-      setCooldown(RESEND_SECONDS);
-      setView('phone-code');
-      // A deployment without an SMS provider must say so, instead of showing a
-      // "check your phone" screen for a message that will never arrive.
-      if (data.delivered === false) {
-        setNotice(
-          'El envío de SMS no está configurado en este servidor. Usa el código que aparece abajo.'
-        );
-        if (data.code) setDevCode(data.code);
-      }
-    });
-  };
-
-  const handlePhoneVerify = (e) => {
-    e.preventDefault();
-    run(async () => {
-      await verifyPhoneSignup({ phone, country, code });
-      onDone?.();
-    });
-  };
-
-  // Reenviar el SMS. Se repite la llamada de "pedir código" con los mismos
-  // datos guardados, porque el backend no distingue un reenvío de una petición
-  // nueva y así no hace falta un endpoint aparte.
-  const handleResendPhone = () =>
-    run(async () => {
-      const data = await startPhoneSignup({
-        phone,
-        country,
-        username: phoneSignup?.username,
-        password: phoneSignup?.password,
-      });
-      setCooldown(RESEND_SECONDS);
-      setCode('');
-      setDevCode('');
-      if (data.delivered === false) {
-        setNotice('El envío de SMS no está configurado en este servidor.');
-        if (data.code) setDevCode(data.code);
-      } else {
-        setNotice('Te enviamos otro código por SMS.');
       }
     });
 
@@ -594,7 +556,11 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       const data = await forgotPassword(form.email);
       setView('reset');
       if (data?.delivered === false) {
-        setNotice('El envío de correo no está configurado. Usa el código que aparece abajo.');
+        setNotice(
+          data.code
+            ? 'El envío de correo no está configurado. Usa el código que aparece abajo.'
+            : 'El envío de correo no está disponible todavía. Inténtalo más tarde.'
+        );
         if (data.code) setDevCode(data.code);
       } else {
         setNotice('Si el correo está registrado, recibirás un código de 6 dígitos.');
@@ -676,10 +642,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
             <button
               type="button"
               className="btn-provider"
-              onClick={() => {
-                reset('register');
-                setTab('email');
-              }}
+              onClick={() => reset('register')}
             >
               <span aria-hidden="true">✉️</span> Registrarse o iniciar sesión con correo
             </button>
@@ -687,12 +650,9 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
             <button
               type="button"
               className="btn-provider"
-              onClick={() => {
-                reset('register');
-                setTab('phone');
-              }}
+              onClick={() => reset('register-phone')}
             >
-              <span aria-hidden="true">📱</span> Registrarse o iniciar sesión con teléfono
+              <span aria-hidden="true">📱</span> Registrarme con mi teléfono
             </button>
           </div>
 
@@ -700,10 +660,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
             <button
               type="button"
               className="btn-link"
-              onClick={() => {
-                reset('login');
-                setTab('email');
-              }}
+              onClick={() => reset('login')}
             >
               ¿Ya tienes cuenta? Inicia sesión
             </button>
@@ -791,37 +748,15 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       <h2>
         {view === 'login' && 'Iniciar sesión'}
         {view === 'register' && 'Crear cuenta'}
-        {view === 'phone-code' && 'Verifica tu teléfono'}
         {view === 'verify-email' && 'Verifica tu correo'}
+        {view === 'register-phone' && 'Registrarme con teléfono'}
+        {view === 'verify-phone' && 'Confirma tu teléfono'}
         {view === 'forgot' && 'Recuperar contraseña'}
         {view === 'reset' && 'Nueva contraseña'}
       </h2>
 
-      {(view === 'login' || view === 'register') && (
-        <div className="auth-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'email'}
-            className={tab === 'email' ? 'active' : ''}
-            onClick={() => switchTab('email')}
-          >
-            Correo
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'phone'}
-            className={tab === 'phone' ? 'active' : ''}
-            onClick={() => switchTab('phone')}
-          >
-            Teléfono
-          </button>
-        </div>
-      )}
-
       {/* ---------------- Email ---------------- */}
-      {view === 'login' && tab === 'email' && (
+      {view === 'login' && (
         <form onSubmit={handleEmailLogin}>
           <input
             type="text"
@@ -848,7 +783,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
         </form>
       )}
 
-      {view === 'register' && tab === 'email' && (
+      {view === 'register' && (
         <form onSubmit={handleRegister} noValidate>
           <input
             type="text"
@@ -879,6 +814,14 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
             disabled={busy}
             name="confirm-password"
           />
+          <input
+            type="text"
+            placeholder="Código de invitación (opcional)"
+            value={form.ref}
+            onChange={update('ref')}
+            maxLength={16}
+            autoCapitalize="characters"
+          />
 
           <TermsCheck accepted={accepted} onChange={setAccepted} onOpen={setView} />
 
@@ -886,97 +829,8 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
           <button type="submit" className="btn-primary" disabled={busy}>
             {busy ? 'Procesando…' : 'Registrarme'}
           </button>
-        </form>
-      )}
-
-      {/* ---------------- Phone ---------------- */}
-      {(view === 'login' || view === 'register') && tab === 'phone' && (
-        <form onSubmit={handlePhoneStart} noValidate>
-          {view === 'register' && (
-            <>
-              <input
-                type="text"
-                placeholder="Nombre de usuario"
-                value={form.username}
-                onChange={update('username')}
-              />
-              <PasswordField
-                value={form.password}
-                onChange={update('password')}
-                placeholder={`Contraseña (mínimo ${MIN_PASSWORD_LENGTH} caracteres)`}
-                autoComplete="new-password"
-                disabled={busy}
-                name="phone-password"
-              />
-              <PasswordField
-                value={form.confirm}
-                onChange={update('confirm')}
-                placeholder="Repite la contraseña"
-                autoComplete="new-password"
-                disabled={busy}
-                name="phone-confirm-password"
-              />
-              <TermsCheck accepted={accepted} onChange={setAccepted} onOpen={setView} />
-            </>
-          )}
-          <CountrySelect
-            countries={countries}
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-          />
-          <input
-            type="tel"
-            placeholder="Número de teléfono"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            autoComplete="tel"
-          />
-          {/* En la entrada hace falta la contraseña: el teléfono solo no
-              resuelve la cuenta, y sin ella el botón solo repetía el aviso de
-              "ya tiene cuenta" sin llevar a ninguna parte. */}
-          {view === 'login' && (
-            <PasswordField
-              value={form.password}
-              onChange={update('password')}
-              placeholder="Contraseña"
-              autoComplete="current-password"
-              disabled={busy}
-              name="phone-login-password"
-            />
-          )}
-          <p className="hint">
-            {view === 'login'
-              ? 'Entra con tu número y tu contraseña. Si no la recuerdas, usa "¿Olvidaste tu contraseña?".'
-              : 'Te enviaremos un SMS con un código de 6 dígitos para verificar el número. Si ya tienes cuenta con ese teléfono, entra desde la pestaña de inicio de sesión con tu teléfono y contraseña. Funciona con números de cualquier país.'}
-          </p>
-          {notice && <p className="notice" role="status">{notice}</p>}
-          {error && <p className="error" role="alert">{error}</p>}
-          <button type="submit" className="btn-primary" disabled={busy}>
-            {busy ? 'Enviando…' : view === 'login' ? 'Entrar' : 'Enviar código'}
-          </button>
-        </form>
-      )}
-
-      {view === 'phone-code' && (
-        <form onSubmit={handlePhoneVerify}>
-          <p className="hint">Enviamos un código a {maskedPhone || 'tu teléfono'}.</p>
-          {notice && <p className="notice" role="status">{notice}</p>}
-          <DevCodeBox code={devCode} onUse={setCode} />
-          <CodeInput value={code} onChange={setCode} disabled={busy} />
-          {error && <p className="error" role="alert">{error}</p>}
-          <button type="submit" className="btn-primary" disabled={busy || code.length !== 6}>
-            {busy ? 'Verificando…' : 'Verificar y entrar'}
-          </button>
-          <button
-            type="button"
-            className="btn-link"
-            onClick={handleResendPhone}
-            disabled={busy || cooldown > 0}
-          >
-            {resendLabel(cooldown)}
-          </button>
-          <button type="button" className="btn-link" onClick={() => reset('login')}>
-            Corregir el número
+          <button type="button" className="btn-link" onClick={() => reset('register-phone')}>
+            Registrarme con teléfono
           </button>
         </form>
       )}
@@ -985,8 +839,9 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
       {view === 'verify-email' && (
         <form onSubmit={handleVerifyEmail}>
           <p className="hint">
-            Enviamos un código de 6 dígitos a {pendingEmail || 'tu correo'}. Tu cuenta ya
-            funciona; verificarla es lo que confirma que el correo es tuyo.
+            {emailFailed
+              ? `No pudimos enviar el correo a ${pendingEmail || 'tu correo'}. Tu cuenta ya funciona; puedes verificar más tarde.`
+              : `Enviamos un código de 6 dígitos a ${pendingEmail || 'tu correo'}. Tu cuenta ya funciona; verificarla es lo que confirma que el correo es tuyo.`}
           </p>
           {notice && <p className="notice" role="status">{notice}</p>}
           <DevCodeBox code={devCode} onUse={setCode} />
@@ -1005,6 +860,65 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
           </button>
           <button type="button" className="btn-link" onClick={() => onDone?.()}>
             Lo verificaré más tarde
+          </button>
+        </form>
+      )}
+
+      {/* ---------------- Registro por teléfono ---------------- */}
+      {view === 'register-phone' && (
+        <form onSubmit={handleRegisterPhone}>
+          <p className="settings-hint">
+            {providers.sms
+              ? 'Te enviaremos un SMS con un código para confirmar tu número.'
+              : 'El envío de SMS aún no está activo: tu cuenta se creará directamente, sin código.'}
+          </p>
+          <input
+            type="text"
+            placeholder="Nombre de usuario"
+            value={form.username}
+            onChange={update('username')}
+          />
+          <PhoneCountryFields
+            countries={countries}
+            country={phoneCountry}
+            onCountry={(e) => setPhoneCountry(e.target.value)}
+            phone={phone}
+            onPhone={(e) => setPhone(e.target.value)}
+            disabled={busy}
+          />
+          <PasswordField
+            value={form.password}
+            onChange={update('password')}
+            placeholder={`Contraseña (mínimo ${MIN_PASSWORD_LENGTH} caracteres)`}
+            autoComplete="new-password"
+            disabled={busy}
+            name="phone-password"
+          />
+          {notice && <p className="notice" role="status">{notice}</p>}
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="submit" className="btn-primary" disabled={busy}>
+            {busy ? 'Procesando…' : providers.sms ? 'Enviar código' : 'Crear cuenta'}
+          </button>
+          <button type="button" className="btn-link" onClick={() => reset('register')}>
+            Registrarme con correo
+          </button>
+        </form>
+      )}
+
+      {view === 'verify-phone' && (
+        <form onSubmit={handleVerifyPhone}>
+          <p className="hint">
+            Enviamos un código de 6 dígitos por SMS a {pendingPhone.phone || 'tu teléfono'}.
+          </p>
+          {notice && <p className="notice" role="status">{notice}</p>}
+          <DevCodeBox code={devCode} onUse={setCode} />
+          <CodeInput value={code} onChange={setCode} disabled={busy} />
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="submit" className="btn-primary" disabled={busy || code.length !== 6}>
+            {busy ? 'Verificando…' : 'Confirmar teléfono'}
+          </button>
+          <button type="button" className="btn-link" onClick={handleResendPhone} disabled={busy}>
+            Enviar otro código
           </button>
         </form>
       )}
@@ -1068,10 +982,7 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
         <button
           type="button"
           className="btn-link"
-          onClick={() => {
-            reset(view === 'login' ? 'register' : 'login');
-            setTab('email');
-          }}
+          onClick={() => reset(view === 'login' ? 'register' : 'login')}
         >
           {view === 'login'
             ? '¿No tienes cuenta? Regístrate'

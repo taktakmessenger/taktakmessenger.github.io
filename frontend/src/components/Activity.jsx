@@ -17,6 +17,8 @@ const ICONS = {
   reply: '↩️',
   post_like: '❤️',
   post_comment: '💬',
+  tournament: '🃏',
+  referral: '🤝',
 };
 
 function textFor(n) {
@@ -66,6 +68,21 @@ function textFor(n) {
           <span className="activity-preview">{n.preview}</span>
         </>
       );
+    case 'tournament':
+      // Aviso de la casa: quien lo firma es el administrador, así que el texto
+      // no habla de él sino del torneo.
+      return (
+        <>
+          🃏 Nuevo torneo de POKERTAK: <strong>{n.title || 'sin título'}</strong>
+        </>
+      );
+    case 'referral':
+      return (
+        <>
+          <strong>{who}</strong> compró monedas con tu enlace · ganaste{' '}
+          <span className="activity-amount">{n.amount} monedas de regalo</span>
+        </>
+      );
     default:
       return (
         <>
@@ -92,7 +109,7 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-export default function Activity({ onBack, onOpenVideo, onOpenProfile, onOpenWall }) {
+export default function Activity({ onBack, onOpenVideo, onOpenProfile, onOpenWall, onOpenPoker }) {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -128,6 +145,12 @@ export default function Activity({ onBack, onOpenVideo, onOpenProfile, onOpenWal
   }, [user]);
 
   function openTarget(n) {
+    // Un aviso de torneo lleva a la sala de juegos, que es donde se ve el
+    // cartel y uno se inscribe.
+    if (n.type === 'tournament' && onOpenPoker) {
+      onOpenPoker(n.event);
+      return;
+    }
     // Un aviso de Facetak lleva a Facetak: la publicación no tiene pantalla propia.
     if (n.type?.startsWith('post_') && onOpenWall) {
       onOpenWall();

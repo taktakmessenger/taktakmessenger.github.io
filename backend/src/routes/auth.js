@@ -21,6 +21,7 @@ const voiceService = require('../services/voiceService');
 const mailService = require('../services/mailService');
 const googleService = require('../services/googleService');
 const facebookService = require('../services/facebookService');
+const referralService = require('../services/referralService');
 
 const router = express.Router();
 
@@ -142,6 +143,10 @@ router.post(
       // A small starter balance lets a new account try gifts immediately.
       wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
     });
+
+    // Quién lo invitó, si el alta trae un código. Es best-effort y va después de
+    // crear la cuenta: un código inválido no puede tumbar el registro.
+    await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
 
     // Verification mail is best-effort: a mail outage must not fail the
     // registration, or the user is left with an account they cannot use and no
@@ -360,6 +365,31 @@ router.post(
       return res.json({ existingAccount: true, phone: phoneService.maskPhone(phone) });
     }
 
+    // Sin proveedor de SMS el código nunca llegaría, así que la cuenta se crea
+    // aquí mismo en vez de dejar a la persona esperando un mensaje que no va a
+    // venir. Es una decisión deliberada para poder abrir el registro mientras no
+    // haya SMS contratado; cuando se configure `SMS_PROVIDER`, esta rama deja de
+    // ejecutarse y vuelve el flujo con código.
+    if (!smsService.isConfigured()) {
+      let passwordHash = null;
+      if (req.body.password) {
+        passwordHash = await bcrypt.hash(req.body.password, 10);
+      }
+      const user = await createPhoneAccount({
+        phone,
+        pending: { username: req.body.username || null, passwordHash },
+        ref: req.body.ref,
+      });
+      await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
+      return res.status(201).json({
+        ...session(user),
+        created: true,
+        smsConfigured: false,
+        notice:
+          'Tu cuenta se creó sin código porque el envío de SMS aún no está activo.',
+      });
+    }
+
     // Store the password pre-hashed. The pending record outlives the request,
     // and a plaintext password sitting in the database for ten minutes is a
     // leak waiting to happen.
@@ -402,7 +432,52 @@ router.post(
   })
 );
 
-// Step 2: verify the code and create (or sign in to) the account.
+// Crea (o recupera) la cuenta asociada a un teléfono verificado. Lo usan el
+// registro por teléfono normal y la vía sin código de abajo; compartirlo evita
+// que las dos formas de alta se desincronicen.
+async function createPhoneAccount({ phone, pending = {}, ref }) {
+  const username = pending.username || (await generateUsername(`u${phone.slice(-6)}`));
+
+  // A user who chose a username that got taken between step 1 and step 2
+  // still gets an account, with a generated one, rather than a dead end.
+  // La comprobación es la misma que la del alta por correo: insensible a
+  // mayúsculas, para no crear dos cuentas que casen con el mismo @usuario.
+  const taken = await User.existsByUsername(username);
+  const finalUsername = taken ? await generateUsername(`u${phone.slice(-6)}`) : username;
+
+  const digits = phone.replace(/\D/g, '');
+  const email = `${digits}@phone.taktak.app`;
+
+  try {
+    // Built with `new` rather than `create` so the pre-save hook can be told
+    // the password is already a digest (see the hook in models/User.js).
+    const user = new User({
+      username: finalUsername,
+      // A phone account still needs an email (it is the unique login key).
+      // The placeholder is derived from the number so it cannot collide.
+      email,
+      password: pending.passwordHash || undefined,
+      phone,
+      phoneVerified: true,
+      profile: { displayName: finalUsername },
+      wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
+    });
+    if (pending.passwordHash) user.$locals.passwordAlreadyHashed = true;
+    await user.save();
+    return user;
+  } catch (err) {
+    // Two requests verifying the same number concurrently both find no
+    // user and both try to insert. The unique index rejects the loser; it
+    // should then sign in to the winner's account instead of erroring.
+    if (err.code === 11000) {
+      const user = await User.findOne({ phone });
+      if (user) return user;
+    }
+    throw err;
+  }
+}
+
+// Paso 2: verifica el código y crea (o inicia sesión en) la cuenta.
 router.post(
   '/phone/verify',
   authLimiter,
@@ -426,46 +501,15 @@ router.post(
     let user = await User.findOne({ phone });
 
     if (!user) {
-      const pending = result.payload || {};
-      const username = pending.username || (await generateUsername(`u${phone.slice(-6)}`));
+      user = await createPhoneAccount({
+        phone,
+        pending: result.payload || {},
+        ref: req.body.ref,
+      });
 
-      // A user who chose a username that got taken between step 1 and step 2
-      // still gets an account, with a generated one, rather than a dead end.
-      // La comprobación es la misma que la del alta por correo: insensible a
-      // mayúsculas, para no crear dos cuentas que casen con el mismo @usuario.
-      const taken = await User.existsByUsername(username);
-      const finalUsername = taken ? await generateUsername(`u${phone.slice(-6)}`) : username;
-
-      const digits = phone.replace(/\D/g, '');
-      const email = `${digits}@phone.taktak.app`;
-
-      try {
-        // Built with `new` rather than `create` so the pre-save hook can be told
-        // the password is already a digest (see the hook in models/User.js).
-        user = new User({
-          username: finalUsername,
-          // A phone account still needs an email (it is the unique login key).
-          // The placeholder is derived from the number so it cannot collide.
-          email,
-          password: pending.passwordHash || undefined,
-          phone,
-          phoneVerified: true,
-          profile: { displayName: finalUsername },
-          wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
-        });
-        if (pending.passwordHash) user.$locals.passwordAlreadyHashed = true;
-        await user.save();
-      } catch (err) {
-        // Two requests verifying the same number concurrently both find no
-        // user and both try to insert. The unique index rejects the loser; it
-        // should then sign in to the winner's account instead of erroring.
-        if (err.code === 11000) {
-          user = await User.findOne({ phone });
-          if (!user) throw err;
-        } else {
-          throw err;
-        }
-      }
+      // Quién lo invitó, si el alta trae código. Best-effort: no puede tumbar la
+      // creación de la cuenta.
+      if (user) await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
     } else if (!user.phoneVerified) {
       user.phoneVerified = true;
       await user.save();
@@ -511,6 +555,30 @@ router.post(
       // Already yours and verified: nothing to do. Re-sending an SMS here would
       // spend money on a number that is already attached.
       return res.json({ alreadyLinked: true, phone: phoneService.maskPhone(phone) });
+    }
+
+    // Igual que en el registro: sin SMS el código no llegaría, así que el número
+    // se vincula aquí. El usuario ya tiene sesión y es el dueño de la cuenta, así
+    // que no hay a quién suplantar; cuando haya SMS, vuelve el flujo con código.
+    if (!smsService.isConfigured()) {
+      const user = await User.findById(req.user.userId);
+      if (!user) throw new HttpError(404, 'Usuario no encontrado');
+      user.phone = phone;
+      user.phoneVerified = true;
+      try {
+        await user.save();
+      } catch (err) {
+        if (err.code === 11000) {
+          throw new HttpError(409, 'Ese número ya está vinculado a otra cuenta de TAK TAK');
+        }
+        throw err;
+      }
+      return res.json({
+        linked: true,
+        smsConfigured: false,
+        user: publicUser(user),
+        notice: 'Teléfono vinculado sin código porque el envío de SMS aún no está activo.',
+      });
     }
 
     const issued = await Verification.issue({
@@ -626,6 +694,9 @@ router.post(
         profile: { displayName: claims.name || username, avatar: claims.picture || undefined },
         wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
       });
+      // Cuenta recién creada: es el único momento en que vale apuntar al
+      // invitador. Enlazar una cuenta que ya existía no es un alta y no cuenta.
+      await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
     }
 
     res.json(session(user));
@@ -671,6 +742,7 @@ router.post(
         profile: { displayName: claims.name || username, avatar: claims.picture || undefined },
         wallet: { bonusC: env.welcomeBonusCoins, ttcR: 0 },
       });
+      await referralService.attachReferrer({ userId: user._id, code: req.body.ref });
     }
 
     res.json(session(user));

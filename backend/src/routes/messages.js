@@ -59,6 +59,68 @@ const transcribeLimiter = env.isTest
 // Every route here requires a session: messages are private by definition.
 router.use(auth);
 
+// Valida y limpia el contenido enriquecido que llega del cliente. El cliente
+// nunca elige `kind`: aquí se comprueba que el payload tiene lo mínimo que su
+// tipo necesita y se recorta lo que sobra, para que no se pueda guardar una
+// encuesta sin opciones o una ubicación con coordenadas fuera de rango.
+function sanitizeRich(input) {
+  if (!input || typeof input !== 'object') return null;
+  const type = input.type;
+
+  if (type === 'location') {
+    const lat = Number(input.lat);
+    const lng = Number(input.lng);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) throw new HttpError(400, 'Ubicación inválida');
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) throw new HttpError(400, 'Ubicación inválida');
+    return { type: 'location', lat, lng, placeName: String(input.placeName || '').slice(0, 120) };
+  }
+
+  if (type === 'contact') {
+    const name = String(input.name || '').trim();
+    const phone = String(input.phone || '').trim();
+    if (!name && !phone) throw new HttpError(400, 'Contacto inválido');
+    return { type: 'contact', contactName: name.slice(0, 80), contactPhone: phone.slice(0, 40) };
+  }
+
+  if (type === 'poll') {
+    const question = String(input.question || '').trim();
+    if (!question) throw new HttpError(400, 'La encuesta necesita una pregunta');
+    // Se aceptan entre 2 y 12 opciones: una encuesta de una sola opción no
+    // pregunta nada y una de cien no se puede leer en un móvil.
+    const options = (Array.isArray(input.options) ? input.options : [])
+      .map((o) => String(o || '').trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    if (options.length < 2) throw new HttpError(400, 'La encuesta necesita al menos dos opciones');
+    return {
+      type: 'poll',
+      question: question.slice(0, 200),
+      options,
+      // Los votos empiezan vacíos, uno por opción.
+      votes: options.map(() => []),
+      allowMultiple: Boolean(input.allowMultiple),
+    };
+  }
+
+  if (type === 'event') {
+    const title = String(input.title || '').trim();
+    const startsAt = input.startsAt ? new Date(input.startsAt) : null;
+    if (!title) throw new HttpError(400, 'El evento necesita un título');
+    if (!startsAt || Number.isNaN(startsAt.getTime())) throw new HttpError(400, 'El evento necesita una fecha');
+    const endsAt = input.endsAt ? new Date(input.endsAt) : null;
+    return {
+      type: 'event',
+      title: title.slice(0, 140),
+      startsAt,
+      endsAt: endsAt && !Number.isNaN(endsAt.getTime()) ? endsAt : undefined,
+      location: String(input.location || '').slice(0, 160),
+      notes: String(input.notes || '').slice(0, 500),
+    };
+  }
+
+  return null;
+}
+
 // Inbox: the caller's conversations, most recently active first.
 router.get(
   '/conversations',
@@ -104,14 +166,15 @@ router.post(
   [
     param('id').isMongoId().withMessage('Conversación inválida'),
     // El texto es opcional: un mensaje puede ser solo un adjunto. Se valida
-    // aquí la forma, y el servicio comprueba que hay algo que enviar (texto o
-    // adjunto).
+    // aquí la forma, y el servicio comprueba que hay algo que enviar (texto,
+    // adjunto o contenido rico).
     body('text').optional().trim().isLength({ max: 2000 }).withMessage('Mensaje inválido'),
     body('attachment.kind').optional().isIn(['image', 'video', 'audio', 'file']),
     body('attachment.url').optional().isString().isLength({ max: 500 }),
     body('attachment.name').optional().isString().isLength({ max: 200 }),
     body('attachment.size').optional().isInt({ min: 0 }),
     body('attachment.durationSeconds').optional().isFloat({ min: 0 }),
+    body('rich.type').optional().isIn(['location', 'contact', 'poll', 'event']),
   ],
   validate,
   asyncHandler(async (req, res) => {
@@ -137,6 +200,7 @@ router.post(
             durationSeconds: attachment.durationSeconds || 0,
           }
         : null,
+      rich: sanitizeRich(req.body.rich),
     });
 
     // The client posts over REST, so the fan-out has to happen here too.
@@ -149,6 +213,43 @@ router.post(
     );
 
     res.status(201).json(result);
+  })
+);
+
+// Vota (o retira el voto) en una encuesta del hilo. El resultado se emite por
+// socket a los dos, porque los totales cambian para quien ya tiene el hilo
+// abierto y no debe recargar para verlos.
+router.post(
+  '/conversations/:id/messages/:messageId/vote',
+  [
+    param('id').isMongoId().withMessage('Conversación inválida'),
+    param('messageId').isMongoId().withMessage('Mensaje inválido'),
+    body('optionIndex').isInt({ min: 0, max: 11 }).withMessage('Opción inválida'),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await messages.votePoll({
+      conversationId: req.params.id,
+      userId: req.user.userId,
+      messageId: req.params.messageId,
+      optionIndex: req.body.optionIndex,
+    });
+
+    const participants = await messages.participantsOf(req.params.id);
+    liveSockets.getIo()?.to(`conversation:${req.params.id}`).emit('chat:poll', {
+      conversationId: String(req.params.id),
+      message: result.message,
+    });
+    // Además de la sala del hilo, cada participante tiene la suya: el que no
+    // tiene el hilo abierto igual ve el cambio al volver.
+    for (const participant of participants) {
+      liveSockets.getIo()?.to(`user:${participant}`).emit('chat:poll', {
+        conversationId: String(req.params.id),
+        message: result.message,
+      });
+    }
+
+    res.json(result);
   })
 );
 

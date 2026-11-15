@@ -24,21 +24,21 @@ const paymentMethodSchema = new mongoose.Schema(
 
     provider: {
       type: String,
-      enum: ['stripe', 'paypal'],
+      enum: ['stripe'],
       required: true,
     },
 
-    // `card` para tarjeta, `paypal` para la cuenta de PayPal. Se guarda aparte
-    // de `provider` porque un mismo proveedor podría añadir otros medios más
-    // adelante (SEPA, por ejemplo) sin migrar los datos.
+    // `card` para tarjeta. Se guarda aparte de `provider` porque un mismo
+    // proveedor podría añadir otros medios más adelante (SEPA, por ejemplo) sin
+    // migrar los datos.
     kind: {
       type: String,
-      enum: ['card', 'paypal'],
+      enum: ['card'],
       required: true,
     },
 
-    // Referencia del proveedor con la que se cobra: `pm_...` en Stripe, el
-    // `vault_id` en PayPal. Nunca sale del servidor.
+    // Referencia del proveedor con la que se cobra: `pm_...` en Stripe. Nunca
+    // sale del servidor.
     providerRef: { type: String, required: true },
 
     // --- Presentación de la tarjeta (nunca el PAN) ---
@@ -46,11 +46,6 @@ const paymentMethodSchema = new mongoose.Schema(
     last4: { type: String, trim: true, maxlength: 4 },
     expMonth: { type: Number, min: 1, max: 12 },
     expYear: { type: Number },
-
-    // --- Presentación de PayPal ---
-    // Correo de la cuenta de PayPal. No es un secreto, pero se expone solo al
-    // dueño.
-    email: { type: String, trim: true, lowercase: true },
 
     // Nombre que le pone el usuario ("mi tarjeta del trabajo"). Si no hay, la
     // UI compone uno a partir de la marca y los últimos dígitos.
@@ -87,7 +82,6 @@ paymentMethodSchema.methods.toPublicJSON = function toPublicJSON() {
     last4: this.last4 || null,
     expMonth: this.expMonth ?? null,
     expYear: this.expYear ?? null,
-    email: this.email || null,
     label: this.label || null,
     isDefault: this.isDefault,
     createdAt: this.createdAt,

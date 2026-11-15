@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const { connectTestDb, resetDb, disconnectTestDb, app, registerUser } = require('./helpers');
 const env = require('../src/config/env');
 const transcodeService = require('../src/services/transcodeService');
-const paypalService = require('../src/services/paypalService');
 const Transaction = require('../src/models/Transaction');
 
 test.before(async () => connectTestDb());
@@ -106,7 +105,7 @@ test('a valid webhook credits the package amount exactly once', async () => {
   }
 });
 
-// --- Cobro real con pasarelas (Stripe y PayPal) ---------------------------
+// --- Cobro real con pasarelas (Stripe) ------------------------------------
 
 test('la tienda publica qué pasarelas están disponibles', async () => {
   const agent = app();
@@ -114,20 +113,13 @@ test('la tienda publica qué pasarelas están disponibles', async () => {
 
   assert.equal(res.status, 200);
   assert.equal(typeof res.body.providers.stripe, 'boolean');
-  assert.equal(typeof res.body.providers.paypal, 'boolean');
 });
 
 // Sin claves configuradas, abrir un pago debe fallar en claro en vez de
 // devolver una URL inventada a la que el usuario iría a pagar en el vacío.
 test('sin pasarelas configuradas el checkout se rechaza con 503', async () => {
-  const original = {
-    stripe: env.stripeSecretKey,
-    paypalId: env.paypalClientId,
-    paypalSecret: env.paypalClientSecret,
-  };
+  const original = env.stripeSecretKey;
   env.stripeSecretKey = null;
-  env.paypalClientId = null;
-  env.paypalClientSecret = null;
   try {
     const agent = app();
     const user = await registerUser(agent);
@@ -138,9 +130,7 @@ test('sin pasarelas configuradas el checkout se rechaza con 503', async () => {
 
     assert.equal(res.status, 503);
   } finally {
-    env.stripeSecretKey = original.stripe;
-    env.paypalClientId = original.paypalId;
-    env.paypalClientSecret = original.paypalSecret;
+    env.stripeSecretKey = original;
   }
 });
 
@@ -341,52 +331,6 @@ test('un webhook de Stripe con marca de tiempo vieja se rechaza', async () => {
     assert.equal(res.status, 401);
   } finally {
     env.stripeWebhookSecret = original;
-  }
-});
-
-// PayPal no manda el paquete en la captura: se resuelve por el importe pagado.
-test('PayPal acredita por importe cuando el webhook no trae el paquete', async () => {
-  const agent = app();
-  const user = await registerUser(agent);
-
-  const parsed = paypalService.parseCompletedPayment({
-    event_type: 'PAYMENT.CAPTURE.COMPLETED',
-    resource: {
-      id: 'CAPTURE123',
-      amount: { value: '59.99', currency_code: 'USD' },
-      custom_id: `${user.user.id}|value`,
-      supplementary_data: { related_ids: { order_id: 'ORDER1' } },
-    },
-  });
-
-  assert.equal(parsed.userId, user.user.id);
-  assert.equal(parsed.packageId, 'value');
-  assert.equal(parsed.amountPaidMinor, 5999);
-  assert.equal(parsed.externalId, 'paypal:CAPTURE123');
-});
-
-// Un evento de PayPal que no sea una captura completada no acredita: el
-// "aprobado" solo significa que el usuario pulsó el botón, no que pagó.
-test('una aprobación de PayPal sin captura no se interpreta como pago', async () => {
-  const parsed = paypalService.parseCompletedPayment({
-    event_type: 'CHECKOUT.ORDER.APPROVED',
-    resource: { id: 'ORDER1' },
-  });
-  assert.equal(parsed, null);
-});
-
-test('el webhook de PayPal sin configuración se cierra', async () => {
-  const original = env.paypalWebhookId;
-  env.paypalWebhookId = null;
-  try {
-    const agent = app();
-    const res = await agent
-      .post('/api/payments/webhook/paypal')
-      .send({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'X' } });
-
-    assert.equal(res.status, 503);
-  } finally {
-    env.paypalWebhookId = original;
   }
 });
 

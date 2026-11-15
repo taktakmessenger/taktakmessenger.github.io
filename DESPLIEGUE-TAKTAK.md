@@ -116,7 +116,7 @@ Para abrir TAK TAK de verdad hace falta desplegar el backend, que es lo que hace
    - `MONGODB_URI`: cadena de MongoDB Atlas. **Tiene que incluir
      `?replicaSet=...`**, porque la app usa transacciones y sin replica set
      fallan los regalos y las compras.
-   - Las de pago (`STRIPE_*`, `PAYPAL_*`) solo si vas a cobrar ya.
+   - Las de pago (`STRIPE_*`) solo si vas a cobrar ya.
 5. `JWT_SECRET` lo genera Render solo. No lo cambies después: cerraría la sesión
    a todo el mundo.
 6. Espera el primer build. El frontend se compila dentro de la imagen, así que

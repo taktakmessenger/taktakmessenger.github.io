@@ -6,13 +6,20 @@ const Transaction = require('../models/Transaction');
 const NewsSource = require('../models/NewsSource');
 const Report = require('../models/Report');
 const walletService = require('../services/walletService');
+const phoneService = require('../services/phoneService');
 const ageService = require('../services/ageService');
 const newsService = require('../services/newsService');
 const safetyService = require('../services/safetyService');
 const manualPaymentService = require('../services/manualPaymentService');
+const vaultService = require('../services/vaultService');
+const asistakService = require('../services/asistakService');
+const pokerEventService = require('../services/pokerEventService');
+const adminAssistant = require('../services/adminAssistant');
+const assistantThreadService = require('../services/assistantThreadService');
 const { auth, requireAdmin } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { asyncHandler, HttpError } = require('../utils/http');
+const env = require('../config/env');
 
 const router = express.Router();
 
@@ -34,9 +41,11 @@ router.get(
       videos,
       pendingVideos,
       transactions,
-      // Revenue booked from the 40% platform cut on gifts.
+      // Revenue booked from the platform cut on gifts. The percentage comes from
+      // config so the label can never drift from the real split.
       platformEarnings: earnings.total,
       giftsProcessed: earnings.gifts,
+      platformShare: env.platformShare,
     });
   })
 );
@@ -50,6 +59,224 @@ router.get(
       .sort({ createdAt: -1 })
       .limit(Number(req.query.limit) || 50);
     res.json({ users });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Asistente del administrador                                         */
+/* ------------------------------------------------------------------ */
+//
+// Chat con el que el dueño pide tareas en lenguaje natural. Solo responde a
+// administradores (todo este router ya pasa por `requireAdmin`). El historial
+// vive en la base por administrador (AssistantThread), así la conversación
+// sobrevive a recargas y cambios de dispositivo; el cliente solo manda el turno
+// nuevo.
+
+router.get(
+  '/assistant',
+  asyncHandler(async (req, res) => {
+    const messages = await assistantThreadService.load(req.user.userId);
+    res.json({ messages });
+  })
+);
+
+router.post(
+  '/assistant',
+  [
+    body('message').isString().trim().isLength({ min: 1, max: 4000 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    if (!adminAssistant.isConfigured()) {
+      return res.status(503).json({
+        error: 'El asistente no está configurado (falta ASSISTANT_API_KEY).',
+      });
+    }
+    try {
+      const result = await adminAssistant.chat({
+        message: req.body.message,
+        adminId: req.user.userId,
+      });
+      return res.json(result);
+    } catch (err) {
+      // La cuota del proveedor (429) es lo que más ve el administrador. En vez
+      // de volcar el JSON del proveedor, se devuelve una frase útil y un 503
+      // para que el cliente la muestre tal cual.
+      if (err.status === 429) {
+        return res.status(503).json({
+          error:
+            'GLENIS IA está saturada en este momento (límite del proveedor). Espera unos segundos y vuelve a preguntar.',
+        });
+      }
+      throw err;
+    }
+  })
+);
+
+// Borra el hilo del administrador. El botón "Limpiar" del panel lo usa para
+// empezar de cero; sin esto, limpiar solo vaciaba la pantalla y el asistente
+// seguía recordando todo.
+router.delete(
+  '/assistant',
+  asyncHandler(async (req, res) => {
+    await assistantThreadService.clear(req.user.userId);
+    res.json({ cleared: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Cartera del administrador                                           */
+/* ------------------------------------------------------------------ */
+//
+// Convertir Monedas en Diamantes retirables es una facultad exclusiva del
+// administrador: es la única vía por la que monedas sin reparto de regalos se
+// vuelven saldo canjeable. Todo el router ya pasa por `requireAdmin`, así que
+// ninguna cuenta normal puede llegar aquí.
+
+router.get(
+  '/wallet',
+  asyncHandler(async (req, res) => {
+    res.json({
+      wallet: await walletService.getWallet(req.user.userId),
+      rate: env.coinToDiamondRate,
+    });
+  })
+);
+
+router.post(
+  '/wallet/convert',
+  [
+    body('coins').isFloat({ gt: 0 }).withMessage('Cantidad inválida').toFloat(),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await walletService.convertCoinsToDiamonds({
+      userId: req.user.userId,
+      coins: req.body.coins,
+      rate: env.coinToDiamondRate,
+    });
+    res.json({
+      message: `Convertiste ${result.coins} Monedas en ${result.diamonds} Diamantes`,
+      ...result,
+    });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Bóveda cripto                                                       */
+/* ------------------------------------------------------------------ */
+//
+// La bóveda guarda el 60% de cada compra (el dinero de los usuarios) y la
+// ganancia del 40% va a la billetera del administrador. Aquí se consulta el
+// estado y está el botón de emergencia que mueve la ganancia a la APP madre.
+
+// Estado de la bóveda: cuánto entró, cuánto es ganancia y cuánto se debe a los
+// usuarios. Es la vista que responde "¿cuánto dinero hay y de quién es?".
+router.get(
+  '/vault',
+  asyncHandler(async (_req, res) => {
+    res.json(await vaultService.getVaultStatus());
+  })
+);
+
+// Botón de emergencia: mueve la ganancia del administrador a la APP madre.
+// Exige `confirm: true` y NUNCA toca el dinero de los usuarios.
+router.post(
+  '/vault/emergency-transfer',
+  [body('confirm').optional().isBoolean().toBoolean()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await vaultService.emergencyTransferToMotherApp({
+      adminId: req.user.userId,
+      confirm: req.body.confirm === true,
+      destination: req.body.destination,
+    });
+    res.json(result);
+  })
+);
+
+// Suspensiones de Asistak. El administrador puede suspender a mano a alguien
+// (por ejemplo, tras un reporte) y levantar la suspensión antes de que caduque.
+router.post(
+  '/users/:id/suspend',
+  [
+    param('id').isMongoId(),
+    body('days').optional().isInt({ min: 1, max: 365 }),
+    body('reason').optional().trim().isLength({ max: 300 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await asistakService.suspendUser({
+      userId: req.params.id,
+      days: req.body.days || 3,
+      reason: req.body.reason || '',
+      by: 'admin',
+    });
+    if (!result) throw new HttpError(404, 'Usuario no encontrado');
+    res.json(result);
+  })
+);
+
+router.delete(
+  '/users/:id/suspend',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    await asistakService.liftSuspension(req.params.id);
+    res.json({ lifted: true });
+  })
+);
+
+// Vincula un teléfono a una cuenta sin pasar por el SMS.
+//
+// El flujo normal (`/auth/phone/link/*`) exige un código que llega por SMS, y
+// en un despliegue sin proveedor de SMS ese código nunca sale: la persona se
+// queda en la pantalla del código esperando un mensaje que no llega. Como el
+// administrador ya conoce al usuario y responde de la vinculación, se le da una
+// vía directa. Marca el número como verificado porque es una acción deliberada
+// del dueño de la app, no una autoverificación del usuario.
+router.post(
+  '/users/:id/phone',
+  [
+    param('id').isMongoId(),
+    body('phone').trim().notEmpty().withMessage('Número de teléfono requerido'),
+    body('country').optional().trim().isLength({ min: 2, max: 2 }),
+    body('verified').optional().isBoolean().toBoolean(),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const phone = phoneService.normalizePhone(req.body.phone, req.body.country);
+
+    const user = await User.findById(req.params.id).select('username phone');
+    if (!user) throw new HttpError(404, 'Usuario no encontrado');
+
+    // Un número solo puede estar en una cuenta. Se comprueba antes de guardar
+    // para dar un mensaje claro en vez del error de índice único.
+    const owner = await User.findOne({ phone }).select('_id username');
+    if (owner && String(owner._id) !== String(user._id)) {
+      throw new HttpError(409, `Ese número ya está vinculado a @${owner.username}`);
+    }
+
+    user.phone = phone;
+    user.phoneVerified = req.body.verified !== false;
+    try {
+      await user.save();
+    } catch (err) {
+      if (err.code === 11000) {
+        throw new HttpError(409, 'Ese número ya está vinculado a otra cuenta');
+      }
+      throw err;
+    }
+
+    res.json({
+      linked: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+      },
+    });
   })
 );
 
@@ -335,11 +562,43 @@ router.patch(
 
 router.get(
   '/manual-orders',
-  [query('status').optional().isIn(['pending', 'approved', 'rejected'])],
+  [
+    query('status').optional().isIn(['pending', 'approved', 'rejected']),
+    query('method').optional().isString().trim().isLength({ max: 40 }),
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
+    query('limit').optional().isInt({ min: 1, max: 500 }),
+  ],
   validate,
   asyncHandler(async (req, res) => {
-    const orders = await manualPaymentService.listOrders({ status: req.query.status });
+    const orders = await manualPaymentService.listOrders({
+      status: req.query.status,
+      method: req.query.method,
+      from: req.query.from,
+      to: req.query.to,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
     res.json({ orders });
+  })
+);
+
+// Totales de venta y quiénes compraron. Es la vista que el administrador (y
+// GLENIS IA) usan para saber cuánto entró sin recorrer orden por orden.
+router.get(
+  '/manual-orders/summary',
+  [
+    query('status').optional().isIn(['pending', 'approved', 'rejected']),
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const summary = await manualPaymentService.purchaseSummary({
+      status: req.query.status,
+      from: req.query.from,
+      to: req.query.to,
+    });
+    res.json(summary);
   })
 );
 
@@ -388,6 +647,125 @@ router.post(
       reason: req.body.reason,
     });
     res.json({ order });
+  })
+);
+
+// Cola de retiros de Diamantes. Pagar aquí no mueve saldo (se descontó al
+// solicitarlo): solo marca la solicitud como pagada para que quede registrado
+// quién la pagó. Rechazar sí devuelve los Diamantes al usuario.
+router.get(
+  '/withdrawals',
+  [query('status').optional().isIn(['pending', 'completed', 'rejected'])],
+  validate,
+  asyncHandler(async (req, res) => {
+    const withdrawals = await walletService.listWithdrawals({
+      status: req.query.status || 'pending',
+    });
+    res.json({ withdrawals });
+  })
+);
+
+router.post(
+  '/withdrawals/:id/pay',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await walletService.payWithdrawal({
+      transactionId: req.params.id,
+      adminId: req.user.userId,
+    });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/withdrawals/:id/reject',
+  [param('id').isMongoId(), body('reason').optional().isString().trim().isLength({ max: 300 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await walletService.rejectWithdrawal({
+      transactionId: req.params.id,
+      adminId: req.user.userId,
+      reason: req.body.reason,
+    });
+    res.json(result);
+  })
+);
+
+// Torneos de POKERTAK. El administrador los organiza desde aquí (o pidiéndoselo
+// a Asistak, que usa estas mismas funciones); el jugador se inscribe desde el
+// móvil. Listar y ver van dentro de `requireAdmin` como el resto del router.
+router.get(
+  '/poker-events',
+  [query('status').optional().isIn(['scheduled', 'running', 'finished', 'cancelled'])],
+  validate,
+  asyncHandler(async (req, res) => {
+    const events = await pokerEventService.listEvents({ status: req.query.status, limit: 50 });
+    res.json({ events });
+  })
+);
+
+router.post(
+  '/poker-events',
+  [
+    body('title').isString().trim().isLength({ min: 3, max: 80 }),
+    body('squadSlug').isString().trim().isLength({ min: 1, max: 60 }),
+    body('scheduledAt').isISO8601(),
+    body('entryCost').isFloat({ gt: 0 }),
+    body('maxPlayers').isInt({ min: 2, max: 9 }),
+    body('rakeRate').optional().isFloat({ min: 0, max: 1 }),
+    body('split').optional().isArray({ min: 1, max: 6 }),
+  ],
+  validate,
+  asyncHandler(async (req, res) => {
+    const event = await pokerEventService.createEvent({
+      title: req.body.title,
+      adminId: req.user.userId,
+      squadSlug: req.body.squadSlug,
+      scheduledAt: req.body.scheduledAt,
+      entryCost: req.body.entryCost,
+      maxPlayers: req.body.maxPlayers,
+      rakeRate: req.body.rakeRate,
+      split: req.body.split,
+    });
+    res.status(201).json({ event: pokerEventService.publicEvent(event) });
+  })
+);
+
+router.get(
+  '/poker-events/:id',
+  [param('id').isMongoId()],
+  validate,
+  asyncHandler(async (req, res) => {
+    const event = await pokerEventService.getEvent(req.params.id);
+    if (!event) throw new HttpError(404, 'Evento no encontrado');
+    res.json({ event });
+  })
+);
+
+router.post(
+  '/poker-events/:id/finish',
+  [param('id').isMongoId(), body('ranking').optional().isArray({ max: 9 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await pokerEventService.finishEvent({
+      eventId: req.params.id,
+      ranking: req.body.ranking,
+    });
+    res.json({ event: pokerEventService.publicEvent(result.event), payout: result.payout });
+  })
+);
+
+router.post(
+  '/poker-events/:id/cancel',
+  [param('id').isMongoId(), body('reason').optional().isString().trim().isLength({ max: 300 })],
+  validate,
+  asyncHandler(async (req, res) => {
+    const result = await pokerEventService.cancelEvent({
+      eventId: req.params.id,
+      reason: req.body.reason,
+    });
+    res.json({ event: pokerEventService.publicEvent(result.event), refunded: result.refunded });
   })
 );
 

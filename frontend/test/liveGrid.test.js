@@ -5,6 +5,7 @@ import {
   guestRows,
   orderParticipants,
   isLiveFull,
+  stageColumns,
 } from '../src/lib/liveGrid.js';
 
 // El helper de la rejilla del directo son funciones puras: no tocan el DOM ni
@@ -70,4 +71,18 @@ test('un aforo sin tope (0 o vacío) nunca llena el directo', () => {
   assert.equal(isLiveFull(999, 0), false);
   assert.equal(isLiveFull(999, null), false);
   assert.equal(isLiveFull(999, undefined), false);
+});
+
+// El diseño "Rejilla" de TikTok pone a todos (anfitrión incluido) en la misma
+// cuadrícula, así que el número de columnas cuenta a todo el mundo. Con el
+// aforo de 15 invitados más el anfitrión son 16 ventanas: 4 columnas.
+test('la rejilla de todos iguales cuenta al anfitrión y llega a 4 columnas', () => {
+  assert.equal(stageColumns(1), 1);
+  assert.equal(stageColumns(2), 2);
+  assert.equal(stageColumns(3), 2);
+  assert.equal(stageColumns(4), 2);
+  assert.equal(stageColumns(5), 3);
+  assert.equal(stageColumns(9), 3);
+  assert.equal(stageColumns(10), 4);
+  assert.equal(stageColumns(16), 4);
 });

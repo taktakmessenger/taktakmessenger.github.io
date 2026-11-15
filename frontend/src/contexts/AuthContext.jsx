@@ -115,8 +115,15 @@ export function AuthProvider({ children }) {
     persist(data);
   }
 
-  async function register(username, email, password) {
-    const { data } = await api.post('/auth/register', { username, email, password });
+  async function register(username, email, password, ref) {
+    // El código de invitación es opcional: viaja con el alta para que el servidor
+    // apunte quién invitó. El servidor lo ignora si es inválido.
+    const { data } = await api.post('/auth/register', {
+      username,
+      email,
+      password,
+      ...(ref ? { ref } : {}),
+    });
     persist(data);
     // Returned so the form can show the code when the mail could not be sent
     // (development), instead of a "check your inbox" screen for nothing.
@@ -159,6 +166,10 @@ export function AuthProvider({ children }) {
 
   // Phone sign-up is two steps: request a code, then verify it. The account is
   // created by the second call, so an unverified number cannot take it.
+  //
+  // Con un proveedor de SMS configurado el primer paso solo manda el código. Sin
+  // proveedor no hay código que esperar: el servidor crea la cuenta y devuelve
+  // la sesión ya lista, así que se persiste aquí mismo.
   async function startPhoneSignup({ phone, country, username, password }) {
     const { data } = await api.post('/auth/phone/start', {
       phone,
@@ -166,6 +177,7 @@ export function AuthProvider({ children }) {
       username: username || undefined,
       password: password || undefined,
     });
+    if (data.token) persist(data);
     return data;
   }
 

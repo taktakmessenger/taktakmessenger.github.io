@@ -170,7 +170,17 @@ export default function Squads() {
 
       {active && (
         <div className="squad-feed">
-          <h3>Contenido de {active.squad.name}</h3>
+          <div className="screen-head">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setActive(null)}
+              aria-label="Volver"
+            >
+              ←
+            </button>
+            <h3>Contenido de {active.squad.name}</h3>
+          </div>
 
           <div className="voice-room">
             <div className="voice-room-head">
@@ -188,15 +198,29 @@ export default function Squads() {
                 Salir del directo
               </button>
             ) : (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() =>
-                  joinVoice({ slug: active.squad.slug, name: active.squad.name })
-                }
-              >
-                🎥 Entrar al directo
-              </button>
+              <div className="voice-room-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() =>
+                    joinVoice({ slug: active.squad.slug, name: active.squad.name })
+                  }
+                >
+                  🎥 Entrar al directo
+                </button>
+                {/* Espectador: ver y comentar sin encender cámara ni micrófono.
+                    Es la forma de entrar de quien solo quiere mirar (y de quien
+                    no quiere dar permisos de cámara en el móvil). */}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    joinVoice({ slug: active.squad.slug, name: active.squad.name, spectate: true })
+                  }
+                >
+                  👀 Ver como espectador
+                </button>
+              </div>
             )}
           </div>
 

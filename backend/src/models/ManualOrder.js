@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-// Una orden de cobro manual: el usuario paga por fuera de la app (Zinli, pago
-// móvil, transferencia…) y envía la referencia; un administrador la aprueba.
+// Una orden de cobro manual: el usuario paga por fuera de la app (billetera
+// cripto, transferencia…) y envía la referencia; un administrador la aprueba.
 //
 // Es el único camino de cobro que no depende de ninguna pasarela, así que
 // funciona sin cuenta de empresa y sin webhooks: nada que mantener encendido ni
@@ -17,6 +17,10 @@ const manualOrderSchema = new mongoose.Schema(
     coins: { type: Number, required: true, min: 0 },
     priceUsd: { type: Number, required: true, min: 0 },
     method: { type: String, required: true, trim: true },
+    // Si el método es TakCoin (TKC): la compra NO se pagó con dinero real, así
+    // que al aprobarla se acreditan monedas de regalo (no retirables) en vez de
+    // monedas pagadas. Se guarda en la orden para que el abono lo respete.
+    takcoin: { type: Boolean, default: false },
     reference: { type: String, required: true, trim: true, maxlength: 120 },
     note: { type: String, trim: true, maxlength: 500 },
     status: {

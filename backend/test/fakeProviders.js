@@ -1,7 +1,7 @@
-// Servidor falso de Stripe y PayPal para los tests.
+// Servidor falso de Stripe para los tests.
 //
-// Se levanta un HTTP real en localhost y se apunta `stripeApiBase` /
-// `paypalApiBase` a él. Así las rutas ejercitan el mismo código que en
+// Se levanta un HTTP real en localhost y se apunta `stripeApiBase` a él. Así
+// las rutas ejercitan el mismo código que en
 // producción (form-encode, cabeceras, parseo de la respuesta) en vez de
 // sustituir las funciones por dobles, que es donde se cuelan los fallos de
 // integración: un doble nunca se queja de que falte la cabecera de idempotencia.
@@ -37,52 +37,12 @@ function json(res, status, body) {
  *   behavior.detachFails
  */
 async function startFakeProviders(behavior = {}) {
-  const calls = { stripe: [], paypal: [] };
-  let paypalTokenIssued = 0;
+  const calls = { stripe: [] };
 
   const server = http.createServer(async (req, res) => {
     const url = req.url || '';
     const body = await readBody(req);
 
-    // --- PayPal ---
-    if (url.startsWith('/v1/oauth2/token')) {
-      paypalTokenIssued += 1;
-      return json(res, 200, { access_token: 'fake-token', expires_in: 3600 });
-    }
-
-    if (url === '/v2/checkout/orders' && req.method === 'POST') {
-      calls.paypal.push({ url, body, headers: req.headers });
-      // Alta de método (vault) frente a cobro contra un vault_id.
-      const isVault = body.includes('store_in_vault');
-      if (isVault) {
-        return json(res, 201, {
-          id: 'ORDER-VAULT-1',
-          status: 'CREATED',
-          links: [{ rel: 'approve', href: 'https://fake.paypal/approve/ORDER-VAULT-1' }],
-        });
-      }
-      return json(res, 201, { id: 'ORDER-CHARGE-1', status: 'COMPLETED' });
-    }
-
-    if (url.startsWith('/v2/checkout/orders/') && url.endsWith('/capture')) {
-      calls.paypal.push({ url, body, headers: req.headers });
-      if (behavior.captureWithoutVault) {
-        return json(res, 201, { id: 'ORDER-VAULT-1', status: 'COMPLETED' });
-      }
-      return json(res, 201, {
-        id: 'ORDER-VAULT-1',
-        status: 'COMPLETED',
-        payer: { email_address: 'pagador@example.com' },
-        payment_source: {
-          paypal: {
-            email_address: 'pagador@example.com',
-            attributes: { vault: { id: 'VAULT-ABC-123' } },
-          },
-        },
-      });
-    }
-
-    // --- Stripe ---
     calls.stripe.push({ url, body, headers: req.headers });
 
     if (url === '/customers') {
@@ -135,11 +95,7 @@ async function startFakeProviders(behavior = {}) {
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     stripeUrl: `http://127.0.0.1:${port}`,
-    paypalUrl: `http://127.0.0.1:${port}`,
     calls,
-    get paypalTokenCalls() {
-      return paypalTokenIssued;
-    },
     async close() {
       await new Promise((resolve) => server.close(resolve));
     },

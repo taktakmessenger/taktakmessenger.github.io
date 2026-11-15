@@ -33,7 +33,7 @@ function VideoResult({ video, onOpen, onReport }) {
         {video.thumbnailUrl ? (
           <img src={video.thumbnailUrl} alt="" loading="lazy" />
         ) : (
-          <video ref={videoRef} src={video.hlsUrl || video.videoUrl} muted playsInline preload="metadata" />
+          <video ref={videoRef} src={video.videoUrl} muted playsInline preload="metadata" />
         )}
         {playing && <span className="search-video-pause">❚❚</span>}
       </button>
@@ -93,7 +93,7 @@ function UserResult({ user, onOpen, onReport }) {
   );
 }
 
-export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initialQuery = '' }) {
+export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, onBack, initialQuery = '' }) {
   const { user } = useAuth();
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState({ users: [], videos: [], tags: [] });
@@ -102,6 +102,14 @@ export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initial
   const [tab, setTab] = useState('all');
   // Reporte en curso: { type, item }. La lista de motivos vive en el diálogo.
   const [report, setReport] = useState(null);
+  // Resultados de fuera de TAK TAK (música y vídeo con licencia libre). Se piden
+  // solo al abrir su pestaña: buscar siempre en internet duplicaría peticiones
+  // para quien solo quiere encontrar a una persona.
+  const [external, setExternal] = useState({ music: [], videos: [] });
+  const [extLoading, setExtLoading] = useState(false);
+  // Id del resultado que se está trayendo, para bloquear su botón mientras dura.
+  const [importing, setImporting] = useState('');
+  const [notice, setNotice] = useState('');
   const inputRef = useRef(null);
   // Cada búsqueda lleva su número. Solo se pinta la respuesta de la última
   // lanzada: sin esto, teclear rápido hace que una respuesta lenta de "ca"
@@ -154,9 +162,74 @@ export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initial
   const showVideos = tab === 'all' || tab === 'videos';
   const showTags = tab === 'all' || tab === 'tags';
 
+  // Busca en internet solo cuando el usuario abre la pestaña de música o de
+  // vídeo de fuera. Se vuelve a pedir si cambia el término o la pestaña.
+  useEffect(() => {
+    const term = query.trim();
+    if (!term || (tab !== 'music' && tab !== 'external')) return undefined;
+
+    setExtLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/discover/search', {
+          params: { q: term, kind: tab === 'music' ? 'music' : 'video', limit: 20 },
+        });
+        setExternal({ music: data.music || [], videos: data.videos || [] });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setExtLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query, tab]);
+
+  // Trae a TAK TAK lo elegido. La música se guarda como sonido reutilizable (así
+  // aparece en el selector de «Subir» para ponerla a un vídeo o foto); el vídeo
+  // se publica directamente en el feed.
+  async function importItem(item) {
+    setImporting(item.id);
+    setNotice('');
+    setError('');
+    try {
+      const { data } = await api.post('/discover/import', {
+        url: item.kind === 'music' ? item.audioUrl : item.videoUrl,
+        kind: item.kind,
+      });
+      // En desarrollo el archivo se sirve en `/uploads/...` (relativo) y la API
+      // exige una URL absoluta; en producción ya llega la del bucket.
+      const absoluteUrl = data.url.startsWith('http')
+        ? data.url
+        : `${window.location.origin}${data.url}`;
+
+      if (item.kind === 'music') {
+        await api.post('/sounds', {
+          title: item.title,
+          artist: item.artist,
+          audioUrl: absoluteUrl,
+        });
+        setNotice(`«${item.title}» añadida a tu música. Ya puedes usarla al subir.`);
+      } else {
+        await api.post('/videos', {
+          title: item.title,
+          videoUrl: absoluteUrl,
+        });
+        setNotice(`«${item.title}» publicada en tu perfil.`);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setImporting('');
+    }
+  }
+
   return (
     <div className="explore">
-      <div className="explore-head">
+      <div className="screen-head">
+        <button type="button" className="btn-ghost" onClick={onBack} aria-label="Volver">
+          ←
+        </button>
         <h2>🔍 Explorar</h2>
       </div>
 
@@ -166,8 +239,8 @@ export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initial
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Busca personas, vídeos o #etiquetas"
-          aria-label="Buscar en TAK TAK"
+          placeholder="Busca personas, vídeos, #etiquetas o música"
+          aria-label="Buscar en TAK TAK y en internet"
           autoComplete="off"
         />
         {query && (
@@ -192,6 +265,8 @@ export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initial
             { id: 'users', label: `Personas${results.users.length ? ` (${results.users.length})` : ''}` },
             { id: 'videos', label: `Vídeos${results.videos.length ? ` (${results.videos.length})` : ''}` },
             { id: 'tags', label: 'Etiquetas' },
+            { id: 'music', label: '🎵 Música' },
+            { id: 'external', label: '🎬 De internet' },
           ].map((t) => (
             <button
               key={t.id}
@@ -224,8 +299,14 @@ export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initial
 
       {query.trim() && loading && total === 0 && <p className="muted">Buscando…</p>}
 
-      {query.trim() && !loading && total === 0 && !error && (
+      {query.trim() && !loading && total === 0 && !error && tab !== 'music' && tab !== 'external' && (
         <p className="muted">Nada coincide con “{query.trim()}”. Prueba con otra palabra.</p>
+      )}
+
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+        </p>
       )}
 
       {showTags && results.tags.length > 0 && (
@@ -270,6 +351,90 @@ export default function Explore({ onOpenProfile, onOpenVideo, onOpenTag, initial
                 onOpen={(video) => onOpenVideo?.(video)}
                 onReport={(type, item) => setReport({ type, item })}
               />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {tab === 'music' && (
+        <section className="explore-section">
+          <h3>🎵 Música de internet</h3>
+          <p className="muted">
+            Pistas con licencia libre (Creative Commons). Al usar una, se copia a TAK TAK y
+            queda en tu música para ponérsela a tus vídeos o fotos.
+          </p>
+          {extLoading && <p className="muted">Buscando…</p>}
+          {!extLoading && external.music.length === 0 && (
+            <p className="muted">Sin resultados de música para “{query.trim()}”.</p>
+          )}
+          <ul className="search-list">
+            {external.music.map((item) => (
+              <li key={item.id} className="ext-item">
+                <div className="ext-item-body">
+                  <strong>{item.title}</strong>
+                  <span className="muted">{item.artist}</span>
+                  <small className="muted">
+                    {item.license} · {item.provider}
+                  </small>
+                  {item.audioUrl && (
+                    <audio
+                      controls
+                      preload="none"
+                      src={`/api/discover/preview?url=${encodeURIComponent(item.audioUrl)}`}
+                    />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={importing === item.id}
+                  onClick={() => importItem(item)}
+                >
+                  {importing === item.id ? 'Trayendo…' : 'Usar en TakTak'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {tab === 'external' && (
+        <section className="explore-section">
+          <h3>🎬 Vídeos de internet</h3>
+          <p className="muted">
+            Vídeos con licencia libre de Wikimedia Commons. Al publicar uno, se copia a TAK TAK
+            y aparece en tu perfil.
+          </p>
+          {extLoading && <p className="muted">Buscando…</p>}
+          {!extLoading && external.videos.length === 0 && (
+            <p className="muted">Sin resultados de vídeo para “{query.trim()}”.</p>
+          )}
+          <ul className="search-list">
+            {external.videos.map((item) => (
+              <li key={item.id} className="ext-item">
+                {item.thumbnailUrl && (
+                  <img
+                    className="ext-thumb"
+                    src={`/api/discover/preview?url=${encodeURIComponent(item.thumbnailUrl)}`}
+                    alt=""
+                    loading="lazy"
+                  />
+                )}
+                <div className="ext-item-body">
+                  <strong>{item.title}</strong>
+                  <small className="muted">
+                    {item.license} · {item.provider}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={importing === item.id}
+                  onClick={() => importItem(item)}
+                >
+                  {importing === item.id ? 'Trayendo…' : 'Publicar'}
+                </button>
+              </li>
             ))}
           </ul>
         </section>

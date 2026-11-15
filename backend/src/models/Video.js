@@ -1,4 +1,14 @@
 const mongoose = require('mongoose');
+const { toProxyUrl } = require('../lib/mediaUrl');
+
+// La escalera HLS se reescribe al proxy propio (`/media/...`) al serializar, y
+// también en los sitios que devuelven objetos planos (el feed y la búsqueda
+// usan `aggregate`/`map`, que no pasan por aquí). Sin esto, el bucket sin CORS
+// deja el vídeo en negro.
+function proxyMediaUrls(_doc, ret) {
+  if (ret.hlsUrl) ret.hlsUrl = toProxyUrl(ret.hlsUrl);
+  return ret;
+}
 
 const videoSchema = new mongoose.Schema(
   {
@@ -79,7 +89,11 @@ const videoSchema = new mongoose.Schema(
     newsVerifiedAt: { type: Date, default: null },
     newsVerifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { transform: proxyMediaUrls },
+    toObject: { transform: proxyMediaUrls },
+  }
 );
 
 videoSchema.index({ createdAt: -1 });

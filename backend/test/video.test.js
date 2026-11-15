@@ -105,6 +105,52 @@ test('only the owner or an admin can delete a video', async () => {
   assert.equal(allowed.status, 200);
 });
 
+test('the owner can edit title, description and tags', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const created = await createVideo(agent, owner.token);
+  const id = created.body.video._id;
+
+  const res = await agent
+    .patch(`/api/videos/${id}`)
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send({ title: 'Título nuevo', description: 'Otra descripción', tags: ['uno', 'dos'] });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.video.title, 'Título nuevo');
+  assert.equal(res.body.video.description, 'Otra descripción');
+  assert.deepEqual(res.body.video.tags, ['uno', 'dos']);
+});
+
+test('only the owner or an admin can edit a video', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const other = await registerUser(agent);
+  const created = await createVideo(agent, owner.token);
+
+  const denied = await agent
+    .patch(`/api/videos/${created.body.video._id}`)
+    .set('Authorization', `Bearer ${other.token}`)
+    .send({ title: 'Robado' });
+  assert.equal(denied.status, 403);
+});
+
+test('editing rejects an empty title and unauthenticated callers', async () => {
+  const agent = app();
+  const owner = await registerUser(agent);
+  const created = await createVideo(agent, owner.token);
+  const id = created.body.video._id;
+
+  const anon = await agent.patch(`/api/videos/${id}`).send({ title: 'x' });
+  assert.equal(anon.status, 401);
+
+  const empty = await agent
+    .patch(`/api/videos/${id}`)
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send({ title: '   ' });
+  assert.equal(empty.status, 400);
+});
+
 test('retranscode requires authentication', async () => {
   const agent = app();
   const user = await registerUser(agent);

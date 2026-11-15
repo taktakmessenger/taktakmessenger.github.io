@@ -42,6 +42,14 @@ export function shouldPauseFeed(showingPosts, callStatus, idleStatus = 'idle') {
   return Boolean(showingPosts) || callStatus !== idleStatus;
 }
 
+// ¿Debe sonar/reproducir la tarjeta? Solo si es la visible y el usuario no la
+// pausó a mano. Es una regla distinta de `isMuted`: una tarjeta pausada a mano
+// sigue siendo "la visible", pero no debe reproducirse. Se aísla para probarla
+// sin DOM y para no repetir la condición en el efecto y en el render.
+export function shouldPlay(active, userPaused) {
+  return Boolean(active) && !userPaused;
+}
+
 // Salidas de audio disponibles (altavoz del teléfono, auriculares, Bluetooth).
 // `setSinkId` no existe en todos los navegadores: Firefox y buena parte de
 // Safari lo ignoran, así que se degrada a una lista vacía y la app sigue

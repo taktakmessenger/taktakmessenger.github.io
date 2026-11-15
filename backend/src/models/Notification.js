@@ -29,7 +29,22 @@ const notificationSchema = new mongoose.Schema(
       // diría "le gustó tu vídeo" cuando fue una publicación de Facetak, que es
       // falso. El texto de cada aviso se elige por el tipo, así que cada origen
       // necesita el suyo.
-      enum: ['gift', 'follow', 'like', 'comment', 'reply', 'post_like', 'post_comment'],
+      //
+      // `tournament` es un aviso que no nace de una acción contra el
+      // destinatario sino de un anuncio del administrador: un torneo nuevo que
+      // se pone a la vista de todas las cuentas. `referral` es el premio por
+      // invitar: se abona cuando el invitado compra monedas.
+      enum: [
+        'gift',
+        'follow',
+        'like',
+        'comment',
+        'reply',
+        'post_like',
+        'post_comment',
+        'tournament',
+        'referral',
+      ],
       required: true,
     },
     // Contexto de la acción. Opcionales porque no todos los tipos los tienen:
@@ -44,6 +59,11 @@ const notificationSchema = new mongoose.Schema(
     // un `populate` extra por cada elemento de la lista.
     amount: { type: Number, default: null },
     giftName: { type: String, default: null, maxlength: 40 },
+    // Anuncio de torneo de POKERTAK: el nombre del evento y a cuál apunta, para
+    // poder abrirlo desde la lista de actividad. Es un aviso de la casa, no una
+    // acción de un usuario contra otro, así que no caben en `giftName`/`preview`.
+    event: { type: mongoose.Schema.Types.ObjectId, ref: 'PokerEvent', default: null },
+    title: { type: String, default: null, maxlength: 80 },
     // Recorte del comentario, para que la lista muestre de qué se habla sin
     // abrir el hilo.
     preview: { type: String, default: null, maxlength: 120 },

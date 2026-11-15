@@ -23,6 +23,7 @@ self.addEventListener('push', (event) => {
   }
 
   const isCall = payload.type === 'call';
+  const isMessage = payload.type === 'message';
   const title = payload.title || 'TAK TAK';
   const options = {
     body: payload.body || '',
@@ -39,7 +40,12 @@ self.addEventListener('push', (event) => {
     requireInteraction: Boolean(payload.requireInteraction),
     data: payload.data || {},
     // Vibration API. En Android hace que el teléfono se note; en otros se ignora.
-    vibrate: isCall ? [300, 200, 300, 200, 300] : undefined,
+    // Una llamada insiste más que un mensaje, pero un mensaje también debe
+    // notarse en el bolsillo.
+    vibrate: isCall ? [300, 200, 300, 200, 300] : isMessage ? [200, 100, 200] : undefined,
+    // En una llamada, tocar la notificación abre directamente la pantalla de
+    // respuesta.
+    actions: isCall ? [{ action: 'open', title: 'Abrir' }] : undefined,
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

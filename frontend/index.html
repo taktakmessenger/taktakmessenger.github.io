@@ -22,8 +22,93 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
+
+    <!-- Fondo oscuro y splash desde el primer pintado. Sin esto el navegador
+         enseña un lienzo blanco mientras baja el bundle (la "ventana blanca"
+         antes de la morada). Son las reglas mínimas: los colores de la marca y
+         la colocación del splash; el resto lo pone la hoja de estilos. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #07070d;
+      }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8vh 24px 9vh;
+        text-align: center;
+        background:
+          radial-gradient(720px 540px at 2% -4%, rgba(150, 20, 120, 0.5), transparent 60%),
+          radial-gradient(660px 500px at 104% 0%, rgba(40, 92, 128, 0.42), transparent 58%),
+          radial-gradient(700px 560px at 50% 56%, rgba(110, 40, 150, 0.26), transparent 66%),
+          linear-gradient(180deg, #1a0c2a 0%, #1a1030 45%, #0b0f24 100%);
+      }
+      #boot-splash .splash-logo {
+        display: grid;
+        place-items: center;
+        width: 132px;
+        height: 132px;
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: #000;
+        overflow: hidden;
+        box-shadow: 0 20px 60px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.06) inset, 0 0 34px -6px rgba(40, 224, 208, 0.28);
+      }
+      #boot-splash .splash-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      #boot-splash .splash-word {
+        margin: 1rem 0 0;
+        font-family: 'Outfit', system-ui, sans-serif;
+        font-size: clamp(2rem, 8vw, 2.6rem);
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #e5398d;
+      }
+      #boot-splash .splash-subtitle {
+        margin: 0.5rem auto 0;
+        max-width: 300px;
+        color: #e5d3e8;
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        font-size: 0.92rem;
+        line-height: 1.45;
+      }
+      #boot-splash .splash-photo img {
+        width: 240px;
+        height: 240px;
+        object-fit: contain;
+      }
+      #boot-splash .splash-tagline {
+        margin: 0;
+        color: #e5398d;
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-splash" aria-hidden="true">
+      <div class="splash-top">
+        <div class="splash-logo">
+          <img src="./taktak-app-icon.png" alt="TakTak" width="96" height="96" decoding="async" />
+        </div>
+        <h1 class="splash-word">TakTak</h1>
+        <p class="splash-subtitle">Vídeos cortos en vertical, minijuegos y creación con IA.</p>
+      </div>
+      <div class="splash-photo">
+        <img src="./pepa-inicio.png" alt="Un trozo de queso con la pepa dorada" width="240" height="240" decoding="async" />
+      </div>
+      <p class="splash-tagline">Somos la pepa del queso</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

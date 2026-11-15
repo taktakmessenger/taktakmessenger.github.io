@@ -2,7 +2,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const env = require('../config/env');
 const stripeService = require('./stripeService');
-const paypalService = require('./paypalService');
+const referralService = require('./referralService');
 const { HttpError } = require('../utils/http');
 
 // Cobro de monedas y abono de saldo.
@@ -16,19 +16,18 @@ const { HttpError } = require('../utils/http');
 // botones que van a funcionar: ofrecer "Pagar con tarjeta" cuando no hay claves
 // es prometer un cobro que no existe.
 //
-// `manual` es el cobro por fuera de la app (Zinli, pago móvil…): está activo si
+// `manual` es el cobro por fuera de la app (billetera cripto): está activo si
 // el operador declaró algún método en `MANUAL_PAYMENT_METHODS`.
 function availableProviders() {
   return {
     stripe: stripeService.isConfigured(),
-    paypal: paypalService.isConfigured(),
     manual: env.manualPaymentMethods.length > 0,
   };
 }
 
 function assertProviders() {
   const providers = availableProviders();
-  if (!providers.stripe && !providers.paypal) {
+  if (!providers.stripe) {
     throw new HttpError(
       503,
       'Los pagos no están configurados todavía. Inténtalo más tarde.'
@@ -46,11 +45,10 @@ function findPackage(packageId) {
 // Resuelve el paquete a partir de lo que diga el proveedor, y de paso cuadra el
 // importe con el catálogo.
 //
-// Stripe manda el id del paquete en el metadata; PayPal solo manda el importe,
-// así que ahí se busca por precio. Las dos vías terminan en la misma
-// comprobación: lo cobrado tiene que ser exactamente el precio del paquete. Sin
-// ella, un evento que dijera "pagó 1 dólar por 7000 monedas" se acreditaría
-// aunque viniera firmado por el proveedor.
+// Stripe manda el id del paquete en el metadata. La comprobación final es la
+// misma: lo cobrado tiene que ser exactamente el precio del paquete. Sin ella,
+// un evento que dijera "pagó 1 dólar por 7000 monedas" se acreditaría aunque
+// viniera firmado por el proveedor.
 function resolvePackage({ packageId, amountPaidMinor }) {
   let pkg;
 
@@ -97,15 +95,6 @@ async function startCheckout({ provider, userId, packageId }) {
 
   if (provider === 'stripe') {
     return stripeService.createCheckoutSession({ userId, pkg, successUrl, cancelUrl });
-  }
-
-  if (provider === 'paypal') {
-    return paypalService.createOrder({
-      userId,
-      pkg,
-      returnUrl: successUrl,
-      cancelUrl,
-    });
   }
 
   throw new HttpError(400, 'Proveedor de pago desconocido');
@@ -162,6 +151,21 @@ async function creditPurchase({ externalId, userId, packageId, amountPaidMinor, 
     { new: true }
   );
 
+  // Premio del programa de referidos: si esta cuenta llegó invitada, quien la
+  // invitó cobra un porcentaje de lo comprado, en monedas de regalo. Va después
+  // de acreditar la compra y nunca puede deshacerla: si el premio falla, el
+  // comprador ya tiene sus monedas. Es idempotente por el mismo `externalId`, así
+  // que un webhook reenviado no paga dos veces.
+  await referralService
+    .payForPurchase({
+      buyerId: user._id,
+      externalId,
+      amountPaidMinor: amountPaidMinor != null ? amountPaidMinor : stripeService.toMinorUnits(pkg.priceUsd),
+      currency: currency || 'USD',
+      packageId: pkg.id,
+    })
+    .catch(() => null);
+
   return {
     credited: true,
     duplicate: false,
@@ -172,8 +176,8 @@ async function creditPurchase({ externalId, userId, packageId, amountPaidMinor, 
 }
 
 // Comprueba que lo que llegó del proveedor corresponde a un paquete conocido y
-// a un importe correcto, sin acreditar nada. Útil para el webhook de PayPal, que
-// no manda el paquete: se resuelve por el precio.
+// a un importe correcto, sin acreditar nada. Útil para el webhook, que puede no
+// mandar el paquete: se resuelve por el precio.
 function resolvePackageFromPayment({ packageId, amountPaidMinor }) {
   if (packageId) return findPackage(packageId);
   if (!Number.isFinite(amountPaidMinor)) {

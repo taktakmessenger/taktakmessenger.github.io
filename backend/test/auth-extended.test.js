@@ -22,6 +22,29 @@ function uniquePhone(country = 'MX') {
   return { phone: `5512${tail}`, country, e164: `+525512${tail}` };
 }
 
+// Los tests corren sin proveedor de SMS (no hay credenciales de Twilio), y en
+// ese caso la app crea la cuenta sin código. Para seguir probando el flujo con
+// código hay que fingir que sí hay proveedor; el envío se sustituye por un
+// stub, porque lo que se prueba es el flujo, no la llamada real a Twilio.
+const smsService = require('../src/services/smsService');
+
+async function withSmsProvider(fn) {
+  const originalIsConfigured = smsService.isConfigured;
+  const originalSendSms = smsService.sendSms;
+  smsService.isConfigured = () => true;
+  smsService.sendSms = async () => ({ delivered: false, reason: 'no_provider' });
+  try {
+    return await fn();
+  } finally {
+    smsService.isConfigured = originalIsConfigured;
+    smsService.sendSms = originalSendSms;
+  }
+}
+
+function testWithSms(name, fn) {
+  test(name, () => withSmsProvider(fn));
+}
+
 /* ------------------------------------------------------------------ */
 /* Phone normalisation across countries                                */
 /* ------------------------------------------------------------------ */
@@ -88,7 +111,7 @@ test('a masked phone does not leak the whole number', () => {
 /* Phone sign-up with a 6-digit SMS code                               */
 /* ------------------------------------------------------------------ */
 
-test('phone sign-up issues a 6-digit code and creates the account only after verification', async () => {
+testWithSms('phone sign-up issues a 6-digit code and creates the account only after verification', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -130,7 +153,7 @@ test('phone sign-up issues a 6-digit code and creates the account only after ver
   assert.equal(verify.body.user.username, 'nuevo_tel');
 });
 
-test('the phone account can log in with the password chosen at sign-up', async () => {
+testWithSms('the phone account can log in with the password chosen at sign-up', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -150,7 +173,7 @@ test('the phone account can log in with the password chosen at sign-up', async (
   assert.equal(login.body.user.phone, e164);
 });
 
-test('the same code cannot be used twice', async () => {
+testWithSms('the same code cannot be used twice', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -164,7 +187,7 @@ test('the same code cannot be used twice', async () => {
   assert.equal(second.status, 400, 'un código consumido no debe volver a servir');
 });
 
-test('a code is locked out after too many wrong attempts', async () => {
+testWithSms('a code is locked out after too many wrong attempts', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -183,7 +206,7 @@ test('a code is locked out after too many wrong attempts', async () => {
   assert.equal(blocked.status, 429, 'el código debe quedar bloqueado');
 });
 
-test('requesting a new code invalidates the previous one', async () => {
+testWithSms('requesting a new code invalidates the previous one', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -206,7 +229,7 @@ test('requesting a new code invalidates the previous one', async () => {
   assert.equal(fresh.status, 200);
 });
 
-test('codes are stored hashed, never in the clear', async () => {
+testWithSms('codes are stored hashed, never in the clear', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -218,7 +241,7 @@ test('codes are stored hashed, never in the clear', async () => {
   assert.equal(record.codeHash, Verification.hashCode(code));
 });
 
-test('an existing verified phone is reported as a sign-in, not a new sign-up', async () => {
+testWithSms('an existing verified phone is reported as a sign-in, not a new sign-up', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -332,7 +355,7 @@ test('a reset code cannot be reused', async () => {
 /* Login by identifier and sessions                                    */
 /* ------------------------------------------------------------------ */
 
-test('login accepts an email or a phone number in the same field', async () => {
+testWithSms('login accepts an email or a phone number in the same field', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -480,22 +503,33 @@ test('register returns the verification code when no mail provider is set', asyn
   assert.equal(verify.body.verified, true);
 });
 
-test('phone/start returns the SMS code when no provider is set', async () => {
+test('phone/start creates the account directly when no SMS provider is set', async () => {
   const agent = app();
   const { phone, country, e164 } = uniquePhone();
 
-  const res = await agent.post('/api/auth/phone/start').send({ phone, country });
-  assert.equal(res.status, 201);
-  assert.equal(res.body.delivered, false);
-  assert.equal(res.body.reason, 'no_provider');
-  assert.match(res.body.code, /^\d{6}$/);
+  // Sin proveedor de SMS el código no puede llegar, así que la app no deja a la
+  // persona esperando: crea la cuenta y la deja dentro. Es la vía que permite
+  // abrir el registro por teléfono mientras no haya SMS contratado.
+  const res = await agent
+    .post('/api/auth/phone/start')
+    .send({ phone, country, username: 'sin_sms', password: 'secreto123' });
 
-  // End to end: the code shown to the user is the one that verifies the number.
-  const verify = await agent
-    .post('/api/auth/phone/verify')
-    .send({ phone, country, code: res.body.code });
-  assert.equal(verify.status, 200, JSON.stringify(verify.body));
-  assert.equal(verify.body.user.phone, e164);
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.created, true);
+  assert.equal(res.body.smsConfigured, false);
+  assert.ok(res.body.token, 'debe venir la sesión');
+  assert.equal(res.body.user.phone, e164);
+  assert.equal(res.body.user.phoneVerified, true);
+  assert.equal(res.body.user.username, 'sin_sms');
+
+  // El número queda vinculado de verdad, no solo en la respuesta.
+  assert.equal(await User.countDocuments({ phone: e164 }), 1);
+
+  // Y se puede entrar con la contraseña elegida (no doblemente hasheada).
+  const login = await agent
+    .post('/api/auth/login')
+    .send({ identifier: e164, password: 'secreto123' });
+  assert.equal(login.status, 200, JSON.stringify(login.body));
 });
 
 test('resend-verification and forgot-password also expose the code in dev', async () => {
@@ -553,7 +587,7 @@ test('the code is never exposed in production', async () => {
 
 // A user who registered with an email has no phone, so the dialer cannot find
 // them by number. These endpoints let them add one from inside the app.
-test('an email account can link a phone by verifying an SMS code', async () => {
+testWithSms('an email account can link a phone by verifying an SMS code', async () => {
   const agent = app();
   const reg = await agent
     .post('/api/auth/register')
@@ -590,7 +624,7 @@ test('linking requires a session', async () => {
   assert.equal(res.status, 401);
 });
 
-test('a number already linked to another account cannot be stolen', async () => {
+testWithSms('a number already linked to another account cannot be stolen', async () => {
   const owner = app();
   const { phone, country, e164 } = uniquePhone();
 
@@ -616,7 +650,7 @@ test('a number already linked to another account cannot be stolen', async () => 
 
 // The code is bound to the account that requested it. A code issued for one
 // account must not attach the number to another.
-test('a link code issued for one account is rejected for another', async () => {
+testWithSms('a link code issued for one account is rejected for another', async () => {
   const a = app();
   const b = app();
   const { phone, country, e164 } = uniquePhone();
@@ -645,7 +679,7 @@ test('a link code issued for one account is rejected for another', async () => {
   assert.match(res.body.error, /no corresponde a tu cuenta/);
 });
 
-test('a wrong link code is rejected and counted', async () => {
+testWithSms('a wrong link code is rejected and counted', async () => {
   const agent = app();
   const reg = await agent
     .post('/api/auth/register')
@@ -666,7 +700,7 @@ test('a wrong link code is rejected and counted', async () => {
   assert.match(res.body.error, /Intentos restantes/);
 });
 
-test('re-linking the same verified number is reported as already linked', async () => {
+testWithSms('re-linking the same verified number is reported as already linked', async () => {
   const agent = app();
   const reg = await agent
     .post('/api/auth/register')
@@ -690,6 +724,59 @@ test('re-linking the same verified number is reported as already linked', async 
 
   assert.equal(again.status, 200);
   assert.equal(again.body.alreadyLinked, true);
+});
+
+// Sin proveedor de SMS el código de vinculación no puede llegar. En vez de
+// dejar a la persona esperando, el número se vincula directamente: ya hay
+// sesión y es su propia cuenta, así que no hay a quién suplantar.
+test('vincular un teléfono sin SMS lo vincula directamente', async () => {
+  const agent = app();
+  const reg = await agent
+    .post('/api/auth/register')
+    .send({ username: 'vincula_sin_sms', email: 'vsms@example.com', password: 'secreto123' });
+  const { phone, country, e164 } = uniquePhone();
+
+  const res = await agent
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${reg.body.token}`)
+    .send({ phone, country });
+
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.linked, true);
+  assert.equal(res.body.smsConfigured, false);
+  assert.equal(res.body.user.phone, e164);
+  assert.equal(res.body.user.phoneVerified, true);
+
+  const saved = await User.findById(reg.body.user.id);
+  assert.equal(saved.phone, e164);
+  assert.equal(saved.phoneVerified, true);
+});
+
+test('vincular sin SMS no puede robar el número de otra cuenta', async () => {
+  const owner = app();
+  const { phone, country, e164 } = uniquePhone();
+
+  const ownerReg = await owner
+    .post('/api/auth/register')
+    .send({ username: 'dueno_sin_sms', email: 'dueno_sms@example.com', password: 'secreto123' });
+  const ownerLink = await owner
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${ownerReg.body.token}`)
+    .send({ phone, country });
+  assert.equal(ownerLink.body.linked, true);
+
+  const other = app();
+  const otherReg = await other
+    .post('/api/auth/register')
+    .send({ username: 'otro_sin_sms', email: 'otro_sms@example.com', password: 'secreto123' });
+  const res = await other
+    .post('/api/auth/phone/link/start')
+    .set('Authorization', `Bearer ${otherReg.body.token}`)
+    .send({ phone, country });
+
+  assert.equal(res.status, 409, JSON.stringify(res.body));
+  assert.match(res.body.error, /otra cuenta/);
+  assert.equal((await User.findById(otherReg.body.user.id)).phone, undefined);
 });
 
 // Reads the code that was just issued, standing in for the SMS or email the
