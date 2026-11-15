@@ -10,7 +10,7 @@ import { useId } from 'react';
 // instancias en la misma pantalla (la cabecera del chat y la barra de la
 // llamada) no compartan definición: con el mismo `id`, la segunda heredaría el
 // degradado de la primera.
-export default function WhaTakaEmblem({ size = 28, title = 'WhaTaka' }) {
+export default function WhaTakaEmblem({ size = 28, title = 'TakTak Móvil' }) {
   const uid = useId().replace(/:/g, '');
   const bg = `wt-bg-${uid}`;
   const fruit = `wt-fruit-${uid}`;

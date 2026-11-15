@@ -208,7 +208,7 @@ export default function Settings({ onBack, onNavigate }) {
       <section className="settings-block">
         <h3>Idioma y traducción</h3>
         <p className="settings-hint">
-          WhaTaka traduce los mensajes, las notas de voz y las llamadas a tu idioma. Si no
+          TakTak Móvil traduce los mensajes, las notas de voz y las llamadas a tu idioma. Si no
           eliges ninguno, se usa el del navegador.
         </p>
 

@@ -10,7 +10,7 @@ const TABS = [
   // ("TAK Live Creator"), no una traducción de la interfaz.
   { id: 'squads', label: 'TAK Live Creator', icon: '👥' },
   { id: 'upload', label: 'Subir', icon: '＋', primary: true },
-  { id: 'messages', label: 'WhaTaka', icon: '💬' },
+  { id: 'messages', label: 'TakTak Móvil', icon: '💬' },
   { id: 'profile', label: 'Perfil', icon: '👤' },
 ];
 
