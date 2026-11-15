@@ -1244,7 +1244,7 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
         <div className="messages-head">
           <h2 className="whataka-title">
             <WhaTakaEmblem size={26} />
-            WhaTaka
+            TakTak Móvil
           </h2>
         </div>
         <div className="whataka-tabs">
@@ -1285,7 +1285,7 @@ export default function Messages({ onCall, initialUser, onConsumeInitialUser, on
       <div className="messages-head">
         <h2 className="whataka-title">
           <WhaTakaEmblem size={26} />
-          WhaTaka
+          TakTak Móvil
         </h2>
         <button
           type="button"
