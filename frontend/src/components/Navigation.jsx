@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import PokerTakLogo from './PokerTakLogo';
+import Fireworks, { useFireworks, celebrate } from './Fireworks';
 import api from '../api/client';
 import { pulseIcon } from '../lib/tapFx';
 
@@ -26,6 +27,11 @@ export default function Navigation({ currentView, setCurrentView }) {
   const { user } = useAuth();
   const { subscribe } = useSocket();
   const [unread, setUnread] = useState(0);
+  // Fuegos artificiales del botón POKERTAK: al tocar la pestaña que abre el
+  // juego, las cartas del emblema se levantan y estallan los fuegos. La capa se
+  // pinta por encima de todo y se apaga sola.
+  const { bursts, fire } = useFireworks();
+  const [pokerPlaying, setPokerPlaying] = useState(false);
 
   const tabs = TABS;
 
@@ -64,6 +70,22 @@ export default function Navigation({ currentView, setCurrentView }) {
     };
   }, [user, subscribe, currentView]);
 
+  // Tocar el botón POKERTAK (el de la barra inferior) abre el juego y, de paso,
+  // celebra la entrada: las cartas del emblema se levantan y salen fuegos desde
+  // el propio botón. El evento da la posición para que estallen justo ahí.
+  const openPoker = useCallback(
+    (event) => {
+      setCurrentView('poker');
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX || rect.left + rect.width / 2;
+      const y = event.clientY || rect.top + rect.height / 2;
+      celebrate(fire, x, y);
+      setPokerPlaying(true);
+      setTimeout(() => setPokerPlaying(false), 900);
+    },
+    [fire, setCurrentView],
+  );
+
   return (
     <nav className="tabbar" aria-label="Navegación principal">
       {tabs.map((tab) => (
@@ -72,12 +94,16 @@ export default function Navigation({ currentView, setCurrentView }) {
           type="button"
           className={`tabbar-btn ${currentView === tab.id ? 'active' : ''} ${
             tab.primary ? 'primary' : ''
-          }`}
-          onClick={() => setCurrentView(tab.id)}
+          } ${tab.poker && pokerPlaying ? 'poker-playing' : ''}`}
+          onClick={tab.poker ? openPoker : () => setCurrentView(tab.id)}
           aria-current={currentView === tab.id ? 'page' : undefined}
         >
           <span className="tabbar-icon" aria-hidden="true">
-            {tab.poker ? <PokerTakLogo size={24} className="tabbar-poker-logo" /> : tab.icon}
+            {tab.poker ? (
+              <PokerTakLogo size={24} className="tabbar-poker-logo" playing={pokerPlaying} />
+            ) : (
+              tab.icon
+            )}
           </span>
           <span className="tabbar-label">{tab.label}</span>
           {tab.id === 'messages' && unread > 0 && (
@@ -87,6 +113,8 @@ export default function Navigation({ currentView, setCurrentView }) {
           )}
         </button>
       ))}
+      {/* Los fuegos del botón POKERTAK, en una capa fija por encima de todo. */}
+      <Fireworks bursts={bursts} />
     </nav>
   );
 }

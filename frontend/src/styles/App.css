@@ -8779,6 +8779,9 @@
   height: 24px;
   display: block;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  /* Sin esto el SVG recorta su propio lienzo y el destello dorado del toque
+     (`ptak-logo-glow`) queda cortado en seco al abrir el juego. */
+  overflow: visible;
 }
 
 .ptak-lobby {

@@ -2,19 +2,13 @@
 // de dentro, y dos cartas (as de picas y rey de corazones) delante, como una
 // mano repartida. Va en SVG para que se vea nítido en cualquier tamaño.
 //
-// Con `interactive` el emblema se puede tocar: las cartas se levantan y el dedo
-// enciende los fuegos artificiales. En ese caso se envuelve en un botón, para
-// que también funcione con el teclado y los lectores de pantalla.
-export default function PokerTakLogo({
-  size = 72,
-  className = '',
-  interactive = false,
-  playing = false,
-  onCards,
-}) {
+// `playing` levanta las cartas y enciende el destello dorado un instante. Lo
+// dispara el botón que abre el juego (la pestaña de la barra inferior), no el
+// propio logo: así el gesto vive en el botón, que es lo que se toca.
+export default function PokerTakLogo({ size = 72, className = '', playing = false }) {
   const svg = (
     <svg
-      className={`ptak-logo-svg${playing ? ' playing' : ''}`}
+      className={`ptak-logo-svg${playing ? ' playing' : ''}${className ? ` ${className}` : ''}`}
       width={size}
       height={size}
       viewBox="0 0 100 100"
@@ -69,7 +63,7 @@ export default function PokerTakLogo({
       <path d="M30 18 l1.6 3.6 3.6 1.6 -3.6 1.6 -1.6 3.6 -1.6 -3.6 -3.6 -1.6 3.6 -1.6 z" fill="#ffe98a" opacity="0.9" />
 
       {/* Las dos cartas de la casa, abanicadas delante del queso: as de picas y
-          rey de corazones. Se pueden tocar para encender los fuegos. */}
+          rey de corazones. `playing` las levanta cuando se abre el juego. */}
       <g className="ptak-logo-cards">
         <g transform="rotate(-16 40 78)">
           <rect x="26" y="56" width="24" height="34" rx="3.5" fill="url(#ptak-card-face)" stroke="#b9c2e6" strokeWidth="1.4" />
@@ -85,16 +79,5 @@ export default function PokerTakLogo({
     </svg>
   );
 
-  if (!interactive) return svg;
-
-  return (
-    <button
-      type="button"
-      className={`ptak-logo-btn${className ? ` ${className}` : ''}`}
-      onClick={onCards}
-      aria-label="Tocar las cartas para lanzar fuegos artificiales"
-    >
-      {svg}
-    </button>
-  );
+  return svg;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,7 +15,6 @@ import {
 } from '../lib/pokerUi';
 import PokerTakLogo from './PokerTakLogo';
 import AsistakLogo from './AsistakLogo';
-import Fireworks, { useFireworks, celebrate } from './Fireworks';
 import LiveChat from './LiveChat';
 import TournamentPanel from './TournamentPanel';
 
@@ -157,12 +156,6 @@ export default function PokerTable({ slug, onClose }) {
   const [busy, setBusy] = useState(false);
   const [raiseTo, setRaiseTo] = useState(0);
   const [closed, setClosed] = useState(false);
-  // Fuegos artificiales: la capa se pinta por encima de todo y se apaga sola.
-  const { bursts, fire } = useFireworks();
-  // Última mano vista: sirve para celebrar solo cuando TERMINA una mano nueva y
-  // no en cada mensaje de estado que llega por el socket.
-  const handSeenRef = useRef(null);
-  const [logoPlaying, setLogoPlaying] = useState(false);
   // Comentarios de la mesa: el mismo hilo del directo, así Asistak vigila
   // también lo que se dice jugando y el aviso sale en la parte de comentarios.
   const [chatOpen, setChatOpen] = useState(false);
@@ -214,33 +207,6 @@ export default function PokerTable({ slug, onClose }) {
       emit('poker:leave', {});
     };
   }, [socket, slug, emit]);
-
-  // Celebración al terminar una mano: en el showdown saltan los fuegos desde el
-  // centro de la mesa. Se recuerda el número de mano para que la fiesta salga
-  // una vez por mano y no en cada mensaje de estado que llega por el socket.
-  useEffect(() => {
-    const hand = state?.handNumber;
-    if (hand == null) return;
-    if (state.phase !== 'showdown' || handSeenRef.current === hand) return;
-    handSeenRef.current = hand;
-    const rect = feltRef.current?.getBoundingClientRect();
-    const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
-    const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
-    celebrate(fire, x, y);
-  }, [state?.phase, state?.handNumber, fire]);
-
-  // Tocar las dos cartas del emblema: fuegos justo encima del dedo y las cartas
-  // se levantan un instante.
-  const boomFromLogo = useCallback((event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX || rect.left + rect.width / 2;
-    const y = event.clientY || rect.top + rect.height / 2;
-    fire(x, y, 45);
-    fire(x - 60, y + 20, 285);
-    fire(x + 60, y + 20, 325);
-    setLogoPlaying(true);
-    setTimeout(() => setLogoPlaying(false), 900);
-  }, [fire]);
 
   const mySeat = ownSeat(state, user?.id);
   const actions = useMemo(() => legalActions(state, mySeat), [state, mySeat]);
@@ -419,13 +385,7 @@ export default function PokerTable({ slug, onClose }) {
             cartas comunitarias. El repartidor es Asistak: cuida la mesa y lleva
             las cartas, como se pidió. */}
         <div className="ptak-center">
-          <PokerTakLogo
-            size={64}
-            className="ptak-center-logo"
-            interactive
-            playing={logoPlaying}
-            onCards={boomFromLogo}
-          />
+          <PokerTakLogo size={64} className="ptak-center-logo" />
           <h2 className="ptak-center-name">POKERTAK</h2>
           <p className="ptak-center-tagline">Somos la PEPA DEL QUIERO</p>
           {/* Bote en el centro del tapete, como en las mesas de siempre: es el
@@ -602,9 +562,6 @@ export default function PokerTable({ slug, onClose }) {
           </>
         )}
       </footer>
-
-      {/* Los fuegos viven por encima de la mesa, en una capa fija. */}
-      <Fireworks bursts={bursts} />
     </div>
   );
 }
