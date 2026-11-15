@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Feed from './components/Feed';
 import Upload from './components/Upload';
 import { LandingPage } from './components/LandingPage';
+import { StartupScreen } from './components/StartupScreen';
 import { useStore } from './store/useStore';
 import { LogOut } from 'lucide-react';
 import { Toaster } from 'sonner';
@@ -16,6 +17,7 @@ import { Toaster } from 'sonner';
 export default function App() {
   const { currentUser, isAuthenticated, logout } = useStore();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showStartup, setShowStartup] = useState(true);
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -27,6 +29,10 @@ export default function App() {
       window.removeEventListener('offline', onOffline);
     };
   }, []);
+
+  if (showStartup) {
+    return <StartupScreen onContinue={() => setShowStartup(false)} />;
+  }
 
   // Si no está autenticado, mostramos la "Pepa del Queso" (Landing Page Real)
   if (!isAuthenticated || !currentUser) {
