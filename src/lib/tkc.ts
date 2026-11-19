@@ -10,10 +10,10 @@
  *   MAX_SUPPLY 100_000_000 ether
  *
  * El contrato tiene un único `balanceOf` por dirección, así que la app también
- * usa un único saldo. Los antiguos "TTC-C" y "TTC-R" eran dos números separados
- * que no existían on-chain y además se valoraban a precios distintos (1000x de
- * diferencia entre pantalla y backend). Aquí queda un solo saldo y un solo tipo
- * de cambio.
+ * usa un único saldo. Los antiguos "TTC-C" y "TTC-R" se retiraron junto con toda
+ * la economía de prueba: no existían on-chain y se valoraban a precios distintos
+ * (1000x de diferencia entre pantalla y backend). Aquí queda un solo saldo, un
+ * solo tipo de cambio, y todos los usuarios arrancan en cero.
  */
 
 export const TKC = {
@@ -55,14 +55,3 @@ export function formatTkc(amount: number): string {
 export function formatTkcUsd(amount: number): string {
   return `$${tkcToUsd(amount ?? 0).toFixed(2)}`;
 }
-
-/**
- * Tipos de cambio de las monedas retiradas, SOLO para convertir saldos viejos.
- *
- * TTC-C valía 0.01 USD y TTC-R valía 0.00001 USD. Se guardan aquí para que la
- * migración de localStorage conserve el valor real de cada saldo en lugar de
- * sumar los números, que habría multiplicado por 1000 el saldo en TTC-R.
- * Ningún código nuevo debe usar estas constantes.
- */
-export const LEGACY_TTC_C_USD = 0.01;
-export const LEGACY_TTC_R_USD = 0.00001;

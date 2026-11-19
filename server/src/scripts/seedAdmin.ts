@@ -21,7 +21,7 @@ async function seedAdmin() {
       isAdmin: true,
       isVerified: true,
       economicBalance: 0,
-      minedCoins: 500, // Initial balance
+      minedCoins: 0, // Arranca en cero: la economia de prueba quedo retirada
       boughtCoins: 0,
       referralCode: 'MAN-7704',
       dateOfBirth: new Date('1976-01-01'),

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { usdToTkc, TKC_USD_RATE, LEGACY_TTC_C_USD, LEGACY_TTC_R_USD } from '../lib/tkc';
+import { usdToTkc } from '../lib/tkc';
 
 export const ADMIN_ACCOUNTS = [
   'elmalayaso7@gmail.com',
@@ -498,23 +498,26 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'taktak-storage',
-      // Los usuarios que ya tenían saldo guardado tienen ttcC y ttcR en
-      // localStorage. Se convierten a TKC conservando el VALOR en dólares, no el
-      // número: TTC-C valía 0.01 USD y TTC-R valía 0.00001 USD, así que sumarlos
-      // 1:1 habría multiplicado por 1000 el saldo de quien tenía TTC-R, creando
-      // dinero que nadie pagó. TTC-C entra 1:1 y TTC-R se divide por 1000.
-      version: 2,
+      // La economía TTC era de prueba y quedó retirada, así que la versión 3 no
+      // convierte los saldos viejos: los pone en cero para que todos empiecen
+      // limpios con TKC. También se descartan los vídeos guardados para que el
+      // feed arranque desde cero y no arrastre datos de las pruebas.
+      version: 3,
       migrate: (persisted: any) => {
         if (!persisted) return persisted;
-        const ttcC = persisted.ttcC ?? 0;
-        const ttcR = persisted.ttcR ?? 0;
-        if (persisted.tkc === undefined) {
-          const converted = ttcC * (LEGACY_TTC_C_USD / TKC_USD_RATE)
-            + ttcR * (LEGACY_TTC_R_USD / TKC_USD_RATE);
-          if (converted > 0) persisted.tkc = converted;
-        }
         delete persisted.ttcC;
         delete persisted.ttcR;
+        delete persisted.tkc;
+        delete persisted.balance;
+        delete persisted.bmPrincipal;
+        delete persisted.bmIncentivo;
+        delete persisted.miningPoints;
+        delete persisted.adminEarnings;
+        delete persisted.videos;
+        if (persisted.currentUser) {
+          persisted.currentUser.tkc = 0;
+          persisted.currentUser.miningPoints = 0;
+        }
         return persisted;
       },
       partialize: (state) => ({ 
