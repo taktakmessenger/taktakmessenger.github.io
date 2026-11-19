@@ -125,7 +125,9 @@ async function main() {
     console.log('OK anti-replay: el mismo informe no se cobra dos veces');
 
     // --- Vale caducado: rechazado ---
-    const pastDeadline = BigInt(Math.floor(Date.now() / 1000) - 1);
+    // Una hora atrás, no un segundo: el timestamp del último bloque puede ir por
+    // detrás del reloj del sistema y un margen de 1s hacía el test intermitente.
+    const pastDeadline = BigInt(Math.floor(Date.now() / 1000) - 3600);
     const oldHash = ethers.keccak256(ethers.toUtf8Bytes('test-report-old'));
     const oldDigest = digestFor({ chainId, contract: address, user: user.address, reportHash: oldHash, units, deadline: pastDeadline });
     const oldSignature = await oracle.signMessage(ethers.getBytes(oldDigest));

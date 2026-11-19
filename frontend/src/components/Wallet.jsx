@@ -178,7 +178,7 @@ export default function Wallet({ onBack, onNavigate }) {
           <small>Retirables</small>
         </div>
         <div className="stat-card total">
-          <h3>Total TTC</h3>
+          <h3>Total TKC</h3>
           <span className="amount">{wallet.totalTTC.toFixed(2)}</span>
         </div>
       </div>
@@ -361,7 +361,7 @@ export default function Wallet({ onBack, onNavigate }) {
                           : tx.type === 'bonus'
                             ? '✨'
                             : '📘'}{' '}
-                  {tx.amount} TTC
+                  {tx.amount} TKC
                   {tx.type === 'withdraw' && (
                     <small className="tx-paid">
                       {' · '}

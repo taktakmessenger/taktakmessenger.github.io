@@ -707,8 +707,8 @@ export default function AuthForm({ onDone, onGuest, initialView = 'welcome' }) {
               para acosar, suplantar ni difundir contenido ilegal.
             </p>
             <p>
-              Las monedas TTC-C se compran y se gastan en regalos dentro de la app. Los
-              diamantes TTC-R que recibe un creador son retirables. Las monedas ya enviadas
+              Las monedas se compran y se gastan en regalos dentro de la app. Los
+              diamantes que recibe un creador son retirables. Las monedas ya enviadas
               como regalo no son reembolsables.
             </p>
             <p>

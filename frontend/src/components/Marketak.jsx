@@ -273,7 +273,7 @@ function ListingComposer({ onClose, onCreated }) {
 
           <div className="market-form-row">
             <label className="market-field">
-              <span>Precio (TTC)</span>
+              <span>Precio (TKC)</span>
               <input
                 type="number"
                 min="0"
@@ -357,7 +357,7 @@ function ListingComposer({ onClose, onCreated }) {
   );
 }
 
-// Marketak: el mercado de segunda mano dentro de Facetak. Precios en TTC y el
+// Marketak: el mercado de segunda mano dentro de Facetak. Precios en TKC y el
 // trato se cierra por WhaTaka, que es donde la app ya habla en privado.
 export default function Marketak({ onMessage }) {
   const { user } = useAuth();

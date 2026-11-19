@@ -35,10 +35,10 @@ test('una condición desconocida se muestra tal cual', () => {
   assert.equal(conditionLabel('raro'), 'raro');
 });
 
-test('el precio se muestra en TTC', () => {
-  assert.equal(formatPrice(500), '500 TTC');
-  assert.equal(formatPrice(0), '0 TTC');
-  assert.match(formatPrice(1234), /TTC$/);
+test('el precio se muestra en TKC', () => {
+  assert.equal(formatPrice(500), '500 TKC');
+  assert.equal(formatPrice(0), '0 TKC');
+  assert.match(formatPrice(1234), /TKC$/);
 });
 
 test('el tiempo relativo resume los últimos días', () => {

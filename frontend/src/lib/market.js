@@ -29,10 +29,10 @@ export function conditionLabel(value) {
   return CONDITION_LABELS[value] || value;
 }
 
-// El precio se muestra siempre en TTC, la moneda de la app. Se redondea a entero
+// El precio se muestra siempre en TKC, la moneda de la app. Se redondea a entero
 // porque Marketak no maneja fracciones de moneda.
 export function formatPrice(value) {
-  return `${Number(value || 0).toLocaleString('es')} TTC`;
+  return `${Number(value || 0).toLocaleString('es')} TKC`;
 }
 
 export function relativeTime(value, now = Date.now()) {

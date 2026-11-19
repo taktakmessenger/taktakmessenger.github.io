@@ -360,7 +360,7 @@ export default function Settings({ onBack, onNavigate }) {
       <section className="settings-block">
         <h3>Dinero y seguridad</h3>
         <button type="button" className="settings-link" onClick={() => onNavigate('wallet')}>
-          <span>💰 Monedero TTC</span>
+          <span>💰 Monedero TKC</span>
           <span aria-hidden="true">›</span>
         </button>
         <button type="button" className="settings-link" onClick={() => onNavigate('verification')}>

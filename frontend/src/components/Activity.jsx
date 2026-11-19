@@ -28,7 +28,7 @@ function textFor(n) {
       return (
         <>
           <strong>{who}</strong> te envió {n.giftName || 'un regalo'}
-          {n.amount ? <span className="activity-amount"> · {n.amount} TTC-C</span> : null}
+          {n.amount ? <span className="activity-amount"> · {n.amount} TKC</span> : null}
         </>
       );
     case 'follow':
