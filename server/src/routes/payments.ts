@@ -1,4 +1,4 @@
-import { Router, Request, Response, raw } from 'express';
+import { Router, Request, Response } from 'express';
 import { createPaymentIntent, createCustomer, createSubscription, confirmPayment, cancelSubscription, handleWebhook } from '../services/stripe.js';
 import { giftService } from '../services/gift.js';
 import { miningService } from '../services/mining.js';
@@ -165,7 +165,7 @@ router.get('/plans', (req: Request, res: Response) => {
  * instead of the JSON-parsed body used everywhere else. `handleWebhook` throws
  * when the signature is missing or wrong, which stops forged events here.
  */
-router.post('/webhook', raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+router.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['stripe-signature'];
 
   if (typeof signature !== 'string') {
