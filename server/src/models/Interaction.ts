@@ -10,7 +10,9 @@ export type InteractionType =
   | 'replay' 
   | 'skip' 
   | 'save' 
-  | 'unsave';
+  | 'unsave'
+  | 'like_rewarded'
+  | 'view_rewarded';
 
 export interface IInteraction extends Document {
   userId: mongoose.Types.ObjectId;
@@ -27,7 +29,7 @@ const InteractionSchema = new Schema<IInteraction>(
     videoId: { type: Schema.Types.ObjectId, ref: 'Video', required: true },
     type: { 
       type: String, 
-      enum: ['like', 'unlike', 'comment', 'share', 'view', 'complete_view', 'replay', 'skip', 'save', 'unsave'], 
+      enum: ['like', 'unlike', 'comment', 'share', 'view', 'complete_view', 'replay', 'skip', 'save', 'unsave', 'like_rewarded', 'view_rewarded'], 
       required: true 
     },
     watchDuration: { type: Number },
@@ -39,6 +41,12 @@ const InteractionSchema = new Schema<IInteraction>(
 // Indexes for fast querying in recommendation engine
 InteractionSchema.index({ userId: 1, createdAt: -1 });
 InteractionSchema.index({ videoId: 1, type: 1 });
-InteractionSchema.index({ userId: 1, videoId: 1, type: 1 });
+// Only the reward markers are unique. Plain 'view' rows must stay repeatable,
+// so the constraint is partial: a user can view a video many times but can be
+// paid for it at most once per video.
+InteractionSchema.index(
+  { userId: 1, videoId: 1, type: 1 },
+  { unique: true, partialFilterExpression: { type: { $in: ['like_rewarded', 'view_rewarded'] } } }
+);
 
 export const Interaction = mongoose.model<IInteraction>('Interaction', InteractionSchema);

@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { raw } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
@@ -35,6 +35,12 @@ app.use(cors({
   credentials: true
 }));
 app.use(compression());
+
+// Stripe signs the exact bytes it sent, so the webhook must be mounted before
+// express.json() consumes the stream. Anywhere after this point the body is a
+// parsed object and signature verification would always fail.
+app.use('/api/payments/webhook', raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'production') {

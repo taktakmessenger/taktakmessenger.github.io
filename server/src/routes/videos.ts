@@ -252,10 +252,24 @@ router.post('/:id/view', optionalAuth, async (req: AuthRequest, res: Response) =
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    // Reward the viewer if logged in
-    const viewerId = req.user?.id || userId;
-    if (viewerId) {
-      await miningService.rewardActivity(viewerId.toString(), 'view');
+    // Reward only the authenticated viewer, and only once per video. Previously
+    // the handler trusted req.body.userId, so an unauthenticated caller could
+    // farm rewards on behalf of any account by replaying this endpoint.
+    const viewerId = req.user?.id;
+    const MIN_REWARD_WATCH_SECONDS = 10;
+    if (viewerId && Number(watchTime) >= MIN_REWARD_WATCH_SECONDS) {
+      try {
+        await Interaction.create({
+          userId: new mongoose.Types.ObjectId(viewerId),
+          videoId: video._id,
+          type: 'view_rewarded',
+        });
+        await miningService.rewardActivity(viewerId.toString(), 'view');
+      } catch (rewardErr: any) {
+        if (rewardErr?.code !== 11000) {
+          console.error('View reward failed:', rewardErr);
+        }
+      }
     }
 
     // Log interaction
@@ -344,10 +358,22 @@ router.post('/:id/like', authMiddleware, async (req: AuthRequest, res: Response)
 
     // Reward for Like Activity
     if (likedIndex === -1) {
-      // Reward the Liker
-      miningService.rewardActivity(userId!, 'like');
-      // Reward the Creator
-      miningService.rewardActivity(video.userId.toString(), 'receive_like');
+      // Like/unlike/like used to pay out every cycle. Only the first like a
+      // user ever gives a video is rewarded: the marker row is protected by a
+      // partial unique index, so a repeat insert fails and the payout is skipped.
+      try {
+        await Interaction.create({
+          userId: new mongoose.Types.ObjectId(userId),
+          videoId: video._id,
+          type: 'like_rewarded',
+        });
+        miningService.rewardActivity(userId!, 'like');
+        miningService.rewardActivity(video.userId.toString(), 'receive_like');
+      } catch (rewardErr: any) {
+        if (rewardErr?.code !== 11000) {
+          console.error('Like reward failed:', rewardErr);
+        }
+      }
     }
   } catch (error) {
     console.error('Like error:', error);

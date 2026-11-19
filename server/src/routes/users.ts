@@ -9,9 +9,30 @@ const router = Router();
 router.post('/checkin', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    // In a real app, we'd check if the user already checked in today in the DB.
-    // For this implementation, we'll allow the reward.
-    const result = await miningService.rewardActivity(userId!, 'checkin');
+
+    if (!userId) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    // One reward per calendar day. The claim is a conditional update, so of two
+    // simultaneous requests only the one that actually moves lastCheckinAt wins.
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const claimed = await User.findOneAndUpdate(
+      {
+        _id: userId,
+        $or: [{ lastCheckinAt: { $exists: false } }, { lastCheckinAt: { $lt: startOfDay } }],
+      },
+      { $set: { lastCheckinAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+
+    if (!claimed) {
+      return res.status(409).json({ success: false, error: 'Ya reclamaste el check-in de hoy' });
+    }
+
+    const result = await miningService.rewardActivity(userId, 'checkin');
     res.json({ success: true, reward: result?.reward });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -69,9 +90,18 @@ router.post('/kyc', authMiddleware, kycUpload.fields([
 
     await User.findByIdAndUpdate(userId, updateData);
 
-    // Reward User & Mother Wallet (Mining Split)
+    // Reward User & Mother Wallet (Mining Split).
+    // Only the first submission pays: resubmitting the same KYC used to grant
+    // 45 coins every time. The conditional update makes the claim atomic.
     try {
-      await miningService.rewardActionWithSplit(userId!, 'verification');
+      const claim = await User.findOneAndUpdate(
+        { _id: userId, 'kycData.verifiedAt': { $exists: false } },
+        { $set: { 'kycData.verifiedAt': new Date() } },
+        { returnDocument: 'before' }
+      );
+      if (claim) {
+        await miningService.rewardActionWithSplit(userId!, 'verification');
+      }
     } catch (rewardError) {
       console.error('Failed to process mining reward for verification:', rewardError);
     }

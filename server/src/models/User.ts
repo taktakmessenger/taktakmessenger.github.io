@@ -68,6 +68,7 @@ export interface IUser extends Document {
   privacyPolicyAccepted: boolean;
   referralCode?: string;
   referredBy?: mongoose.Types.ObjectId;
+  lastCheckinAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -131,6 +132,7 @@ const userSchema = new Schema<IUser>({
   isWhaleOrBot: { type: Boolean, default: false },
   whaleOrBotSince: { type: Date },
   balance: { type: Number, default: 0 },
+  lastCheckinAt: { type: Date },
   purchasedCoins: { type: Number, default: 0 },
   minedCoins: { type: Number, default: 0 },
   isAgencyMember: { type: Boolean, default: false },
