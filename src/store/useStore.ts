@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { usdToTkc } from '../lib/tkc';
 
 export const ADMIN_ACCOUNTS = [
   'elmalayaso7@gmail.com',
@@ -18,8 +19,7 @@ export interface User {
   bio: string;
   isAdmin: boolean;
   isOwner: boolean;
-  ttcC: number;
-  ttcR: number;
+  tkc: number;
   miningPoints: number;
   referralCode?: string;
   incentiveLevel?: number; // 1 to 5
@@ -120,22 +120,20 @@ interface AppState {
   
   // Payments & Economy
   balance: number;
-  ttcC: number;
-  ttcR: number;
+  tkc: number;
   bmPrincipal: number;
   bmIncentivo: number;
   miningPoints: number;
   addBalance: (amount: number) => void;
-  addTtcC: (amount: number) => void;
-  addTtcR: (amount: number) => void;
+  addTkc: (amount: number) => void;
   addBmPrincipal: (amount: number) => void;
   addBmIncentivo: (amount: number) => void;
   setMiningPoints: (points: number) => void;
   miningCycle: (totalMined: number) => void;
   withdrawIncentivo: () => boolean;
   withdrawProgressive: (usdAmount: number) => { success: boolean, message: string };
-  sendTtcR: (amount: number, address: string) => boolean;
-  swapTtcR: (amount: number, targetCurrency: string) => boolean;
+  sendTkc: (amount: number, address: string) => boolean;
+  swapTkc: (amount: number, targetCurrency: string) => boolean;
   
   // Navigation
   currentTab: 'home' | 'discover' | 'poker' | 'create' | 'wallet' | 'chat' | 'profile' | 'policies' | 'live' | 'following' | 'incentives' | 'whataka' | 'whataka-download';
@@ -342,18 +340,18 @@ export const useStore = create<AppState>()(
       })),
       sendGift: (videoId, giftId) => {
         const gift = get().gifts.find(g => g.id === giftId);
-        const { ttcC } = get();
+        const { tkc } = get();
         
-        if (gift && ttcC >= gift.price) {
+        if (gift && tkc >= gift.price) {
           const platformFee = gift.price * 0.4;
           
           set((state) => ({
             videos: state.videos.map(v => 
               v.id === videoId ? { ...v, gifts: v.gifts + 1 } : v
             ),
-            ttcC: state.ttcC - gift.price,
+            tkc: state.tkc - gift.price,
             bmPrincipal: state.bmPrincipal + platformFee
-            // In a real app, we would add creatorReward (gift.price * 0.6) to the video owner's ttcR
+            // In a real app, we would add creatorReward (gift.price * 0.6) to the creator's tkc
           }));
           return true;
         }
@@ -362,21 +360,19 @@ export const useStore = create<AppState>()(
       
       // Payments & Economy
       balance: 0.00,
-      ttcC: 0.00,
-      ttcR: 0.00,
+      tkc: 0.00,
       bmPrincipal: 0.00,
       bmIncentivo: 0.00,
       miningPoints: 0,
       
-      addTtcC: (amount) => set((state) => {
+      addTkc: (amount) => set((state) => {
         const commission = amount * 0.4; // 40% commission on purchases
         return { 
-          ttcC: state.ttcC + amount,
+          tkc: state.tkc + amount,
           bmPrincipal: state.bmPrincipal + commission
         };
       }),
       
-      addTtcR: (amount) => set((state) => ({ ttcR: state.ttcR + amount })),
       
       miningCycle: (totalMined: number) => {
         // Distribution: 36% Creators, 18% Viewers, 36% Nodes, 10% Admin
@@ -385,7 +381,7 @@ export const useStore = create<AppState>()(
         const platformPart = totalMined * 0.36; // Representing nodes/infra
         
         set((state) => ({
-          ttcR: state.ttcR + viewerReward,
+          tkc: state.tkc + viewerReward,
           bmIncentivo: state.bmIncentivo + adminIncentive,
           bmPrincipal: state.bmPrincipal + platformPart,
           miningPoints: 0 // Reset points after cycle
@@ -396,7 +392,7 @@ export const useStore = create<AppState>()(
         const { bmIncentivo, currentUser } = get();
         if (currentUser?.isAdmin && bmIncentivo > 0) {
           set((state) => ({
-            ttcR: state.ttcR + state.bmIncentivo,
+            tkc: state.tkc + state.bmIncentivo,
             bmIncentivo: 0
           }));
           return true;
@@ -409,11 +405,10 @@ export const useStore = create<AppState>()(
         const user = state.currentUser;
         if (!user) return { success: false, message: 'No autenticado.' };
 
-        // 1 USD at 0.00001 per TTC-R is 100,000 TTC-R
-        const requiredTtcR = usdAmount * 100000;
+        const requiredTkc = usdToTkc(usdAmount);
         
-        if (state.ttcR < requiredTtcR) {
-          return { success: false, message: 'Saldo TTC-R (Incentivos) insuficiente.' };
+        if (state.tkc < requiredTkc) {
+          return { success: false, message: 'Saldo TKC insuficiente.' };
         }
 
         const currentLevel = user.incentiveLevel || 1;
@@ -457,7 +452,7 @@ export const useStore = create<AppState>()(
         const netAmount = usdAmount - feeAmount;
 
         set((s) => ({
-          ttcR: s.ttcR - requiredTtcR,
+          tkc: s.tkc - requiredTkc,
           currentUser: s.currentUser ? { ...s.currentUser, incentiveLevel: nextLevel } : null
         }));
 
@@ -467,21 +462,21 @@ export const useStore = create<AppState>()(
         };
       },
 
-      sendTtcR: (amount, address) => {
-        const { ttcR } = get();
-        if (ttcR >= amount) {
-          console.log(`Sending ${amount} TTC-R to ${address}`);
-          set((state) => ({ ttcR: state.ttcR - amount }));
+      sendTkc: (amount, address) => {
+        const { tkc } = get();
+        if (tkc >= amount) {
+          console.log(`Sending ${amount} TKC to ${address}`);
+          set((state) => ({ tkc: state.tkc - amount }));
           return true;
         }
         return false;
       },
 
-      swapTtcR: (amount, targetCurrency) => {
-        const { ttcR } = get();
-        if (ttcR >= amount) {
-          console.log(`Swapping ${amount} TTC-R for ${targetCurrency}`);
-          set((state) => ({ ttcR: state.ttcR - amount }));
+      swapTkc: (amount, targetCurrency) => {
+        const { tkc } = get();
+        if (tkc >= amount) {
+          console.log(`Swapping ${amount} TKC for ${targetCurrency}`);
+          set((state) => ({ tkc: state.tkc - amount }));
           // In a real app, we would credit the target currency here
           return true;
         }
@@ -503,13 +498,34 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'taktak-storage',
+      // La economía TTC era de prueba y quedó retirada, así que la versión 3 no
+      // convierte los saldos viejos: los pone en cero para que todos empiecen
+      // limpios con TKC. También se descartan los vídeos guardados para que el
+      // feed arranque desde cero y no arrastre datos de las pruebas.
+      version: 3,
+      migrate: (persisted: any) => {
+        if (!persisted) return persisted;
+        delete persisted.ttcC;
+        delete persisted.ttcR;
+        delete persisted.tkc;
+        delete persisted.balance;
+        delete persisted.bmPrincipal;
+        delete persisted.bmIncentivo;
+        delete persisted.miningPoints;
+        delete persisted.adminEarnings;
+        delete persisted.videos;
+        if (persisted.currentUser) {
+          persisted.currentUser.tkc = 0;
+          persisted.currentUser.miningPoints = 0;
+        }
+        return persisted;
+      },
       partialize: (state) => ({ 
         currentUser: state.currentUser, 
         isAuthenticated: state.isAuthenticated,
         videos: state.videos,
         balance: state.balance,
-        ttcC: state.ttcC,
-        ttcR: state.ttcR,
+        tkc: state.tkc,
         bmPrincipal: state.bmPrincipal,
         bmIncentivo: state.bmIncentivo,
         miningPoints: state.miningPoints,

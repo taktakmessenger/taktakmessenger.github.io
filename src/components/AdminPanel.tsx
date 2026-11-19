@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useStore } from '@/store/useStore';
 import { toast } from 'sonner';
+import { TKC, formatTkc } from '@/lib/tkc';
 
 type AdminTab = 'dashboard' | 'users' | 'earnings' | 'security' | 'integrations' | 'calls' | 'settings' | 'economy';
 
@@ -514,13 +515,13 @@ export const AdminPanel = ({ onClose }: { onClose: () => void }) => {
           <div className="p-4 space-y-4">
             <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 p-6 rounded-xl border border-green-500/30 text-center">
               <p className="text-zinc-400 text-sm italic">BM‑PRINCIPAL (Plataforma - Regalos)</p>
-              <p className="text-4xl font-bold text-green-400">{bmPrincipal?.toLocaleString() || 0} TTC</p>
+              <p className="text-4xl font-bold text-green-400">{formatTkc(bmPrincipal)} {TKC.symbol}</p>
               <p className="text-zinc-500 text-xs mt-2">≈ ${(bmPrincipal * 0.01).toLocaleString()} USD</p>
             </div>
 
             <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-6 rounded-xl border border-purple-500/30 text-center">
               <p className="text-zinc-400 text-sm italic">BM‑INCENTIVO (Admin - 10% Minado)</p>
-              <p className="text-4xl font-bold text-purple-400">{bmIncentivo?.toLocaleString() || 0} TTC</p>
+              <p className="text-4xl font-bold text-purple-400">{formatTkc(bmIncentivo)} {TKC.symbol}</p>
               <p className="text-zinc-500 text-xs mt-2">≈ ${(bmIncentivo * 0.01).toLocaleString()} USD</p>
               <Button 
                 onClick={() => {

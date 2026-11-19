@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useStore } from '@/store/useStore';
 import { toast } from 'sonner';
+import { TKC } from '@/lib/tkc';
 
 const trendingTopics = [
   { id: '1', tag: '#viral', posts: '2.5M', icon: Flame },
@@ -146,7 +147,7 @@ export const DiscoverView = () => {
           <div className="absolute inset-0 p-6 flex flex-col justify-center">
             <span className="bg-red-500 text-[10px] font-bold text-white px-2 py-0.5 rounded-full w-fit mb-2">HOT CHALLENGE</span>
             <h2 className="text-2xl font-black text-white italic tracking-tighter">#TakTakDance2026</h2>
-            <p className="text-white/70 text-sm mt-1">¡Gana hasta 5000 TTC participando!</p>
+            <p className="text-white/70 text-sm mt-1">¡Gana hasta 5000 {TKC.symbol} participando!</p>
             <Button size="sm" className="mt-4 w-fit bg-white text-black hover:bg-zinc-200">Participar ahora</Button>
           </div>
         </motion.div>
@@ -214,7 +215,7 @@ export const DiscoverView = () => {
           {[
             { id: '1', name: 'Original Sound', artist: 'Dua Lipa', img: 'https://picsum.photos/200?random=10' },
             { id: '2', name: 'Cyberpunk Mix', artist: 'Night City', img: 'https://picsum.photos/200?random=11' },
-            { id: '3', name: 'TTC Vibes', artist: 'CryptoBeat', img: 'https://picsum.photos/200?random=12' },
+            { id: '3', name: 'TKC Vibes', artist: 'CryptoBeat', img: 'https://picsum.photos/200?random=12' },
             { id: '4', name: 'Magic Car', artist: 'Racer X', img: 'https://picsum.photos/200?random=13' },
           ].map((sound) => (
             <div key={sound.id} className="flex-shrink-0 w-28 group cursor-pointer">

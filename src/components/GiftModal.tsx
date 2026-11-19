@@ -14,8 +14,8 @@ interface GiftModalProps {
 }
 
 export const GiftModal = ({ videoId, onClose }: GiftModalProps) => {
-  const { gifts, customGifts, ttcC, ttcR, sendGift, addBalance, addEarnings } = useStore();
-  const balance = ttcC + ttcR;
+  const { gifts, customGifts, tkc, sendGift, addBalance, addEarnings } = useStore();
+  const balance = tkc;
   const [selectedGift, setSelectedGift] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -34,20 +34,7 @@ export const GiftModal = ({ videoId, onClose }: GiftModalProps) => {
       return;
     }
 
-    // Logic to prioritize ttcC over ttcR
-    let newTtcC = ttcC;
-    let newTtcR = ttcR;
-    
-    if (ttcC >= gift.price) {
-      newTtcC -= gift.price;
-    } else {
-      const remaining = gift.price - ttcC;
-      newTtcC = 0;
-      newTtcR -= remaining;
-    }
-
-    useStore.setState({ ttcC: newTtcC, ttcR: newTtcR });
-
+    // sendGift already debits the balance; doing it here too charged twice.
     sendGift(videoId, selectedGift);
     addEarnings(gift.price * 0.3); // para el admin
     toast.success(`¡Regalo "${gift.name}" enviado con éxito! 🎁`);

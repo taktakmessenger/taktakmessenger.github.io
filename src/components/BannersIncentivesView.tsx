@@ -4,9 +4,10 @@ import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { TKC, formatTkc, tkcToUsd } from '@/lib/tkc';
 
 export const BannersIncentivesView = () => {
-  const { ttcR, currentUser, setCurrentTab, withdrawProgressive } = useStore();
+  const { tkc, currentUser, setCurrentTab, withdrawProgressive } = useStore();
   const [amount, setAmount] = useState('');
 
   if (!currentUser) return null;
@@ -14,7 +15,7 @@ export const BannersIncentivesView = () => {
   const currentLevel = currentUser.incentiveLevel || 1;
   const isWhale = currentUser.isWhale || false;
   
-  const usdBalance = ttcR * 0.00001;
+  const usdBalance = tkcToUsd(tkc);
 
   const handleWithdraw = (targetUsd: number) => {
     const { success, message } = withdrawProgressive(targetUsd);
@@ -66,7 +67,7 @@ export const BannersIncentivesView = () => {
         <div className="bg-gradient-to-r from-yellow-600 to-amber-500 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-black">
           <p className="text-sm font-bold uppercase tracking-widest opacity-80 mb-1">Saldo de Incentivos</p>
           <p className="text-4xl font-black mb-1">${usdBalance.toFixed(2)} USD</p>
-          <p className="text-sm font-mono opacity-80">{ttcR.toLocaleString()} TTC-R</p>
+          <p className="text-sm font-mono opacity-80">{formatTkc(tkc)} {TKC.symbol}</p>
           
           {isWhale && (
             <div className="mt-4 p-3 bg-red-500/20 rounded-xl border border-red-500/50 flex items-start gap-2">

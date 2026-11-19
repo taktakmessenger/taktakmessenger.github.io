@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useStore } from '@/store/useStore';
 import { toast } from 'sonner';
+import { TKC, TKC_USD_RATE, formatTkc, formatTkcUsd } from '../lib/tkc';
 
 interface PaymentMethod {
   id: string;
@@ -47,7 +48,7 @@ const subscriptions = [
 ];
 
 export const PaymentView = () => {
-  const { ttcC, ttcR, addTtcC } = useStore();
+  const { tkc, addTkc } = useStore();
   const [activeTab, setActiveTab] = useState<'recharge' | 'buy' | 'subscription' | 'withdraw' | 'send' | 'swap'>('recharge');
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
@@ -64,7 +65,7 @@ export const PaymentView = () => {
     
     setTimeout(() => {
       const value = parseFloat(amount);
-      addTtcC(value);
+      addTkc(value);
       setIsProcessing(false);
       setShowPaymentDetails(true);
       toast.success(`¡Recarga de $${value} exitosa!`);
@@ -75,7 +76,7 @@ export const PaymentView = () => {
     setIsProcessing(true);
     
     setTimeout(() => {
-      addTtcC(pkg.credits);
+      addTkc(pkg.credits);
       setIsProcessing(false);
       toast.success(`¡${pkg.name} activado! +${pkg.credits} fichas`);
     }, 1500);
@@ -111,21 +112,14 @@ export const PaymentView = () => {
           <div className="w-10" />
         </div>
         
-        <div className="grid grid-cols-2 gap-4 text-center mt-2">
-          <div>
-            <p className="text-white/70 text-xs uppercase tracking-wider">TTC‑C (Interno)</p>
-            <p className="text-2xl font-bold">{ttcC?.toLocaleString() || 0}</p>
-            <p className="text-[10px] text-white/40 font-mono">${(ttcC * 0.01).toFixed(2)} USD</p>
-          </div>
-          <div>
-            <p className="text-white/70 text-xs uppercase tracking-wider">TTC‑R (Premios)</p>
-            <p className="text-2xl font-bold">{ttcR?.toLocaleString() || 0}</p>
-            <p className="text-[10px] text-white/40 font-mono">${(ttcR * 0.00001).toFixed(2)} USD</p>
-          </div>
+        <div className="text-center mt-2">
+          <p className="text-white/70 text-xs uppercase tracking-wider">Saldo TakCoin</p>
+          <p className="text-3xl font-bold">{formatTkc(tkc)} TKC</p>
+          <p className="text-[10px] text-white/40 font-mono">{formatTkcUsd(tkc)} USD</p>
         </div>
         <div className="mt-4 flex flex-col items-center gap-1">
-          <p className="text-white/30 text-[10px] uppercase tracking-tighter">Suministro Total (Max Supply): 50,000,000 TTC</p>
-          <p className="text-white/30 text-[10px] uppercase">1,000 TTC-R ≈ 0.01 USD | 1 TTC-C = 0.01 USD</p>
+          <p className="text-white/30 text-[10px] uppercase tracking-tighter">Suministro Total (Max Supply): {TKC.maxSupply.toLocaleString()} {TKC.symbol}</p>
+          <p className="text-white/30 text-[10px] uppercase">1 {TKC.symbol} = {TKC_USD_RATE} USD</p>
         </div>
       </div>
 
@@ -183,12 +177,8 @@ export const PaymentView = () => {
           </h3>
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-xs">
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1" />
-              <p className="text-zinc-300"><span className="text-white font-semibold">TTC-C (Compras):</span> Exclusivas para regalos y contenido. No transferibles externamente.</p>
-            </div>
-            <div className="flex items-start gap-2 text-xs">
               <div className="w-1.5 h-1.5 rounded-full bg-[#25F4EE] mt-1" />
-              <p className="text-zinc-300"><span className="text-white font-semibold">TTC-R (Premios):</span> Canjeables, enviables y vendibles sin restricciones internas.</p>
+              <p className="text-zinc-300"><span className="text-white font-semibold">{TKC.symbol} ({TKC.name}):</span> Una sola moneda para regalos, premios y retiros. Se usa también para minar.</p>
             </div>
           </div>
         </div>
@@ -264,7 +254,7 @@ export const PaymentView = () => {
               />
             </div>
             <div className="bg-zinc-900 rounded-xl p-4">
-              <label className="text-zinc-400 text-sm mb-2 block">Monto a enviar (TTC‑R)</label>
+              <label className="text-zinc-400 text-sm mb-2 block">Monto a enviar (TKC)</label>
               <div className="flex items-center gap-2">
                 <span className="text-2xl text-[#25F4EE]">R</span>
                 <Input
@@ -282,7 +272,7 @@ export const PaymentView = () => {
                   toast.success('Envío completado');
                   setAmount('');
                 } else {
-                  toast.error('Saldo TTC-R insuficiente');
+                  toast.error('Saldo TKC insuficiente');
                 }
               }}
               className="w-full bg-[#25F4EE] hover:bg-[#20d8d2] text-black font-bold py-6 text-lg"
@@ -295,7 +285,7 @@ export const PaymentView = () => {
         {activeTab === 'swap' && (
           <div className="space-y-4">
             <div className="bg-zinc-900 rounded-xl p-4">
-              <label className="text-zinc-400 text-sm mb-2 block">De: TTC-R</label>
+              <label className="text-zinc-400 text-sm mb-2 block">De: TKC</label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -409,7 +399,7 @@ export const PaymentView = () => {
         {activeTab === 'withdraw' && (
           <div className="space-y-4">
             <div className="bg-zinc-900 rounded-xl p-4">
-              <label className="text-zinc-400 text-sm mb-2 block">Monto a retirar (TTC‑R)</label>
+              <label className="text-zinc-400 text-sm mb-2 block">Monto a retirar (TKC)</label>
               <div className="flex items-center gap-2">
                 <span className="text-2xl text-[#25F4EE]">R</span>
                 <Input
@@ -453,8 +443,8 @@ export const PaymentView = () => {
 
             <Button
               onClick={() => {
-                if (!amount || parseFloat(amount) > ttcR) {
-                  toast.error('Saldo TTC‑R insuficiente');
+                if (!amount || parseFloat(amount) > tkc) {
+                  toast.error('Saldo TKC insuficiente');
                   return;
                 }
                 setIsProcessing(true);

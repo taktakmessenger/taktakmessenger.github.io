@@ -292,7 +292,7 @@ export class MiningService {
 
   /**
    * Periodic Reward Cycle
-   * Distributes TTC-R based on accumulated points across the network.
+   * Distributes TKC based on accumulated points across the network.
    */
   async runRewardCycle(totalPoolAmount: number = 1000) {
     const session = await mongoose.startSession();
@@ -338,7 +338,7 @@ export class MiningService {
         // Removed node points distribution as per user request (100% to admin)
 
         if (userReward > 0) {
-          user.minedCoins += userReward; // ttcR in frontend
+          user.minedCoins += userReward; // TKC in frontend
           // Reset points after reward
           user.miningPoints = { viewer: 0, creator: 0, node: 0 };
           await user.save({ session });
@@ -382,7 +382,7 @@ export class MiningService {
       );
 
       await session.commitTransaction();
-      console.log(`✅ Reward cycle completed. Distributed ${totalPoolAmount} TTC-R. Admin share: ${poolAdmin} TTC-R.`);
+      console.log(`✅ Reward cycle completed. Distributed ${totalPoolAmount} TKC. Admin share: ${poolAdmin} TKC.`);
     } catch (error) {
       await session.abortTransaction();
       console.error('❌ Reward cycle failed:', error);
@@ -461,8 +461,8 @@ export class MiningService {
       if (!user) throw new Error('User not found');
 
       const rewards = {
-        verification: 50, // 50 TTC for KYC
-        video_upload: 10, // 10 TTC for upload
+        verification: 50, // 50 TKC for KYC
+        video_upload: 10, // 10 TKC for upload
       };
 
       const totalReward = rewards[actionType] || 0;

@@ -1,15 +1,16 @@
-import React, { useRef, useState, useContext } from 'react';
+import React, { useRef, useState } from 'react';
 import axios from 'axios';
-import { AuthContext } from '../App';
 
 export default function Upload() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const { token } = useContext(AuthContext);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
+    // El resto de la app lee el token de aqui; api.ts ya lo adjunta en cada
+    // peticion, pero la subida va por axios directo, asi que se lee igual.
+    const token = localStorage.getItem('taktak_token');
     if (!token) return alert('Debes iniciar sesión para subir vídeos.');
 
     setUploading(true);
