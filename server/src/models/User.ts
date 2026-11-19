@@ -38,8 +38,8 @@ export interface IUser extends Document {
   isWhaleOrBot: boolean;
   whaleOrBotSince?: Date;
   balance: number; // USD balance (from gifts/mined conversion)
-  purchasedCoins: number; // Spend-only coins
-  minedCoins: number; // Potentially withdrawable coins
+  purchasedCoins: number; // TKC bought with money
+  minedCoins: number; // TKC earned by mining
   isAgencyMember: boolean;
   agencyId?: mongoose.Types.ObjectId;
   dailyMiningAmount: number;
@@ -57,7 +57,7 @@ export interface IUser extends Document {
     status: 'pending' | 'verified' | 'rejected' | 'none';
   };
   watchedViewsCount: number;
-  bmIncentivo: number; // Admin incentive (TTC-R)
+  bmIncentivo: number; // Admin incentive (TKC)
   miningPoints: {
     viewer: number;
     creator: number;

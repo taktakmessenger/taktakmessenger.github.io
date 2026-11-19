@@ -158,7 +158,7 @@ router.post('/verify', [
     if (!user.isVerified && user.referredBy) {
       const referrer = await User.findById(user.referredBy);
       if (referrer) {
-        referrer.minedCoins += 100; // Reward: 100 TTC-R = $1.00 USD
+        referrer.minedCoins += 100; // Reward: 100 TKC
         await referrer.save();
       }
     }
@@ -532,8 +532,9 @@ router.post('/recover', async (req: Request, res: Response) => {
         phone: user.phone,
         isAdmin: user.isAdmin,
         isOwner: user.isOwner,
-        ttcC: (user as any).ttcC || 0,
-        ttcR: (user as any).ttcR || 0,
+        // Un solo saldo TKC: el contrato tiene un único balanceOf, así que el
+        // backend no debe exponer dos monedas distintas al frontend.
+        tkc: (user.purchasedCoins || 0) + (user.minedCoins || 0),
         bmPrincipal: (user as any).bmPrincipal || 0,
         bmIncentivo: (user as any).bmIncentivo || 0,
         miningPoints: (user as any).miningPoints || 0,

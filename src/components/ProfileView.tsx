@@ -14,9 +14,10 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { TKC, formatTkc, formatTkcUsd } from '@/lib/tkc';
 
 const AnalyticsModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const { currentUser, videos, ttcR } = useStore();
+  const { currentUser, videos, tkc } = useStore();
   const userVideos = videos.filter(v => v.userId === currentUser?.id);
   
   const totalViews = userVideos.length * 1250; 
@@ -81,7 +82,7 @@ const AnalyticsModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                   </div>
                   <span className="text-white font-semibold">Balance TakTak Premios</span>
                 </div>
-                <span className="text-yellow-500 font-bold">{ttcR.toFixed(2)} TTC-R</span>
+                <span className="text-yellow-500 font-bold">{tkc.toFixed(2)} {TKC.symbol}</span>
               </div>
             </div>
 
@@ -268,7 +269,7 @@ const SettingsModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 };
 
 export const ProfileView = () => {
-  const { currentUser, videos, customGifts, ttcC, ttcR, setCurrentTab } = useStore();
+  const { currentUser, videos, customGifts, tkc, setCurrentTab } = useStore();
   const { anonId, deviceFingerprint, logout } = useSecurity();
   const [showSecurityInfo, setShowSecurityInfo] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -399,14 +400,14 @@ export const ProfileView = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">TTC-C (Compras)</p>
-              <p className="text-xl font-black text-white">{ttcC?.toLocaleString() || 0}</p>
+              <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">{TKC.name} (TKC)</p>
+              <p className="text-xl font-black text-white">{formatTkc(tkc)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                TTC-R (Premios) <TrendingUp className="w-3 h-3 text-[#25F4EE]" />
+                Equivalente en USD <TrendingUp className="w-3 h-3 text-[#25F4EE]" />
               </p>
-              <p className="text-xl font-black text-[#25F4EE]">{ttcR?.toLocaleString() || 0}</p>
+              <p className="text-xl font-black text-[#25F4EE]">{formatTkcUsd(tkc)}</p>
             </div>
           </div>
           
@@ -429,7 +430,7 @@ export const ProfileView = () => {
               Invita y Gana
             </h3>
             <span className="bg-black text-yellow-500 text-[10px] font-black uppercase px-2 py-1 rounded-full shadow-lg">
-              +100 TTC-R
+              +100 TKC
             </span>
           </div>
           <p className="text-sm font-medium mb-4 opacity-90">

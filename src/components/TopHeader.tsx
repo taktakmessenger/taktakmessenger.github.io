@@ -3,6 +3,7 @@ import { Search, PlusSquare, MessageSquare, Bell, Hash, Wallet } from 'lucide-re
 import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { formatTkc } from '@/lib/tkc';
 
 export const TopHeader = () => {
   const { setCurrentTab, currentUser } = useStore();
@@ -124,7 +125,7 @@ export const TopHeader = () => {
         >
           <Wallet className="w-4 h-4 text-[#FE2C55] group-hover:scale-110 transition-transform" />
           <span className="text-white font-bold text-sm tracking-tight">
-            TTC {(useStore.getState().ttcC + useStore.getState().ttcR).toLocaleString()}
+            TKC {formatTkc(useStore.getState().tkc)}
           </span>
         </button>
         <div 

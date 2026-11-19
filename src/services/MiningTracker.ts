@@ -1,5 +1,5 @@
 /**
- * MiningTracker handles the accumulation and reporting of TTC mining units.
+ * MiningTracker handles the accumulation and reporting of TKC mining units.
  * Based on the WhaTaka protocol.
  */
 export class MiningTracker {

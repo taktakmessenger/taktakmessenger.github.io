@@ -473,7 +473,7 @@ export const LandingPage = ({ onEnterApp }: LandingPageProps) => {
               <p className="text-zinc-500 text-[10px]">Descentralizado</p>
             </div>
             <div className="bg-zinc-900/50 p-3 rounded-xl border border-zinc-800 text-center">
-              <h3 className="text-yellow-500 font-black text-sm">TTC</h3>
+              <h3 className="text-yellow-500 font-black text-sm">TKC</h3>
               <p className="text-zinc-500 text-[10px]">Tak Tak Coins</p>
             </div>
             <div className="bg-zinc-900/50 p-3 rounded-xl border border-zinc-800 text-center">
